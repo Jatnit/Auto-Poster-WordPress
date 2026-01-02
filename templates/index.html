@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WordPress Auto Poster</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-primary: #0f0f23;
+        --bg-secondary: #1a1a2e;
+        --bg-card: #16213e;
+        --bg-input: #0f3460;
+        --accent-primary: #e94560;
+        --accent-secondary: #533483;
+        --accent-gradient: linear-gradient(135deg, #e94560 0%, #533483 100%);
+        --text-primary: #ffffff;
+        --text-secondary: #a0a0b9;
+        --text-muted: #6c6c8a;
+        --success: #00d26a;
+        --warning: #ffb800;
+        --error: #ff4757;
+        --info: #3498db;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        --radius: 16px;
+        --radius-sm: 8px;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow-x: hidden;
+      }
+
+      /* Animated background */
+      .bg-animation {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+      }
+
+      .bg-animation::before {
+        content: "";
+        position: absolute;
+        width: 150%;
+        height: 150%;
+        background: radial-gradient(
+            circle at 20% 80%,
+            rgba(233, 69, 96, 0.15) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 80% 20%,
+            rgba(83, 52, 131, 0.15) 0%,
+            transparent 50%
+          ),
+          radial-gradient(
+            circle at 40% 40%,
+            rgba(52, 152, 219, 0.1) 0%,
+            transparent 50%
+          );
+        animation: float 20s ease-in-out infinite;
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translate(0, 0) rotate(0deg);
+        }
+        33% {
+          transform: translate(30px, -30px) rotate(5deg);
+        }
+        66% {
+          transform: translate(-20px, 20px) rotate(-5deg);
+        }
+      }
+
+      /* Header */
+      .header {
+        background: rgba(22, 33, 62, 0.8);
+        backdrop-filter: blur(20px);
+        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 2rem;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .header-content {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .logo-icon {
+        width: 48px;
+        height: 48px;
+        background: var(--accent-gradient);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+      }
+
+      .logo-text h1 {
+        font-size: 1.25rem;
+        font-weight: 700;
+        background: var(--accent-gradient);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .logo-text span {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+      }
+
+      .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 50px;
+        font-size: 0.875rem;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-muted);
+      }
+
+      .status-dot.running {
+        background: var(--success);
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.5;
+          transform: scale(1.2);
+        }
+      }
+
+      /* Main container */
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+
+      @media (max-width: 1024px) {
+        .container {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Cards */
+      .card {
+        background: var(--bg-card);
+        border-radius: var(--radius);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+      }
+
+      .card-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .card-header i {
+        font-size: 1.25rem;
+        color: var(--accent-primary);
+      }
+
+      .card-header h2 {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .card-body {
+        padding: 1.5rem;
+      }
+
+      /* Form elements */
+      .form-group {
+        margin-bottom: 1.25rem;
+      }
+
+      .form-group:last-child {
+        margin-bottom: 0;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 12px 16px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.875rem;
+        font-family: inherit;
+        transition: all 0.3s ease;
+      }
+
+      .form-input:focus {
+        outline: none;
+        border-color: var(--accent-primary);
+        box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.2);
+      }
+
+      .form-input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      /* Toggle switch */
+      .toggle-group {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .toggle {
+        position: relative;
+        width: 48px;
+        height: 26px;
+      }
+
+      .toggle input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: var(--bg-input);
+        border-radius: 50px;
+        transition: 0.3s;
+      }
+
+      .toggle-slider::before {
+        content: "";
+        position: absolute;
+        height: 20px;
+        width: 20px;
+        left: 3px;
+        bottom: 3px;
+        background: var(--text-secondary);
+        border-radius: 50%;
+        transition: 0.3s;
+      }
+
+      .toggle input:checked + .toggle-slider {
+        background: var(--accent-gradient);
+      }
+
+      .toggle input:checked + .toggle-slider::before {
+        transform: translateX(22px);
+        background: white;
+      }
+
+      /* Topics list */
+      .topics-container {
+        max-height: 300px;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: var(--accent-primary) var(--bg-input);
+      }
+
+      .topics-container::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .topics-container::-webkit-scrollbar-track {
+        background: var(--bg-input);
+        border-radius: 3px;
+      }
+
+      .topics-container::-webkit-scrollbar-thumb {
+        background: var(--accent-primary);
+        border-radius: 3px;
+      }
+
+      .topic-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: var(--radius-sm);
+        margin-bottom: 8px;
+        transition: all 0.3s ease;
+      }
+
+      .topic-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      .topic-number {
+        width: 28px;
+        height: 28px;
+        background: var(--accent-gradient);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        flex-shrink: 0;
+      }
+
+      .topic-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .topic-title {
+        font-size: 0.875rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .topic-keyword {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .topic-delete {
+        background: none;
+        border: none;
+        color: var(--error);
+        cursor: pointer;
+        padding: 4px;
+        opacity: 0.6;
+        transition: opacity 0.3s;
+      }
+
+      .topic-delete:hover {
+        opacity: 1;
+      }
+
+      .add-topic-form {
+        display: flex;
+        gap: 8px;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-color);
+      }
+
+      .add-topic-form .form-input {
+        flex: 1;
+      }
+
+      /* Buttons */
+      .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+        font-weight: 600;
+        font-family: inherit;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      .btn-primary {
+        background: var(--accent-gradient);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(233, 69, 96, 0.4);
+      }
+
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.15);
+      }
+
+      .btn-danger {
+        background: var(--error);
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #ff5e6d;
+      }
+
+      .btn-icon {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border-radius: var(--radius-sm);
+      }
+
+      .btn-large {
+        width: 100%;
+        padding: 16px 32px;
+        font-size: 1rem;
+        border-radius: var(--radius);
+      }
+
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+      }
+
+      /* Progress section */
+      .progress-section {
+        grid-column: 1 / -1;
+      }
+
+      .progress-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      @media (max-width: 768px) {
+        .progress-stats {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+
+      .stat-card {
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: var(--radius-sm);
+        padding: 1.25rem;
+        text-align: center;
+      }
+
+      .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+      }
+
+      .stat-value.success {
+        color: var(--success);
+      }
+      .stat-value.warning {
+        color: var(--warning);
+      }
+      .stat-value.error {
+        color: var(--error);
+      }
+      .stat-value.info {
+        color: var(--info);
+      }
+
+      .stat-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .progress-bar-container {
+        margin-bottom: 1.5rem;
+      }
+
+      .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+      }
+
+      .progress-task {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+      }
+
+      .progress-percent {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--accent-primary);
+      }
+
+      .progress-bar {
+        height: 8px;
+        background: var(--bg-input);
+        border-radius: 4px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: var(--accent-gradient);
+        border-radius: 4px;
+        transition: width 0.5s ease;
+      }
+
+      /* Logs */
+      .logs-container {
+        height: 300px;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: var(--radius-sm);
+        padding: 1rem;
+        font-family: "JetBrains Mono", "Fira Code", monospace;
+        font-size: 0.8rem;
+        scrollbar-width: thin;
+        scrollbar-color: var(--accent-primary) transparent;
+      }
+
+      .logs-container::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .logs-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      .logs-container::-webkit-scrollbar-thumb {
+        background: var(--accent-primary);
+        border-radius: 3px;
+      }
+
+      .log-entry {
+        display: flex;
+        gap: 12px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .log-time {
+        color: var(--text-muted);
+        flex-shrink: 0;
+      }
+
+      .log-message {
+        flex: 1;
+        word-break: break-word;
+      }
+
+      .log-message.success {
+        color: var(--success);
+      }
+      .log-message.warning {
+        color: var(--warning);
+      }
+      .log-message.error {
+        color: var(--error);
+      }
+      .log-message.info {
+        color: var(--info);
+      }
+
+      /* Control buttons */
+      .control-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1.5rem;
+      }
+
+      .control-buttons .btn {
+        flex: 1;
+      }
+
+      /* Tooltip */
+      .tooltip {
+        position: relative;
+      }
+
+      .tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 8px 12px;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-size: 0.75rem;
+        border-radius: 6px;
+        white-space: nowrap;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+        pointer-events: none;
+      }
+
+      .tooltip:hover::after {
+        opacity: 1;
+        visibility: visible;
+        bottom: calc(100% + 8px);
+      }
+
+      /* Empty state */
+      .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+      }
+
+      .empty-state i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+      }
+
+      /* Animations */
+      .fade-in {
+        animation: fadeIn 0.5s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Notification toast */
+      .toast {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+        padding: 1rem 1.5rem;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        box-shadow: var(--shadow);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 1000;
+      }
+
+      .toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+
+      .toast.success {
+        border-left: 4px solid var(--success);
+      }
+      .toast.error {
+        border-left: 4px solid var(--error);
+      }
+      .toast.warning {
+        border-left: 4px solid var(--warning);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="bg-animation"></div>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <div class="logo-icon">
+            <i class="fab fa-wordpress"></i>
+          </div>
+          <div class="logo-text">
+            <h1>WordPress Auto Poster</h1>
+            <span>Powered by Gemini AI</span>
+          </div>
+        </div>
+        <div class="status-badge">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Ready</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+      <!-- Configuration Card -->
+      <div class="card fade-in">
+        <div class="card-header">
+          <i class="fas fa-cog"></i>
+          <h2>Cấu hình</h2>
+        </div>
+        <div class="card-body">
+          <!-- AI Provider - Only Gemini Web Chat -->
+          <div class="form-group">
+            <label class="form-label">🤖 AI Provider</label>
+            <div style="padding: 0.75rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)); border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 1.5rem;">🌐</span>
+                <div>
+                  <strong style="color: var(--text-primary);">Gemini Web Chat</strong>
+                  <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;">
+                    Miễn phí • Tự động chat với Gemini • Cần đăng nhập Google
+                  </p>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" name="aiProvider" value="gemini_web" id="providerGeminiWeb">
+          </div>
+
+          <!-- Gemini Web Prompt Template (always visible) -->
+          <div class="form-group" id="geminiPromptGroup">
+            <label class="form-label">📝 Prompt Template</label>
+            <textarea
+              class="form-input"
+              id="geminiPrompt"
+              rows="10"
+              style="font-family: monospace; font-size: 0.85rem; line-height: 1.5;"
+              placeholder="Nhập prompt mẫu..."
+            >Viết bài blog chuẩn SEO google với tiêu đề "{title}". THANG MÁY KENZO VIỆT NAM chuyên lắp đặt, sửa chữa, bảo trì thang máy. Từ khóa SEO "{keyword}". Từ khóa in đậm, bài viết trên 1500 từ.
+Từ khóa SEO lặp lại không vượt quá 3%.
+Thông tin cần tư vấn liên hệ: CÔNG TY TNHH THANG MÁY KENZO VIỆT NAM
+Trụ sở: 07 Đường DD5, Phường Tân Hưng Thuận, Quận 12, TP.HCM
+Xưởng sản xuất: B15/6A Liên Ấp 1-2-3, H. Bình Chánh, TP.HCM
+Chi nhánh Bình Dương: 113, NE3, Chánh Phú Hoà, Bến Cát, Bình Dương - ĐT: 0932 619 668
+Chi nhánh Quy Nhơn: Tổ 15, Khu 2, P. Nhơn Bình, Tp. Quy nhơn - ĐT: 0937 596 248
+Mail: thanhtienelevator@gmail.com
+Website: https://suachuathangmay247.com
+         https://thangmaykenzo.com</textarea>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+              💡 Sử dụng <code>{title}</code> và <code>{keyword}</code> để chèn tiêu đề và từ khóa SEO
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">WordPress Username</label>
+              <input
+                type="text"
+                class="form-input"
+                id="wpUsername"
+                placeholder="admin"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">WordPress Password</label>
+              <input
+                type="password"
+                class="form-input"
+                id="wpPassword"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">WordPress Login URL</label>
+            <input
+              type="url"
+              class="form-input"
+              id="wpLoginUrl"
+              placeholder="https://your-site.com/wp-login.php"
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">WordPress Admin URL</label>
+            <input
+              type="url"
+              class="form-input"
+              id="wpAdminUrl"
+              placeholder="https://your-site.com/wp-admin"
+            />
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Số bài/ngày</label>
+              <input
+                type="number"
+                class="form-input"
+                id="postsPerDay"
+                value="2"
+                min="1"
+                max="10"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Delay giữa các bài (giây)</label>
+              <input
+                type="number"
+                class="form-input"
+                id="delayBetweenRequests"
+                value="65"
+                min="1"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="toggle-group">
+              <label class="form-label" style="margin-bottom: 0"
+                >Headless Mode (Ẩn trình duyệt)</label
+              >
+              <label class="toggle">
+                <input type="checkbox" id="headlessMode" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <button class="btn btn-secondary btn-large" onclick="saveConfig()">
+            <i class="fas fa-save"></i>
+            Lưu cấu hình
+          </button>
+        </div>
+      </div>
+
+      <!-- Topics Card -->
+      <div class="card fade-in">
+        <div class="card-header">
+          <i class="fas fa-list-alt"></i>
+          <h2>Chủ đề & Từ khóa</h2>
+        </div>
+        <div class="card-body">
+          <div class="topics-container" id="topicsContainer">
+            <div class="empty-state" id="emptyTopics">
+              <i class="fas fa-folder-open"></i>
+              <p>Chưa có chủ đề nào</p>
+            </div>
+          </div>
+
+          <div class="add-topic-form">
+            <input
+              type="text"
+              class="form-input"
+              id="newTitle"
+              placeholder="Tiêu đề bài viết..."
+            />
+            <input
+              type="text"
+              class="form-input"
+              id="newKeyword"
+              placeholder="Từ khóa SEO..."
+            />
+            <button
+              class="btn btn-primary btn-icon tooltip"
+              data-tooltip="Thêm"
+              onclick="addTopic()"
+            >
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; gap: 0.5rem">
+            <button
+              class="btn btn-secondary"
+              onclick="loadSampleTopics()"
+              style="flex: 1"
+            >
+              <i class="fas fa-magic"></i>
+              Thêm mẫu
+            </button>
+            <button
+              class="btn btn-secondary"
+              onclick="clearAllTopics()"
+              style="flex: 1"
+            >
+              <i class="fas fa-trash"></i>
+              Xóa tất cả
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress Section -->
+      <div class="card progress-section fade-in">
+        <div class="card-header">
+          <i class="fas fa-tasks"></i>
+          <h2>Tiến trình</h2>
+        </div>
+        <div class="card-body">
+          <div class="progress-stats">
+            <div class="stat-card">
+              <div class="stat-value info" id="totalTopics">0</div>
+              <div class="stat-label">Tổng bài</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value success" id="successfulPosts">0</div>
+              <div class="stat-label">Thành công</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value error" id="failedPosts">0</div>
+              <div class="stat-label">Thất bại</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value warning" id="progressPercent">0%</div>
+              <div class="stat-label">Hoàn thành</div>
+            </div>
+          </div>
+
+          <div class="progress-bar-container">
+            <div class="progress-header">
+              <span class="progress-task" id="currentTask">Sẵn sàng</span>
+              <span class="progress-percent" id="progressValue">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div
+                class="progress-fill"
+                id="progressBar"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+
+          <div class="logs-container" id="logsContainer">
+            <div class="log-entry">
+              <span class="log-time">--:--:--</span>
+              <span class="log-message">Đang chờ bắt đầu...</span>
+            </div>
+          </div>
+
+          <div class="control-buttons">
+            <button
+              class="btn btn-primary btn-large"
+              id="startBtn"
+              onclick="startAutomation()"
+            >
+              <i class="fas fa-play"></i>
+              Bắt đầu
+            </button>
+            <button
+              class="btn btn-danger btn-large"
+              id="stopBtn"
+              onclick="stopAutomation()"
+              style="display: none"
+            >
+              <i class="fas fa-stop"></i>
+              Dừng lại
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast notification -->
+    <div class="toast" id="toast">
+      <i class="fas fa-info-circle"></i>
+      <span id="toastMessage"></span>
+    </div>
+
+    <script>
+      // Topics storage
+      let topics = [];
+      let isRunning = false;
+      let statusInterval = null;
+
+      // Initialize
+      document.addEventListener("DOMContentLoaded", () => {
+        loadConfig();
+        loadTopics();
+        updateStats();
+      });
+
+      // Toast notification
+      function showToast(message, type = "info") {
+        const toast = document.getElementById("toast");
+        const toastMessage = document.getElementById("toastMessage");
+
+        toast.className = "toast " + type;
+        toastMessage.textContent = message;
+        toast.classList.add("show");
+
+        setTimeout(() => {
+          toast.classList.remove("show");
+        }, 3000);
+      }
+
+      // Save configuration
+      async function saveConfig() {
+        const config = {
+          ai_provider: "gemini_web",  // Only Gemini Web Chat
+          gemini_prompt: document.getElementById("geminiPrompt").value,
+          wp_username: document.getElementById("wpUsername").value,
+          wp_password: document.getElementById("wpPassword").value,
+          wp_login_url: document.getElementById("wpLoginUrl").value,
+          wp_admin_url: document.getElementById("wpAdminUrl").value,
+          posts_per_day:
+            parseInt(document.getElementById("postsPerDay").value) || 2,
+          delay_between_requests:
+            parseInt(document.getElementById("delayBetweenRequests").value) || 30,
+          headless_mode: document.getElementById("headlessMode").checked,
+        };
+
+        try {
+          const response = await fetch("/api/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(config),
+          });
+
+          if (response.ok) {
+            showToast("Cấu hình đã được lưu!", "success");
+            localStorage.setItem("wp_auto_config", JSON.stringify(config));
+          }
+        } catch (e) {
+          showToast("Lỗi khi lưu cấu hình", "error");
+        }
+      }
+
+      // Load configuration
+      async function loadConfig() {
+        // Try loading from localStorage first
+        const savedConfig = localStorage.getItem("wp_auto_config");
+        if (savedConfig) {
+          const config = JSON.parse(savedConfig);
+          
+          // Gemini Prompt
+          if (config.gemini_prompt) {
+            document.getElementById("geminiPrompt").value = config.gemini_prompt;
+          }
+          
+          document.getElementById("wpUsername").value =
+            config.wp_username || "";
+          document.getElementById("wpPassword").value =
+            config.wp_password || "";
+          document.getElementById("wpLoginUrl").value =
+            config.wp_login_url || "";
+          document.getElementById("wpAdminUrl").value =
+            config.wp_admin_url || "";
+          document.getElementById("postsPerDay").value =
+            config.posts_per_day || 2;
+          document.getElementById("delayBetweenRequests").value =
+            config.delay_between_requests || 30;
+          document.getElementById("headlessMode").checked =
+            config.headless_mode || false;
+        }
+
+        // Also try to load from server
+        try {
+          const response = await fetch("/api/config");
+          const config = await response.json();
+          if (config.gemini_api_key) {
+            document.getElementById("geminiApiKey").value =
+              config.gemini_api_key;
+          }
+        } catch (e) {
+          console.log("Could not load config from server");
+        }
+        
+        // Load topics from localStorage safely
+        loadTopics();
+      }
+
+      // Add topic
+      function addTopic() {
+        const titleInput = document.getElementById("newTitle");
+        const keywordInput = document.getElementById("newKeyword");
+
+        const title = titleInput.value.trim();
+        const keyword = keywordInput.value.trim();
+
+        if (!title) {
+          showToast("Vui lòng nhập tiêu đề", "warning");
+          return;
+        }
+
+        topics.push({
+          title: title,
+          keyword: keyword || title,
+        });
+
+        titleInput.value = "";
+        keywordInput.value = "";
+
+        renderTopics();
+        saveTopics();
+        updateStats();
+      }
+
+      // Delete topic
+      function deleteTopic(index) {
+        topics.splice(index, 1);
+        renderTopics();
+        saveTopics();
+        updateStats();
+      }
+
+      // Clear all topics
+      let isClearing = false;
+      function clearAllTopics() {
+        // Prevent multiple calls
+        if (isClearing) return;
+        
+        // Check if there are topics to clear
+        if (topics.length === 0) {
+          showToast("Không có chủ đề nào để xóa", "warning");
+          return;
+        }
+        
+        isClearing = true;
+        
+        // Use setTimeout to allow the button click to complete first
+        setTimeout(() => {
+          const confirmed = confirm("Bạn có chắc muốn xóa tất cả " + topics.length + " chủ đề?");
+          
+          if (confirmed) {
+            topics = [];
+            renderTopics();
+            saveTopics();
+            updateStats();
+            showToast("Đã xóa tất cả chủ đề", "success");
+          }
+          
+          isClearing = false;
+        }, 100);
+      }
+
+      // Load sample topics
+      function loadSampleTopics() {
+        const sampleTopics = [
+          {
+            title: "Hướng dẫn tối ưu SEO cho website năm 2024",
+            keyword: "tối ưu SEO website",
+          },
+          {
+            title: "10 xu hướng thiết kế website hiện đại",
+            keyword: "thiết kế website hiện đại",
+          },
+          {
+            title: "Cách xây dựng chiến lược content marketing hiệu quả",
+            keyword: "content marketing",
+          },
+          {
+            title: "Bí quyết tăng tốc độ tải trang website",
+            keyword: "tăng tốc độ website",
+          },
+          {
+            title: "Hướng dẫn bảo mật website WordPress toàn diện",
+            keyword: "bảo mật WordPress",
+          },
+        ];
+
+        topics = [...topics, ...sampleTopics];
+        renderTopics();
+        saveTopics();
+        updateStats();
+        showToast("Đã thêm 5 chủ đề mẫu", "success");
+      }
+
+      // Render topics
+      function renderTopics() {
+        const container = document.getElementById("topicsContainer");
+
+        if (topics.length === 0) {
+          container.innerHTML = `
+            <div class="empty-state">
+              <i class="fas fa-folder-open"></i>
+              <p>Chưa có chủ đề nào</p>
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = topics
+          .map(
+            (topic, index) => `
+                <div class="topic-item fade-in">
+                    <span class="topic-number">${index + 1}</span>
+                    <div class="topic-content">
+                        <div class="topic-title">${escapeHtml(topic.title)}</div>
+                        <div class="topic-keyword"><i class="fas fa-key"></i> ${escapeHtml(topic.keyword)}</div>
+                    </div>
+                    <button class="topic-delete" onclick="deleteTopic(${index})">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `
+          )
+          .join("");
+      }
+
+      // Escape HTML to prevent XSS
+      function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Save topics to localStorage and server
+      async function saveTopics() {
+        localStorage.setItem("wp_auto_topics", JSON.stringify(topics));
+
+        try {
+          await fetch("/api/topics", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ topics: topics }),
+          });
+        } catch (e) {
+          console.log("Could not save topics to server");
+        }
+      }
+
+      // Load topics
+      function loadTopics() {
+        const savedTopics = localStorage.getItem("wp_auto_topics");
+        if (savedTopics) {
+          topics = JSON.parse(savedTopics);
+          renderTopics();
+        }
+      }
+
+      // Update stats
+      function updateStats() {
+        document.getElementById("totalTopics").textContent = topics.length;
+      }
+
+      // Start automation
+      async function startAutomation() {
+        // Save config and topics first
+        await saveConfig();
+        await saveTopics();
+
+        try {
+          const response = await fetch("/api/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            isRunning = true;
+            document.getElementById("startBtn").style.display = "none";
+            document.getElementById("stopBtn").style.display = "block";
+            document.getElementById("statusDot").classList.add("running");
+            document.getElementById("statusText").textContent = "Running";
+
+            // Start polling for status
+            statusInterval = setInterval(updateStatus, 1000);
+            showToast("Đã bắt đầu tự động đăng bài!", "success");
+          } else {
+            showToast(result.message || "Không thể bắt đầu", "error");
+          }
+        } catch (e) {
+          showToast("Lỗi kết nối server", "error");
+        }
+      }
+
+      // Stop automation
+      async function stopAutomation() {
+        try {
+          await fetch("/api/stop", { method: "POST" });
+
+          isRunning = false;
+          document.getElementById("startBtn").style.display = "block";
+          document.getElementById("stopBtn").style.display = "none";
+          document.getElementById("statusDot").classList.remove("running");
+          document.getElementById("statusText").textContent = "Stopped";
+
+          if (statusInterval) {
+            clearInterval(statusInterval);
+            statusInterval = null;
+          }
+
+          showToast("Đã dừng!", "warning");
+        } catch (e) {
+          showToast("Lỗi khi dừng", "error");
+        }
+      }
+
+      // Update status
+      async function updateStatus() {
+        try {
+          const response = await fetch("/api/status");
+          const status = await response.json();
+
+          // Update progress
+          document.getElementById("progressBar").style.width =
+            status.progress + "%";
+          document.getElementById("progressValue").textContent =
+            Math.round(status.progress) + "%";
+          document.getElementById("progressPercent").textContent =
+            Math.round(status.progress) + "%";
+          document.getElementById("currentTask").textContent =
+            status.current_task || "Sẵn sàng";
+          document.getElementById("successfulPosts").textContent =
+            status.successful_posts || 0;
+          document.getElementById("failedPosts").textContent =
+            status.failed_posts || 0;
+
+          // Update logs
+          const logsContainer = document.getElementById("logsContainer");
+          if (status.logs && status.logs.length > 0) {
+            logsContainer.innerHTML = status.logs
+              .map(
+                (log) => `
+                        <div class="log-entry">
+                            <span class="log-time">${log.time}</span>
+                            <span class="log-message ${log.type}">${log.message}</span>
+                        </div>
+                    `
+              )
+              .join("");
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+          }
+
+          // Check if finished
+          if (!status.is_running && isRunning) {
+            isRunning = false;
+            document.getElementById("startBtn").style.display = "block";
+            document.getElementById("stopBtn").style.display = "none";
+            document.getElementById("statusDot").classList.remove("running");
+            document.getElementById("statusText").textContent = "Completed";
+
+            if (statusInterval) {
+              clearInterval(statusInterval);
+              statusInterval = null;
+            }
+
+            showToast("Hoàn thành!", "success");
+          }
+        } catch (e) {
+          console.log("Could not fetch status");
+        }
+      }
+
+      // Handle Enter key on topic inputs
+      document.getElementById("newTitle").addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          document.getElementById("newKeyword").focus();
+        }
+      });
+
+      document
+        .getElementById("newKeyword")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") {
+            addTopic();
+          }
+        });
+    </script>
+  </body>
+</html>

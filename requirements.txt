@@ -1,0 +1,12 @@
+# WordPress Auto Poster Dependencies
+# Install with: pip install -r requirements.txt
+
+# Google Generative AI (Gemini API)
+google-generativeai>=0.3.0
+
+# Playwright for browser automation
+playwright>=1.40.0
+
+# Flask for web interface
+flask>=2.3.0
+flask-cors>=4.0.0
