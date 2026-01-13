@@ -68,9 +68,10 @@ class AppState:
         self.generated_contents = []
         self.successful_posts = 0
         self.failed_posts = 0
-        self.current_content = None  # Current generated content for preview
+        self.current_content = None
         self.current_title = ""
         self.current_keyword = ""
+        self.content_list = []  # List of {title, keyword, content, word_count}
 
 state = AppState()
 
@@ -1851,9 +1852,22 @@ def run_automation():
                     content = generate_content_gemini_web(page, topic["title"], topic["keyword"])
                     state.generated_contents.append(content)
                     
-                    # Store content for preview
+                    # Store cleaned content for preview
                     if content:
-                        state.current_content = content
+                        # Clean the content before storing
+                        cleaned_content = clean_gemini_content(content)
+                        state.current_content = cleaned_content
+                        # Count words
+                        import re
+                        text_only = re.sub(r'<[^>]*>', ' ', cleaned_content)
+                        word_count = len(text_only.split())
+                        # Add to content list
+                        state.content_list.append({
+                            "title": topic["title"],
+                            "keyword": topic["keyword"],
+                            "content": cleaned_content,
+                            "word_count": word_count
+                        })
                     
                     state.progress = ((i + 1) / state.total_tasks) * 100
                     
@@ -1927,19 +1941,23 @@ def index():
 
 @app.route('/api/status')
 def get_status():
+    # Return content_list without full content for performance
+    content_list_summary = [
+        {"title": c["title"], "keyword": c["keyword"], "word_count": c["word_count"]}
+        for c in state.content_list
+    ]
     return jsonify({
         "is_running": state.is_running,
         "current_task": state.current_task,
         "progress": state.progress,
         "successful_posts": state.successful_posts,
         "failed_posts": state.failed_posts,
-        "logs": state.logs,  # All logs - no limit
+        "logs": state.logs,
         "gemini_available": GEMINI_AVAILABLE,
         "ollama_available": check_ollama(),
         "playwright_available": PLAYWRIGHT_AVAILABLE,
-        "current_content": state.current_content,
-        "current_title": state.current_title,
-        "current_keyword": state.current_keyword
+        "content_list": content_list_summary,
+        "content_count": len(state.content_list)
     })
 
 @app.route('/api/config', methods=['GET', 'POST'])
@@ -1956,6 +1974,58 @@ def handle_topics():
         state.topics = request.json.get('topics', [])
         return jsonify({"success": True, "count": len(state.topics)})
     return jsonify(state.topics)
+
+@app.route('/api/content/<int:index>')
+def get_content(index):
+    """Get full content by index for accordion expansion."""
+    if 0 <= index < len(state.content_list):
+        return jsonify({
+            "success": True,
+            "data": state.content_list[index]
+        })
+    return jsonify({"success": False, "message": "Content not found"})
+
+@app.route('/api/content/<int:index>', methods=['PUT'])
+def update_content(index):
+    """Update content by index - allows editing without stopping automation."""
+    if 0 <= index < len(state.content_list):
+        data = request.json
+        if 'content' in data:
+            new_content = data['content']
+            # Recalculate word count
+            import re
+            text_only = re.sub(r'<[^>]*>', ' ', new_content)
+            word_count = len(text_only.split())
+            
+            state.content_list[index]['content'] = new_content
+            state.content_list[index]['word_count'] = word_count
+            
+            # Also update generated_contents for WordPress posting
+            if index < len(state.generated_contents):
+                state.generated_contents[index] = new_content
+            
+            add_log(f"📝 Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
+            return jsonify({"success": True, "word_count": word_count})
+    return jsonify({"success": False, "message": "Content not found"})
+
+@app.route('/api/content/<int:index>', methods=['DELETE'])
+def delete_content(index):
+    """Delete content by index - removes from list without stopping automation."""
+    if 0 <= index < len(state.content_list):
+        deleted_title = state.content_list[index]['title']
+        del state.content_list[index]
+        
+        # Also remove from generated_contents
+        if index < len(state.generated_contents):
+            del state.generated_contents[index]
+        
+        # Remove from topics to avoid creating post for this
+        if index < len(state.topics):
+            del state.topics[index]
+        
+        add_log(f"🗑️ Đã xóa: {deleted_title}", "warning")
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Content not found"})
 
 @app.route('/api/start', methods=['POST'])
 def start_automation():
@@ -1979,6 +2049,9 @@ def start_automation():
     
     if not state.config.get("wp_username"):
         return jsonify({"success": False, "message": "WordPress credentials not configured"})
+    
+    # Clear previous content list
+    state.content_list = []
     
     # Start in background thread
     thread = threading.Thread(target=run_automation)

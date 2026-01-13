@@ -837,6 +837,320 @@
         opacity: 0.5;
       }
 
+      /* Content Accordion */
+      .content-accordion-item {
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+        transition: all 0.3s ease;
+      }
+
+      .content-accordion-item:hover {
+        border-color: rgba(0, 212, 255, 0.2);
+      }
+
+      .content-accordion-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        cursor: pointer;
+        transition: background 0.3s ease;
+      }
+
+      .content-accordion-header:hover {
+        background: rgba(255, 255, 255, 0.03);
+      }
+
+      .content-accordion-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .content-accordion-title {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.25rem;
+      }
+
+      .content-accordion-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .content-accordion-meta span {
+        margin-right: 1rem;
+      }
+
+      .content-accordion-actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-shrink: 0;
+      }
+
+      .content-accordion-body {
+        display: none;
+        padding: 1rem;
+        border-top: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.15);
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .content-accordion-body.open {
+        display: block;
+        animation: slideDown 0.3s ease;
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          max-height: 0;
+        }
+        to {
+          opacity: 1;
+          max-height: 400px;
+        }
+      }
+
+      .content-accordion-body h2 {
+        font-size: 1.1rem;
+        color: var(--text-primary);
+        margin: 1rem 0 0.5rem 0;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+      }
+
+      .content-accordion-body p {
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+      }
+
+      .content-accordion-body ul,
+      .content-accordion-body ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .content-accordion-body strong {
+        color: var(--accent-primary);
+      }
+
+      .btn-expand {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        background: rgba(0, 212, 255, 0.1);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--accent-primary);
+      }
+
+      .btn-expand:hover {
+        background: rgba(0, 212, 255, 0.2);
+      }
+
+      .btn-expand.active {
+        background: var(--accent-primary);
+        color: #000;
+      }
+
+      /* Edit Modal */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+      }
+
+      .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        width: 100%;
+        max-width: 900px;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .modal-header h3 {
+        font-size: 1.1rem;
+        color: var(--text-primary);
+      }
+
+      .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      /* Wide modal for split view */
+      .modal-wide {
+        max-width: 1400px;
+      }
+
+      /* Split view for edit */
+      .edit-split-view {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        padding: 1rem !important;
+      }
+
+      .edit-panel {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+
+      .edit-panel-header {
+        padding: 0.75rem 1rem;
+        background: rgba(0, 0, 0, 0.3);
+        color: var(--text-muted);
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .edit-panel-header i {
+        margin-right: 0.5rem;
+      }
+
+      .edit-textarea {
+        flex: 1;
+        min-height: 500px;
+        border: none;
+        border-radius: 0;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+        padding: 1rem;
+        resize: none;
+      }
+
+      .edit-preview {
+        flex: 1;
+        min-height: 500px;
+        padding: 1.5rem;
+        overflow-y: auto;
+        background: rgba(255, 255, 255, 0.02);
+        font-size: 0.9rem;
+        line-height: 1.7;
+        color: var(--text-secondary);
+      }
+
+      .edit-preview h2 {
+        font-size: 1.2rem;
+        color: var(--text-primary);
+        margin: 1.5rem 0 0.75rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .edit-preview h2:first-child {
+        margin-top: 0;
+      }
+
+      .edit-preview h3 {
+        font-size: 1rem;
+        color: var(--text-primary);
+        margin: 1rem 0 0.5rem 0;
+      }
+
+      .edit-preview p {
+        margin-bottom: 0.75rem;
+      }
+
+      .edit-preview ul, .edit-preview ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .edit-preview li {
+        margin-bottom: 0.25rem;
+      }
+
+      .edit-preview strong {
+        color: var(--accent-primary);
+      }
+
+      .edit-preview a {
+        color: var(--accent-primary);
+        text-decoration: underline;
+      }
+
+      @media (max-width: 1024px) {
+        .edit-split-view {
+          grid-template-columns: 1fr;
+        }
+        
+        .edit-textarea, .edit-preview {
+          min-height: 300px;
+        }
+      }
+
+      /* Action buttons in accordion */
+      .btn-edit {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+        background: rgba(124, 58, 237, 0.1);
+        border: 1px solid rgba(124, 58, 237, 0.3);
+        color: #a78bfa;
+      }
+
+      .btn-edit:hover {
+        background: rgba(124, 58, 237, 0.2);
+      }
+
+      .btn-delete {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+        background: rgba(255, 77, 77, 0.1);
+        border: 1px solid rgba(255, 77, 77, 0.3);
+        color: var(--error);
+      }
+
+      .btn-delete:hover {
+        background: rgba(255, 77, 77, 0.2);
+      }
+
       /* Tooltip */
       .tooltip {
         position: relative;
@@ -1278,33 +1592,68 @@ Sửa chữa thang máy tải hàng"
       <div class="card progress-section fade-in">
         <div class="card-header">
           <i class="fas fa-file-alt"></i>
-          <h2>Xem trước nội dung</h2>
+          <h2>Nội dung đã tạo <span id="contentCount" style="font-size: 0.8rem; color: var(--text-muted);">(0)</span></h2>
         </div>
         <div class="card-body">
-          <div class="content-preview-container" id="contentPreviewContainer">
-            <div class="content-preview-empty" id="contentPreviewEmpty">
+          <div class="content-list-container" id="contentListContainer">
+            <div class="content-preview-empty" id="contentListEmpty">
               <i class="fas fa-file-alt"></i>
               <p>Nội dung sẽ hiển thị ở đây khi Gemini tạo xong</p>
             </div>
-            <div id="contentPreviewContent" style="display: none;">
-              <div class="content-preview-header">
-                <div>
-                  <div class="content-preview-title" id="previewTitle">Tiêu đề bài viết</div>
-                  <div class="content-preview-meta">
-                    <span id="previewKeyword">Từ khóa: ---</span>
-                    <span style="margin-left: 1rem;" id="previewWordCount">Số từ: 0</span>
-                  </div>
-                </div>
-                <button class="btn btn-secondary" onclick="copyContent()" style="padding: 6px 12px; font-size: 0.75rem;">
-                  <i class="fas fa-copy"></i>
-                  Copy
-                </button>
-              </div>
-              <div class="content-preview-body" id="previewBody">
-                <!-- Content will be inserted here -->
-              </div>
+            <div id="contentAccordion">
+              <!-- Accordion items will be inserted here dynamically -->
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Content Modal -->
+    <div class="modal-overlay" id="editModal" style="display: none;">
+      <div class="modal-content modal-wide">
+        <div class="modal-header">
+          <div>
+            <h3><i class="fas fa-edit"></i> Chỉnh sửa nội dung</h3>
+            <span id="editTitle" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 1rem;">
+            <span style="color: var(--text-muted); font-size: 0.85rem;">Số từ: <strong id="editWordCount">0</strong></span>
+            <button class="btn btn-icon" onclick="closeEditModal()">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        </div>
+        <div class="modal-body edit-split-view">
+          <!-- HTML Editor -->
+          <div class="edit-panel">
+            <div class="edit-panel-header">
+              <i class="fas fa-code"></i> Mã HTML
+            </div>
+            <textarea 
+              id="editContentArea" 
+              class="form-input edit-textarea" 
+              placeholder="Nhập nội dung HTML..."
+              oninput="updateEditPreview()"
+            ></textarea>
+          </div>
+          
+          <!-- Visual Preview -->
+          <div class="edit-panel">
+            <div class="edit-panel-header">
+              <i class="fas fa-eye"></i> Xem trước
+            </div>
+            <div class="edit-preview" id="editPreview">
+              <!-- Preview will render here -->
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeEditModal()">
+            <i class="fas fa-times"></i> Hủy
+          </button>
+          <button class="btn btn-primary" onclick="saveEditContent()">
+            <i class="fas fa-save"></i> Lưu thay đổi
+          </button>
         </div>
       </div>
     </div>
@@ -1320,7 +1669,6 @@ Sửa chữa thang máy tải hàng"
       let topics = [];
       let isRunning = false;
       let statusInterval = null;
-      let currentContent = null;
 
       // Initialize
       document.addEventListener("DOMContentLoaded", () => {
@@ -1329,57 +1677,272 @@ Sửa chữa thang máy tải hàng"
         updateStats();
       });
 
-      // Update content preview
-      function updateContentPreview(title, keyword, content) {
-        currentContent = content;
+      // Render content list as accordion
+      let loadedContents = {};
+      
+      function renderContentList(contentList) {
+        const accordion = document.getElementById("contentAccordion");
+        const emptyState = document.getElementById("contentListEmpty");
+        const countBadge = document.getElementById("contentCount");
         
-        const emptyState = document.getElementById("contentPreviewEmpty");
-        const contentDiv = document.getElementById("contentPreviewContent");
-        const previewTitle = document.getElementById("previewTitle");
-        const previewKeyword = document.getElementById("previewKeyword");
-        const previewWordCount = document.getElementById("previewWordCount");
-        const previewBody = document.getElementById("previewBody");
-        
-        // Hide empty state, show content
-        emptyState.style.display = "none";
-        contentDiv.style.display = "block";
-        
-        // Update title and keyword
-        previewTitle.textContent = title;
-        previewKeyword.textContent = `Từ khóa: ${keyword}`;
-        
-        // Count words (strip HTML tags first)
-        const textOnly = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        const wordCount = textOnly.split(" ").filter(w => w.length > 0).length;
-        previewWordCount.textContent = `Số từ: ${wordCount.toLocaleString()}`;
-        
-        // Insert HTML content
-        previewBody.innerHTML = content;
-        
-        // Scroll to top of preview
-        previewBody.scrollTop = 0;
-      }
-
-      // Copy content to clipboard
-      async function copyContent() {
-        if (!currentContent) {
-          showToast("Không có nội dung để copy!", "warning");
+        if (!contentList || contentList.length === 0) {
+          emptyState.style.display = "block";
+          accordion.innerHTML = "";
+          countBadge.textContent = "(0)";
           return;
         }
         
-        try {
-          await navigator.clipboard.writeText(currentContent);
-          showToast("Đã copy nội dung HTML!", "success");
-        } catch (e) {
-          showToast("Không thể copy nội dung", "error");
+        emptyState.style.display = "none";
+        countBadge.textContent = `(${contentList.length})`;
+        
+        // Only update if count changed
+        if (accordion.children.length === contentList.length) {
+          return;
+        }
+        
+        accordion.innerHTML = contentList.map((item, index) => `
+          <div class="content-accordion-item" id="accordion-item-${index}">
+            <div class="content-accordion-header" onclick="toggleContentAccordion(${index})">
+              <div class="content-accordion-info">
+                <div class="content-accordion-title">${index + 1}. ${item.title}</div>
+                <div class="content-accordion-meta">
+                  <span>🔑 ${item.keyword}</span>
+                  <span>📝 ${item.word_count.toLocaleString()} từ</span>
+                </div>
+              </div>
+              <div class="content-accordion-actions">
+                <button class="btn btn-expand" id="expand-btn-${index}" onclick="event.stopPropagation(); toggleContentAccordion(${index})">
+                  <i class="fas fa-chevron-down"></i>
+                  Xem
+                </button>
+                <button class="btn btn-edit" onclick="event.stopPropagation(); openEditModal(${index})" title="Chỉnh sửa">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-secondary" onclick="event.stopPropagation(); copyContentByIndex(${index})" style="padding: 6px 10px; font-size: 0.75rem;" title="Copy HTML">
+                  <i class="fas fa-copy"></i>
+                </button>
+                <button class="btn btn-delete" onclick="event.stopPropagation(); deleteContentByIndex(${index})" title="Xóa">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+            <div class="content-accordion-body" id="accordion-body-${index}">
+              <div class="loading-content" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+                <i class="fas fa-spinner fa-spin"></i> Đang tải nội dung...
+              </div>
+            </div>
+          </div>
+        `).join("");
+      }
+
+      // Toggle accordion content
+      async function toggleContentAccordion(index) {
+        const body = document.getElementById(`accordion-body-${index}`);
+        const btn = document.getElementById(`expand-btn-${index}`);
+        
+        if (body.classList.contains("open")) {
+          body.classList.remove("open");
+          btn.classList.remove("active");
+          btn.innerHTML = '<i class="fas fa-chevron-down"></i> Xem';
+          return;
+        }
+        
+        // Close other open accordions
+        document.querySelectorAll(".content-accordion-body.open").forEach(el => {
+          el.classList.remove("open");
+        });
+        document.querySelectorAll(".btn-expand.active").forEach(el => {
+          el.classList.remove("active");
+          el.innerHTML = '<i class="fas fa-chevron-down"></i> Xem';
+        });
+        
+        // Open this one
+        body.classList.add("open");
+        btn.classList.add("active");
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i> Ẩn';
+        
+        // Load content if not loaded
+        if (!loadedContents[index]) {
+          try {
+            const response = await fetch(`/api/content/${index}`);
+            const result = await response.json();
+            if (result.success) {
+              loadedContents[index] = result.data.content;
+              body.innerHTML = result.data.content;
+            } else {
+              body.innerHTML = '<p style="color: var(--error);">Không thể tải nội dung</p>';
+            }
+          } catch (e) {
+            body.innerHTML = '<p style="color: var(--error);">Lỗi kết nối</p>';
+          }
+        } else {
+          body.innerHTML = loadedContents[index];
         }
       }
 
-      // Clear content preview
-      function clearContentPreview() {
-        currentContent = null;
-        document.getElementById("contentPreviewEmpty").style.display = "block";
-        document.getElementById("contentPreviewContent").style.display = "none";
+      // Copy content by index
+      async function copyContentByIndex(index) {
+        if (loadedContents[index]) {
+          try {
+            await navigator.clipboard.writeText(loadedContents[index]);
+            showToast("Đã copy nội dung HTML!", "success");
+          } catch (e) {
+            showToast("Không thể copy", "error");
+          }
+          return;
+        }
+        
+        // Load first then copy
+        try {
+          const response = await fetch(`/api/content/${index}`);
+          const result = await response.json();
+          if (result.success) {
+            loadedContents[index] = result.data.content;
+            await navigator.clipboard.writeText(result.data.content);
+            showToast("Đã copy nội dung HTML!", "success");
+          }
+        } catch (e) {
+          showToast("Không thể copy", "error");
+        }
+      }
+
+      // Clear content list
+      function clearContentList() {
+        loadedContents = {};
+        document.getElementById("contentListEmpty").style.display = "block";
+        document.getElementById("contentAccordion").innerHTML = "";
+        document.getElementById("contentCount").textContent = "(0)";
+      }
+
+      // Edit modal functions
+      let currentEditIndex = null;
+
+      async function openEditModal(index) {
+        currentEditIndex = index;
+        
+        // Load content if not loaded
+        let title = "";
+        if (!loadedContents[index]) {
+          try {
+            const response = await fetch(`/api/content/${index}`);
+            const result = await response.json();
+            if (result.success) {
+              loadedContents[index] = result.data.content;
+              title = result.data.title;
+            }
+          } catch (e) {
+            showToast("Không thể tải nội dung", "error");
+            return;
+          }
+        }
+        
+        // Set title
+        document.getElementById("editTitle").textContent = title;
+        
+        // Set content in textarea
+        document.getElementById("editContentArea").value = loadedContents[index];
+        
+        // Update word count and preview
+        updateEditPreview();
+        
+        // Show modal
+        document.getElementById("editModal").style.display = "flex";
+      }
+
+      function closeEditModal() {
+        document.getElementById("editModal").style.display = "none";
+        document.getElementById("editPreview").innerHTML = "";
+        currentEditIndex = null;
+      }
+
+      function updateEditPreview() {
+        const content = document.getElementById("editContentArea").value;
+        
+        // Update preview
+        document.getElementById("editPreview").innerHTML = content;
+        
+        // Update word count
+        const textOnly = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        const wordCount = textOnly.split(" ").filter(w => w.length > 0).length;
+        document.getElementById("editWordCount").textContent = wordCount.toLocaleString();
+      }
+
+      async function saveEditContent() {
+        if (currentEditIndex === null) return;
+        
+        const newContent = document.getElementById("editContentArea").value;
+        
+        try {
+          const response = await fetch(`/api/content/${currentEditIndex}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: newContent })
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            // Update local cache
+            loadedContents[currentEditIndex] = newContent;
+            
+            // Update accordion body if open
+            const body = document.getElementById(`accordion-body-${currentEditIndex}`);
+            if (body && body.classList.contains("open")) {
+              body.innerHTML = newContent;
+            }
+            
+            showToast("Đã lưu thay đổi!", "success");
+            closeEditModal();
+            
+            // Force refresh content list
+            const statusResponse = await fetch("/api/status");
+            const status = await statusResponse.json();
+            if (status.content_list) {
+              // Force re-render by clearing first
+              document.getElementById("contentAccordion").innerHTML = "";
+              renderContentList(status.content_list);
+            }
+          } else {
+            showToast("Không thể lưu", "error");
+          }
+        } catch (e) {
+          showToast("Lỗi kết nối", "error");
+        }
+      }
+
+      async function deleteContentByIndex(index) {
+        if (!confirm("Bạn có chắc muốn xóa nội dung này?")) return;
+        
+        try {
+          const response = await fetch(`/api/content/${index}`, {
+            method: "DELETE"
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            // Remove from local cache
+            delete loadedContents[index];
+            
+            // Refresh content list
+            const statusResponse = await fetch("/api/status");
+            const status = await statusResponse.json();
+            
+            // Clear and re-render
+            document.getElementById("contentAccordion").innerHTML = "";
+            loadedContents = {}; // Reset cache as indices changed
+            
+            if (status.content_list && status.content_list.length > 0) {
+              renderContentList(status.content_list);
+            } else {
+              document.getElementById("contentListEmpty").style.display = "block";
+              document.getElementById("contentCount").textContent = "(0)";
+            }
+            
+            showToast("Đã xóa nội dung!", "success");
+          } else {
+            showToast("Không thể xóa", "error");
+          }
+        } catch (e) {
+        }
       }
 
       // Toast notification
@@ -1731,9 +2294,8 @@ Sửa chữa thang máy tải hàng"
             document.getElementById("statusDot").classList.add("running");
             document.getElementById("statusText").textContent = "Running";
 
-            // Clear content preview
-            clearContentPreview();
-            lastContentUpdate = "";
+            // Clear content list
+            clearContentList();
 
             // Start polling for status
             statusInterval = setInterval(updateStatus, 1000);
@@ -1769,7 +2331,6 @@ Sửa chữa thang máy tải hàng"
       }
 
       // Update status
-      let lastContentUpdate = "";
       async function updateStatus() {
         try {
           const response = await fetch("/api/status");
@@ -1805,14 +2366,9 @@ Sửa chữa thang máy tải hàng"
             logsContainer.scrollTop = logsContainer.scrollHeight;
           }
 
-          // Update content preview if new content available
-          if (status.current_content && status.current_content !== lastContentUpdate) {
-            lastContentUpdate = status.current_content;
-            updateContentPreview(
-              status.current_title || "Bài viết",
-              status.current_keyword || "---",
-              status.current_content
-            );
+          // Update content list
+          if (status.content_list && status.content_list.length > 0) {
+            renderContentList(status.content_list);
           }
 
           // Check if finished
