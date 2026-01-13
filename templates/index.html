@@ -686,7 +686,8 @@
 
       /* Logs */
       .logs-container {
-        height: 300px;
+        height: 500px;
+        max-height: 70vh;
         overflow-y: auto;
         background: rgba(0, 0, 0, 0.3);
         border-radius: var(--radius-sm);
@@ -749,6 +750,91 @@
 
       .control-buttons .btn {
         flex: 1;
+      }
+
+      /* Content Preview */
+      .content-preview-container {
+        background: rgba(0, 0, 0, 0.25);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+      }
+
+      .content-preview-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-bottom: 1px solid var(--border-color);
+      }
+
+      .content-preview-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--accent-primary);
+      }
+
+      .content-preview-meta {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .content-preview-body {
+        padding: 1.25rem;
+        max-height: 600px;
+        overflow-y: auto;
+        font-size: 0.9rem;
+        line-height: 1.7;
+        color: var(--text-secondary);
+      }
+
+      .content-preview-body h1, 
+      .content-preview-body h2, 
+      .content-preview-body h3 {
+        color: var(--text-primary);
+        margin: 1rem 0 0.5rem 0;
+      }
+
+      .content-preview-body h2 {
+        font-size: 1.25rem;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.5rem;
+      }
+
+      .content-preview-body p {
+        margin-bottom: 0.75rem;
+      }
+
+      .content-preview-body ul, 
+      .content-preview-body ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      .content-preview-body li {
+        margin-bottom: 0.25rem;
+      }
+
+      .content-preview-body strong {
+        color: var(--accent-primary);
+      }
+
+      .content-preview-body a {
+        color: var(--accent-primary);
+        text-decoration: underline;
+      }
+
+      .content-preview-empty {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-muted);
+      }
+
+      .content-preview-empty i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
       }
 
       /* Tooltip */
@@ -1187,6 +1273,40 @@ Sửa chữa thang máy tải hàng"
           </div>
         </div>
       </div>
+
+      <!-- Content Preview Section -->
+      <div class="card progress-section fade-in">
+        <div class="card-header">
+          <i class="fas fa-file-alt"></i>
+          <h2>Xem trước nội dung</h2>
+        </div>
+        <div class="card-body">
+          <div class="content-preview-container" id="contentPreviewContainer">
+            <div class="content-preview-empty" id="contentPreviewEmpty">
+              <i class="fas fa-file-alt"></i>
+              <p>Nội dung sẽ hiển thị ở đây khi Gemini tạo xong</p>
+            </div>
+            <div id="contentPreviewContent" style="display: none;">
+              <div class="content-preview-header">
+                <div>
+                  <div class="content-preview-title" id="previewTitle">Tiêu đề bài viết</div>
+                  <div class="content-preview-meta">
+                    <span id="previewKeyword">Từ khóa: ---</span>
+                    <span style="margin-left: 1rem;" id="previewWordCount">Số từ: 0</span>
+                  </div>
+                </div>
+                <button class="btn btn-secondary" onclick="copyContent()" style="padding: 6px 12px; font-size: 0.75rem;">
+                  <i class="fas fa-copy"></i>
+                  Copy
+                </button>
+              </div>
+              <div class="content-preview-body" id="previewBody">
+                <!-- Content will be inserted here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Toast notification -->
@@ -1200,6 +1320,7 @@ Sửa chữa thang máy tải hàng"
       let topics = [];
       let isRunning = false;
       let statusInterval = null;
+      let currentContent = null;
 
       // Initialize
       document.addEventListener("DOMContentLoaded", () => {
@@ -1207,6 +1328,59 @@ Sửa chữa thang máy tải hàng"
         loadTopics();
         updateStats();
       });
+
+      // Update content preview
+      function updateContentPreview(title, keyword, content) {
+        currentContent = content;
+        
+        const emptyState = document.getElementById("contentPreviewEmpty");
+        const contentDiv = document.getElementById("contentPreviewContent");
+        const previewTitle = document.getElementById("previewTitle");
+        const previewKeyword = document.getElementById("previewKeyword");
+        const previewWordCount = document.getElementById("previewWordCount");
+        const previewBody = document.getElementById("previewBody");
+        
+        // Hide empty state, show content
+        emptyState.style.display = "none";
+        contentDiv.style.display = "block";
+        
+        // Update title and keyword
+        previewTitle.textContent = title;
+        previewKeyword.textContent = `Từ khóa: ${keyword}`;
+        
+        // Count words (strip HTML tags first)
+        const textOnly = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        const wordCount = textOnly.split(" ").filter(w => w.length > 0).length;
+        previewWordCount.textContent = `Số từ: ${wordCount.toLocaleString()}`;
+        
+        // Insert HTML content
+        previewBody.innerHTML = content;
+        
+        // Scroll to top of preview
+        previewBody.scrollTop = 0;
+      }
+
+      // Copy content to clipboard
+      async function copyContent() {
+        if (!currentContent) {
+          showToast("Không có nội dung để copy!", "warning");
+          return;
+        }
+        
+        try {
+          await navigator.clipboard.writeText(currentContent);
+          showToast("Đã copy nội dung HTML!", "success");
+        } catch (e) {
+          showToast("Không thể copy nội dung", "error");
+        }
+      }
+
+      // Clear content preview
+      function clearContentPreview() {
+        currentContent = null;
+        document.getElementById("contentPreviewEmpty").style.display = "block";
+        document.getElementById("contentPreviewContent").style.display = "none";
+      }
 
       // Toast notification
       function showToast(message, type = "info") {
@@ -1557,6 +1731,10 @@ Sửa chữa thang máy tải hàng"
             document.getElementById("statusDot").classList.add("running");
             document.getElementById("statusText").textContent = "Running";
 
+            // Clear content preview
+            clearContentPreview();
+            lastContentUpdate = "";
+
             // Start polling for status
             statusInterval = setInterval(updateStatus, 1000);
             showToast("Đã bắt đầu tự động đăng bài!", "success");
@@ -1591,6 +1769,7 @@ Sửa chữa thang máy tải hàng"
       }
 
       // Update status
+      let lastContentUpdate = "";
       async function updateStatus() {
         try {
           const response = await fetch("/api/status");
@@ -1624,6 +1803,16 @@ Sửa chữa thang máy tải hàng"
               )
               .join("");
             logsContainer.scrollTop = logsContainer.scrollHeight;
+          }
+
+          // Update content preview if new content available
+          if (status.current_content && status.current_content !== lastContentUpdate) {
+            lastContentUpdate = status.current_content;
+            updateContentPreview(
+              status.current_title || "Bài viết",
+              status.current_keyword || "---",
+              status.current_content
+            );
           }
 
           // Check if finished

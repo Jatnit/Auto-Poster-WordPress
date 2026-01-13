@@ -68,6 +68,9 @@ class AppState:
         self.generated_contents = []
         self.successful_posts = 0
         self.failed_posts = 0
+        self.current_content = None  # Current generated content for preview
+        self.current_title = ""
+        self.current_keyword = ""
 
 state = AppState()
 
@@ -750,8 +753,8 @@ def login_to_wordpress(page: Page) -> bool:
             return False
         
         # Navigate to login page
-        page.goto(login_url, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(3)  # Wait for page to fully render
+        page.goto(login_url, wait_until="domcontentloaded", timeout=30000)
+        time.sleep(1)
         
         current_url = page.url
         add_log(f"📍 Current URL: {current_url}", "info")
@@ -797,7 +800,7 @@ def login_to_wordpress(page: Page) -> bool:
             except:
                 continue
         
-        time.sleep(0.5)
+        time.sleep(0.3)
         
         # Fill password
         for selector in password_selectors:
@@ -812,7 +815,7 @@ def login_to_wordpress(page: Page) -> bool:
             except:
                 continue
         
-        time.sleep(0.5)
+        time.sleep(0.3)
         
         # Click submit button
         submit_selectors = ["#wp-submit", "input[type='submit']", "button[type='submit']", ".login-submit button"]
@@ -828,14 +831,14 @@ def login_to_wordpress(page: Page) -> bool:
                 continue
         
         # Wait for navigation
-        add_log("⏳ Waiting for login to complete...", "info")
-        time.sleep(5)
+        add_log("⏳ Đang chờ đăng nhập...", "info")
+        time.sleep(2)
         
         # Try waiting for wp-admin URL
         try:
-            page.wait_for_url("**/wp-admin/**", timeout=15000)
+            page.wait_for_url("**/wp-admin/**", timeout=10000)
         except:
-            time.sleep(3)
+            time.sleep(1)
         
         # Check if login was successful
         current_url = page.url
@@ -932,8 +935,8 @@ def set_post_title(page: Page, title: str) -> bool:
 def set_post_content(page: Page, content: str) -> bool:
     """Set the post content (Classic Editor with TinyMCE)."""
     try:
-        add_log("📝 Adding content to post...", "info")
-        time.sleep(1)
+        add_log("📝 Đang thêm nội dung...", "info")
+        time.sleep(0.5)
         
         content_added = False
         
@@ -943,7 +946,7 @@ def set_post_content(page: Page, content: str) -> bool:
             text_tab = page.locator("#content-html").first
             if text_tab.is_visible(timeout=3000):
                 text_tab.click()
-                time.sleep(1)
+                time.sleep(0.5)
                 add_log("📝 Đã chuyển sang chế độ Text/HTML", "info")
                 
                 # Fill the content textarea
@@ -1163,202 +1166,131 @@ def select_random_image(page: Page, alt_text: str) -> bool:
         return False
 
 def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
-    """Insert images RIGHT AFTER H2 headings (after the title) using Visual Editor."""
+    """Insert images after H2 headings using Visual Editor."""
     try:
-        add_log("🖼️ Starting to insert images after H2 headings...", "info")
+        add_log("🖼️ Đang chèn hình vào bài viết...", "info")
+        close_all_modals(page)
         
-        # First, close any open modals
-        force_close_all_modals(page)
-        
-        # Switch to Visual mode for cursor navigation
-        visual_tab = page.locator("#content-tmce").first
+        # Switch to Visual mode
         try:
-            if visual_tab.is_visible(timeout=2000):
+            visual_tab = page.locator("#content-tmce").first
+            if visual_tab.is_visible(timeout=1000):
                 visual_tab.click()
-                time.sleep(1)
-                add_log("📝 Đã chuyển sang chế độ Visual", "info")
+                time.sleep(0.5)
         except:
             pass
         
-        # Get all H2 headings in the TinyMCE iframe
-        tinymce_frame = page.frame_locator("#content_ifr")
-        h2_elements = tinymce_frame.locator("h2").all()
-        
+        # Get H2 headings
+        h2_elements = page.frame_locator("#content_ifr").locator("h2").all()
         if not h2_elements:
-            add_log("⚠️ Không tìm thấy tiêu đề H2 trong nội dung", "warning")
+            add_log("⚠️ Không tìm thấy tiêu đề H2", "warning")
             return False
         
         add_log(f"📝 Tìm thấy {len(h2_elements)} tiêu đề H2", "info")
-        
         images_inserted = 0
         
-        # Insert images after H2s at positions 0, 2, 4 (1st, 3rd, 5th H2)
-        target_indices = [0, 2, 4]  # After 1st, 3rd, 5th H2
-        
-        for idx, h2_index in enumerate(target_indices):
-            if images_inserted >= max_images:
-                break
-            if h2_index >= len(h2_elements):
+        # Insert after 1st, 3rd, 5th H2
+        for h2_index in [0, 2, 4]:
+            if images_inserted >= max_images or h2_index >= len(h2_elements):
                 break
             
             try:
-                h2 = h2_elements[h2_index]
-                
-                # Click on the H2 to position cursor
-                h2.click()
-                time.sleep(0.5)
-                
-                # Move to end of H2 line
+                # Position cursor after H2
+                h2_elements[h2_index].click()
                 page.keyboard.press("End")
-                time.sleep(0.3)
-                
-                # Press Enter to create new line right after H2
                 page.keyboard.press("Enter")
-                time.sleep(0.3)
+                time.sleep(0.2)
                 
-                # Now click "Thêm Media" button
-                add_media_btn = page.locator("#insert-media-button, .add_media, button:has-text('Thêm Media')").first
-                if add_media_btn.is_visible(timeout=2000):
-                    add_media_btn.click()
-                    time.sleep(2)
+                # Open media modal
+                add_btn = page.locator("#insert-media-button, .add_media").first
+                if not add_btn.is_visible(timeout=1000):
+                    continue
                     
-                    # Wait for media modal
-                    try:
-                        page.wait_for_selector(".media-modal", timeout=5000)
-                        time.sleep(2)
-                        
-                        # Find and click an image
-                        images = page.locator(".attachments .attachment, li.attachment").all()
-                        if images:
-                            # Pick a random image from first 10
-                            img_index = random.randint(0, min(len(images) - 1, 10))
-                            images[img_index].click()
-                            time.sleep(1)
-                            
-                            # Set alt text
-                            try:
-                                alt_input = page.locator("input[data-setting='alt']").first
-                                if alt_input.is_visible(timeout=1000):
-                                    alt_input.fill(keyword)
-                            except:
-                                pass
-                            
-                            # Set "Link To" = "Attachment Page" (Trang nội dung đính kèm)
-                            try:
-                                link_select = page.locator("select[data-setting='link'], select.link-to").first
-                                if link_select.is_visible(timeout=1000):
-                                    link_select.select_option("post")  # "post" = Attachment Page
-                                    add_log("🔗 Set Link To: Attachment Page", "info")
-                                    time.sleep(0.5)
-                            except:
-                                pass
-                            
-                            # Click "Chèn vào bài viết" / "Insert into post"
-                            insert_selectors = [
-                                "button.media-button-insert",
-                                "button:has-text('Chèn vào bài viết')",
-                                "button:has-text('Insert into post')",
-                                ".media-button-insert"
-                            ]
-                            
-                            for selector in insert_selectors:
-                                try:
-                                    btn = page.locator(selector).first
-                                    if btn.is_visible(timeout=1000):
-                                        btn.click()
-                                        images_inserted += 1
-                                        add_log(f"🖼️ Đã chèn hình {images_inserted} sau H2 #{h2_index + 1}", "success")
-                                        time.sleep(1)
-                                        break
-                                except:
-                                    continue
-                        
-                    except Exception as e:
-                        add_log(f"⚠️ Error inserting image: {e}", "warning")
-                    
-                    # Always close modal after each attempt
-                    force_close_all_modals(page)
+                add_btn.click()
+                page.wait_for_selector(".media-modal", timeout=3000)
+                time.sleep(0.8)
+                
+                # Select image
+                images = page.locator(".attachments .attachment, li.attachment").all()
+                if images:
+                    images[random.randint(0, min(len(images) - 1, 10))].click()
                     time.sleep(0.5)
+                    
+                    # Set alt text
+                    try:
+                        alt = page.locator("input[data-setting='alt']").first
+                        if alt.is_visible(timeout=500):
+                            alt.fill(keyword)
+                    except:
+                        pass
+                    
+                    # Set link to attachment page
+                    try:
+                        link = page.locator("select[data-setting='link']").first
+                        if link.is_visible(timeout=500):
+                            link.select_option("post")
+                    except:
+                        pass
+                    
+                    # Insert
+                    for sel in ["button.media-button-insert", "button:has-text('Chèn vào bài viết')"]:
+                        try:
+                            btn = page.locator(sel).first
+                            if btn.is_visible(timeout=500):
+                                btn.click()
+                                images_inserted += 1
+                                add_log(f"🖼️ Đã chèn hình {images_inserted} sau H2 #{h2_index + 1}", "success")
+                                time.sleep(0.5)
+                                break
+                        except:
+                            continue
+                
+                close_all_modals(page)
                 
             except Exception as e:
-                add_log(f"⚠️ Could not insert image after H2 #{h2_index + 1}: {e}", "warning")
-                force_close_all_modals(page)
+                close_all_modals(page)
                 continue
         
-        # Final cleanup
-        force_close_all_modals(page)
-        
-        add_log(f"✅ Đã chèn {images_inserted} hình vào nội dung", "success")
+        close_all_modals(page)
+        add_log(f"✅ Đã chèn {images_inserted} hình", "success")
         return images_inserted > 0
         
     except Exception as e:
-        add_log(f"⚠️ Error inserting images: {e}", "warning")
-        force_close_all_modals(page)
+        add_log(f"⚠️ Lỗi chèn hình: {e}", "warning")
+        close_all_modals(page)
         return False
 
-def force_close_all_modals(page: Page):
-    """Aggressively close all media modals."""
+def close_all_modals(page: Page, max_attempts: int = 2):
+    """Close all media modals efficiently."""
     try:
-        # Try multiple times
-        for attempt in range(3):
-            # Press Escape multiple times
-            for _ in range(3):
-                page.keyboard.press("Escape")
-                time.sleep(0.2)
+        for _ in range(max_attempts):
+            # Quick Escape key press
+            page.keyboard.press("Escape")
+            time.sleep(0.15)
             
-            # Try clicking close buttons
-            close_selectors = [
-                ".media-modal-close",
-                "button[aria-label='Close']",
-                ".media-modal .close",
-                ".media-frame-close"
-            ]
-            
-            for selector in close_selectors:
+            # Try close buttons
+            for selector in [".media-modal-close", "button[aria-label='Close']", ".media-frame-close"]:
                 try:
-                    close_btns = page.locator(selector).all()
-                    for btn in close_btns:
-                        if btn.is_visible(timeout=500):
-                            btn.click()
-                            time.sleep(0.3)
+                    btn = page.locator(selector).first
+                    if btn.is_visible(timeout=300):
+                        btn.click()
+                        time.sleep(0.15)
+                        break
                 except:
                     continue
             
             # Check if modal is gone
             try:
-                if not page.locator(".media-modal").first.is_visible(timeout=500):
-                    return  # Modal is closed
+                if not page.locator(".media-modal").first.is_visible(timeout=300):
+                    return
             except:
-                return  # No modal found, we're done
-            
-            time.sleep(0.5)
+                return
     except:
         pass
 
-def close_any_media_modal(page: Page):
-    """Close any open media modal."""
-    try:
-        close_selectors = [
-            ".media-modal-close",
-            "button[aria-label='Close']",
-            ".media-modal button.close",
-            ".media-frame-menu .media-menu-item"
-        ]
-        for selector in close_selectors:
-            try:
-                close_btn = page.locator(selector).first
-                if close_btn.is_visible(timeout=1000):
-                    close_btn.click()
-                    time.sleep(0.5)
-                    return
-            except:
-                continue
-        
-        # Also try pressing Escape key
-        page.keyboard.press("Escape")
-        time.sleep(0.5)
-    except:
-        pass
+# Alias for compatibility
+force_close_all_modals = close_all_modals
+close_any_media_modal = close_all_modals
 
 def select_random_image_for_content(page: Page, alt_text: str) -> bool:
     """Select an image from media library and insert it into content."""
@@ -1646,14 +1578,14 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
         add_log("📤 Preparing to publish...", "info")
         
         # Wait a moment for any overlays to disappear
-        time.sleep(2)
+        time.sleep(1)
         
         # Scroll to publish button area
         try:
             page.evaluate("document.getElementById('publish').scrollIntoView({block: 'center'})")
         except:
             pass
-        time.sleep(1)
+        time.sleep(0.5)
         
         # Try to click using JavaScript to bypass any overlay
         try:
@@ -1667,8 +1599,8 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
                 publish_btn.click(force=True)
         
         # Wait for page to reload - this is critical
-        add_log("⏳ Waiting for page to save...", "info")
-        time.sleep(8)  # Wait 8 seconds for page reload
+        add_log("⏳ Đang lưu bài viết...", "info")
+        time.sleep(4)
         
         # Multiple ways to check for success
         success_detected = False
@@ -1913,8 +1845,16 @@ def run_automation():
                         break
                     
                     state.current_task = f"Generating content {i+1}/{total_topics} via Gemini Web..."
+                    state.current_title = topic["title"]
+                    state.current_keyword = topic["keyword"]
+                    
                     content = generate_content_gemini_web(page, topic["title"], topic["keyword"])
                     state.generated_contents.append(content)
+                    
+                    # Store content for preview
+                    if content:
+                        state.current_content = content
+                    
                     state.progress = ((i + 1) / state.total_tasks) * 100
                     
                     if i < len(state.topics) - 1 and state.is_running:
@@ -1993,10 +1933,13 @@ def get_status():
         "progress": state.progress,
         "successful_posts": state.successful_posts,
         "failed_posts": state.failed_posts,
-        "logs": state.logs[-20:],  # Last 20 logs
+        "logs": state.logs,  # All logs - no limit
         "gemini_available": GEMINI_AVAILABLE,
         "ollama_available": check_ollama(),
-        "playwright_available": PLAYWRIGHT_AVAILABLE
+        "playwright_available": PLAYWRIGHT_AVAILABLE,
+        "current_content": state.current_content,
+        "current_title": state.current_title,
+        "current_keyword": state.current_keyword
     })
 
 @app.route('/api/config', methods=['GET', 'POST'])
