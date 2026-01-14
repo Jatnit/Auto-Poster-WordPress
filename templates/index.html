@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WordPress Auto Poster</title>
+    <title>WP_AUTOPOSTER // Matrix Terminal</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap"
       rel="stylesheet"
     />
     <link
@@ -14,28 +14,28 @@
     />
     <style>
       :root {
-        --bg-primary: #0a0a1a;
-        --bg-secondary: #12122a;
-        --bg-card: rgba(20, 20, 50, 0.7);
-        --bg-input: rgba(30, 30, 70, 0.5);
-        --accent-primary: #00d4ff;
-        --accent-secondary: #7c3aed;
-        --accent-tertiary: #f472b6;
-        --accent-gradient: linear-gradient(135deg, #00d4ff 0%, #7c3aed 50%, #f472b6 100%);
-        --accent-gradient-hover: linear-gradient(135deg, #00e5ff 0%, #8b5cf6 50%, #f59fba 100%);
-        --text-primary: #ffffff;
-        --text-secondary: #94a3b8;
-        --text-muted: #64748b;
-        --success: #10b981;
-        --warning: #f59e0b;
-        --error: #ef4444;
-        --info: #0ea5e9;
-        --border-color: rgba(255, 255, 255, 0.08);
-        --glass-bg: rgba(255, 255, 255, 0.03);
-        --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        --shadow-glow: 0 0 40px rgba(0, 212, 255, 0.15);
-        --radius: 20px;
-        --radius-sm: 12px;
+        --bg-primary: #000000;
+        --bg-secondary: #0a0a0a;
+        --bg-card: rgba(0, 15, 0, 0.85);
+        --bg-input: rgba(0, 20, 0, 0.7);
+        --accent-primary: #00ff00;
+        --accent-secondary: #00cc00;
+        --accent-tertiary: #33ff33;
+        --accent-gradient: linear-gradient(135deg, #00ff00 0%, #00cc00 50%, #009900 100%);
+        --accent-gradient-hover: linear-gradient(135deg, #33ff33 0%, #00ff00 50%, #00cc00 100%);
+        --text-primary: #00ff00;
+        --text-secondary: #00cc00;
+        --text-muted: #008800;
+        --success: #00ff00;
+        --warning: #ffff00;
+        --error: #ff0000;
+        --info: #00ffff;
+        --border-color: rgba(0, 255, 0, 0.2);
+        --glass-bg: rgba(0, 255, 0, 0.03);
+        --shadow: 0 0 30px rgba(0, 255, 0, 0.2);
+        --shadow-glow: 0 0 50px rgba(0, 255, 0, 0.3);
+        --radius: 8px;
+        --radius-sm: 4px;
       }
 
       * {
@@ -45,81 +45,59 @@
       }
 
       body {
-        font-family: "Inter", sans-serif;
+        font-family: "JetBrains Mono", "Share Tech Mono", monospace;
         background: var(--bg-primary);
         color: var(--text-primary);
         min-height: 100vh;
         overflow-x: hidden;
       }
 
-      /* Animated background */
-      .bg-animation {
+      /* Matrix rain background */
+      .matrix-rain {
         position: fixed;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
         z-index: -1;
-        overflow: hidden;
+        background: #000000;
       }
 
-      .bg-animation::before {
-        content: "";
-        position: absolute;
-        width: 200%;
-        height: 200%;
-        top: -50%;
-        left: -50%;
-        background: radial-gradient(
-            circle at 20% 80%,
-            rgba(0, 212, 255, 0.12) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 80% 20%,
-            rgba(124, 58, 237, 0.12) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 50% 50%,
-            rgba(244, 114, 182, 0.08) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 90% 90%,
-            rgba(0, 212, 255, 0.08) 0%,
-            transparent 30%
-          );
-        animation: floatBg 25s ease-in-out infinite;
+      .matrix-rain canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
       }
 
-      @keyframes floatBg {
-        0%,
-        100% {
-          transform: translate(0, 0) rotate(0deg) scale(1);
-        }
-        25% {
-          transform: translate(50px, -30px) rotate(3deg) scale(1.02);
-        }
-        50% {
-          transform: translate(-30px, 50px) rotate(-3deg) scale(0.98);
-        }
-        75% {
-          transform: translate(-50px, -20px) rotate(2deg) scale(1.01);
-        }
+      /* Scanline overlay */
+      .scanline-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        pointer-events: none;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.1) 2px,
+          rgba(0, 0, 0, 0.1) 4px
+        );
       }
 
       /* Header */
       .header {
-        background: rgba(10, 10, 30, 0.85);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+        background: rgba(0, 0, 0, 0.95);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-bottom: 1px solid rgba(0, 255, 0, 0.3);
         padding: 1rem 2rem;
         position: sticky;
         top: 0;
         z-index: 100;
-        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
       }
 
       .header-content {
@@ -139,34 +117,42 @@
       .logo-icon {
         width: 52px;
         height: 52px;
-        background: var(--accent-gradient);
-        border-radius: 14px;
+        background: transparent;
+        border: 2px solid var(--accent-primary);
+        border-radius: 8px;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 1.5rem;
-        box-shadow: 0 0 25px rgba(0, 212, 255, 0.3);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        color: var(--accent-primary);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.1);
+        transition: all 0.3s ease;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.1); }
+        50% { box-shadow: 0 0 40px rgba(0, 255, 0, 0.5), inset 0 0 30px rgba(0, 255, 0, 0.2); }
       }
 
       .logo-icon:hover {
-        transform: scale(1.05) rotate(-3deg);
-        box-shadow: 0 0 35px rgba(0, 212, 255, 0.5);
+        transform: scale(1.05);
+        box-shadow: 0 0 50px rgba(0, 255, 0, 0.6);
       }
 
       .logo-text h1 {
         font-size: 1.35rem;
         font-weight: 700;
-        background: var(--accent-gradient);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        color: var(--accent-primary);
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        letter-spacing: 1px;
       }
 
       .logo-text span {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: var(--text-secondary);
-        letter-spacing: 0.5px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
       }
 
       .status-badge {
@@ -174,16 +160,18 @@
         align-items: center;
         gap: 10px;
         padding: 10px 20px;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 50px;
-        font-size: 0.875rem;
+        background: rgba(0, 255, 0, 0.05);
+        border: 1px solid rgba(0, 255, 0, 0.3);
+        border-radius: 4px;
+        font-size: 0.8rem;
         transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .status-badge:hover {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(0, 212, 255, 0.2);
+        background: rgba(0, 255, 0, 0.1);
+        box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
       }
 
       .status-dot {
@@ -196,21 +184,16 @@
 
       .status-dot.running {
         background: var(--success);
-        box-shadow: 0 0 12px var(--success);
-        animation: pulse 1.5s infinite;
+        box-shadow: 0 0 15px var(--success);
+        animation: blink 0.8s infinite;
       }
 
-      @keyframes pulse {
-        0%,
-        100% {
+      @keyframes blink {
+        0%, 100% {
           opacity: 1;
-          transform: scale(1);
-          box-shadow: 0 0 12px var(--success);
         }
         50% {
-          opacity: 0.7;
-          transform: scale(1.3);
-          box-shadow: 0 0 20px var(--success);
+          opacity: 0.3;
         }
       }
 
@@ -233,38 +216,45 @@
 
       /* Cards */
       .card {
-        background: var(--bg-card);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        background: rgba(0, 10, 0, 0.9);
         border-radius: var(--radius);
-        border: 1px solid var(--border-color);
+        border: 1px solid rgba(0, 255, 0, 0.3);
         overflow: hidden;
-        box-shadow: var(--shadow);
-        transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+        transition: all 0.3s ease;
       }
 
       .card:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow), var(--shadow-glow);
-        border-color: rgba(0, 212, 255, 0.15);
+        border-color: rgba(0, 255, 0, 0.5);
+        box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
       }
 
       .card-header {
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid var(--border-color);
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid rgba(0, 255, 0, 0.2);
         display: flex;
         align-items: center;
         gap: 12px;
+        background: rgba(0, 255, 0, 0.05);
+      }
+
+      .card-header::before {
+        content: ">";
+        color: var(--accent-primary);
+        font-weight: bold;
+        animation: blink 1s infinite;
       }
 
       .card-header i {
-        font-size: 1.25rem;
+        font-size: 1rem;
         color: var(--accent-primary);
       }
 
       .card-header h2 {
-        font-size: 1rem;
+        font-size: 0.9rem;
         font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .card-body {
@@ -282,32 +272,41 @@
 
       .form-label {
         display: block;
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         font-weight: 500;
         color: var(--text-secondary);
         margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .form-label::before {
+        content: "$ ";
+        color: var(--accent-primary);
       }
 
       .form-input {
         width: 100%;
         padding: 12px 16px;
-        background: var(--bg-input);
-        border: 1px solid var(--border-color);
+        background: rgba(0, 20, 0, 0.8);
+        border: 1px solid rgba(0, 255, 0, 0.3);
         border-radius: var(--radius-sm);
         color: var(--text-primary);
-        font-size: 0.875rem;
-        font-family: inherit;
+        font-size: 0.85rem;
+        font-family: "JetBrains Mono", monospace;
         transition: all 0.3s ease;
       }
 
       .form-input:focus {
         outline: none;
         border-color: var(--accent-primary);
-        box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15), 0 0 20px rgba(0, 212, 255, 0.1);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.2), inset 0 0 10px rgba(0, 255, 0, 0.05);
+        background: rgba(0, 30, 0, 0.9);
       }
 
       .form-input::placeholder {
         color: var(--text-muted);
+        font-style: italic;
       }
 
       .form-row {
@@ -476,10 +475,13 @@
       }
 
       .btn-primary {
-        background: var(--accent-gradient);
-        color: white;
+        background: transparent;
+        color: var(--accent-primary);
+        border: 2px solid var(--accent-primary);
         position: relative;
         overflow: hidden;
+        text-transform: uppercase;
+        letter-spacing: 2px;
       }
 
       .btn-primary::before {
@@ -489,7 +491,7 @@
         left: -100%;
         width: 100%;
         height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.3), transparent);
         transition: left 0.5s ease;
       }
 
@@ -498,47 +500,56 @@
       }
 
       .btn-primary:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 30px rgba(0, 212, 255, 0.35), 0 0 40px rgba(124, 58, 237, 0.2);
+        background: rgba(0, 255, 0, 0.1);
+        box-shadow: 0 0 30px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1);
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
       }
 
       .btn-secondary {
-        background: rgba(255, 255, 255, 0.1);
-        color: var(--text-primary);
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid rgba(0, 255, 0, 0.3);
       }
 
       .btn-secondary:hover {
-        background: rgba(255, 255, 255, 0.15);
+        background: rgba(0, 255, 0, 0.1);
+        border-color: var(--accent-primary);
       }
 
       /* Mode selector buttons */
       .mode-btn {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--border-color);
+        background: transparent;
+        border: 1px solid rgba(0, 255, 0, 0.3);
         color: var(--text-secondary);
         transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .mode-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(0, 212, 255, 0.3);
+        background: rgba(0, 255, 0, 0.1);
+        border-color: var(--accent-primary);
         color: var(--text-primary);
       }
 
       .mode-btn.active {
-        background: var(--accent-gradient);
-        border-color: transparent;
-        color: white;
-        box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        background: rgba(0, 255, 0, 0.2);
+        border-color: var(--accent-primary);
+        color: var(--accent-primary);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
       }
 
       .btn-danger {
-        background: var(--error);
-        color: white;
+        background: transparent;
+        color: var(--error);
+        border: 2px solid var(--error);
+        text-transform: uppercase;
+        letter-spacing: 1px;
       }
 
       .btn-danger:hover {
-        background: #ff5e6d;
+        background: rgba(255, 0, 0, 0.1);
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
       }
 
       .btn-icon {
@@ -551,7 +562,7 @@
       .btn-large {
         width: 100%;
         padding: 16px 32px;
-        font-size: 1rem;
+        font-size: 0.9rem;
         border-radius: var(--radius);
       }
 
@@ -652,11 +663,11 @@
 
       .progress-fill {
         height: 100%;
-        background: var(--accent-gradient);
-        border-radius: 5px;
+        background: var(--accent-primary);
+        border-radius: 0;
         transition: width 0.5s ease;
         position: relative;
-        box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+        box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
       }
 
       .progress-fill::after {
@@ -669,10 +680,10 @@
         background: linear-gradient(
           90deg,
           transparent 0%,
-          rgba(255, 255, 255, 0.3) 50%,
+          rgba(255, 255, 255, 0.4) 50%,
           transparent 100%
         );
-        animation: shimmer 2s infinite;
+        animation: shimmer 1s infinite;
       }
 
       @keyframes shimmer {
@@ -684,18 +695,20 @@
         }
       }
 
-      /* Logs */
+      /* Logs - Terminal Style */
       .logs-container {
         height: 500px;
         max-height: 70vh;
         overflow-y: auto;
-        background: rgba(0, 0, 0, 0.3);
+        background: rgba(0, 5, 0, 0.95);
+        border: 1px solid rgba(0, 255, 0, 0.3);
         border-radius: var(--radius-sm);
         padding: 1rem;
-        font-family: "JetBrains Mono", "Fira Code", monospace;
-        font-size: 0.8rem;
+        font-family: "JetBrains Mono", "Share Tech Mono", monospace;
+        font-size: 0.75rem;
         scrollbar-width: thin;
         scrollbar-color: var(--accent-primary) transparent;
+        line-height: 1.6;
       }
 
       .logs-container::-webkit-scrollbar {
@@ -714,31 +727,40 @@
       .log-entry {
         display: flex;
         gap: 12px;
-        padding: 6px 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(0, 255, 0, 0.05);
+      }
+
+      .log-entry::before {
+        content: ">";
+        color: var(--accent-primary);
+        font-weight: bold;
       }
 
       .log-time {
-        color: var(--text-muted);
+        color: #006600;
         flex-shrink: 0;
       }
 
       .log-message {
         flex: 1;
         word-break: break-word;
+        color: #00ff00;
       }
 
       .log-message.success {
-        color: var(--success);
+        color: #00ff00;
+        text-shadow: 0 0 8px rgba(0, 255, 0, 0.6);
       }
       .log-message.warning {
-        color: var(--warning);
+        color: #ccff00;
       }
       .log-message.error {
-        color: var(--error);
+        color: #ff3333;
+        text-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
       }
       .log-message.info {
-        color: var(--info);
+        color: #00cc00;
       }
 
       /* Control buttons */
@@ -750,6 +772,36 @@
 
       .control-buttons .btn {
         flex: 1;
+      }
+
+      /* Warning button */
+      .btn-warning {
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        color: #000;
+        font-weight: 600;
+      }
+
+      .btn-warning:hover {
+        box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
+        transform: translateY(-2px);
+      }
+
+      /* Pause banner */
+      .pause-banner {
+        margin-top: 1rem;
+        padding: 1rem 1.5rem;
+        background: rgba(245, 158, 11, 0.15);
+        border: 1px solid rgba(245, 158, 11, 0.3);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: #fbbf24;
+        font-weight: 500;
+      }
+
+      .pause-banner i {
+        font-size: 1.25rem;
       }
 
       /* Content Preview */
@@ -1245,23 +1297,27 @@
     </style>
   </head>
   <body>
-    <div class="bg-animation"></div>
+    <!-- Matrix Rain Background -->
+    <div class="matrix-rain">
+      <canvas id="matrixCanvas"></canvas>
+    </div>
+    <div class="scanline-overlay"></div>
 
     <!-- Header -->
     <header class="header">
       <div class="header-content">
         <div class="logo">
           <div class="logo-icon">
-            <i class="fab fa-wordpress"></i>
+            <i class="fas fa-terminal"></i>
           </div>
           <div class="logo-text">
-            <h1>WordPress Auto Poster</h1>
-            <span>Powered by Gemini AI</span>
+            <h1>WP_AUTOPOSTER</h1>
+            <span>// Hacking the content game</span>
           </div>
         </div>
         <div class="status-badge">
           <span class="status-dot" id="statusDot"></span>
-          <span id="statusText">Ready</span>
+          <span id="statusText">STANDBY</span>
         </div>
       </div>
     </header>
@@ -1313,6 +1369,27 @@ Website: https://suachuathangmay247.com
          https://thangmaykenzo.com</textarea>
             <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
               💡 Sử dụng <code>{title}</code> và <code>{keyword}</code> để chèn tiêu đề và từ khóa SEO
+            </div>
+          </div>
+
+          <!-- Site Preset Selector -->
+          <div class="form-group" style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
+            <label class="form-label">
+              <i class="fas fa-bookmark"></i> Chọn cấu hình đã lưu
+            </label>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <select class="form-input" id="presetSelect" style="flex: 1;" onchange="loadPreset()">
+                <option value="">-- Chọn site đã lưu --</option>
+              </select>
+              <button class="btn btn-primary" onclick="saveCurrentAsPreset()" title="Lưu cấu hình hiện tại" style="padding: 10px 14px;">
+                <i class="fas fa-save"></i>
+              </button>
+              <button class="btn btn-delete" onclick="deleteCurrentPreset()" title="Xóa preset đã chọn" style="padding: 10px 14px;">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+              💾 Lưu cấu hình để sử dụng nhanh cho nhiều website
             </div>
           </div>
 
@@ -1567,6 +1644,7 @@ Sửa chữa thang máy tải hàng"
           </div>
 
           <div class="control-buttons">
+            <!-- Start button - shown initially -->
             <button
               class="btn btn-primary btn-large"
               id="startBtn"
@@ -1575,15 +1653,39 @@ Sửa chữa thang máy tải hàng"
               <i class="fas fa-play"></i>
               Bắt đầu
             </button>
-            <button
-              class="btn btn-danger btn-large"
-              id="stopBtn"
-              onclick="stopAutomation()"
-              style="display: none"
-            >
-              <i class="fas fa-stop"></i>
-              Dừng lại
-            </button>
+            <!-- Running controls - shown after start -->
+            <div id="runningControls" style="display: none; gap: 1rem;">
+              <button
+                class="btn btn-warning btn-large"
+                id="pauseBtn"
+                onclick="pauseAutomation()"
+              >
+                <i class="fas fa-pause"></i>
+                Tạm dừng
+              </button>
+              <button
+                class="btn btn-primary btn-large"
+                id="resumeBtn"
+                onclick="resumeAutomation()"
+                style="display: none;"
+              >
+                <i class="fas fa-play"></i>
+                Tiếp tục
+              </button>
+              <button
+                class="btn btn-danger btn-large"
+                id="stopBtn"
+                onclick="stopAutomation()"
+              >
+                <i class="fas fa-stop"></i>
+                Kết thúc
+              </button>
+            </div>
+          </div>
+          <!-- Pause info banner -->
+          <div id="pauseBanner" class="pause-banner" style="display: none;">
+            <i class="fas fa-exclamation-triangle"></i>
+            <span id="pauseReason">Đã tạm dừng</span>
           </div>
         </div>
       </div>
@@ -1665,6 +1767,83 @@ Sửa chữa thang máy tải hàng"
     </div>
 
     <script>
+      // ============================================================================
+      // MATRIX RAIN EFFECT
+      // ============================================================================
+      
+      function initMatrixRain() {
+        const canvas = document.getElementById('matrixCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Set canvas size
+        function resize() {
+          canvas.width = window.innerWidth;
+          canvas.height = window.innerHeight;
+        }
+        resize();
+        window.addEventListener('resize', resize);
+        
+        // Binary characters
+        const chars = '01';
+        const fontSize = 14;
+        const columns = Math.floor(canvas.width / fontSize);
+        
+        // Array to track y position of each column
+        const drops = [];
+        for (let i = 0; i < columns; i++) {
+          drops[i] = Math.random() * -100;
+        }
+        
+        // Speed variation for each column
+        const speeds = [];
+        for (let i = 0; i < columns; i++) {
+          speeds[i] = 0.5 + Math.random() * 1.5;
+        }
+        
+        function draw() {
+          // Semi-transparent black to create fade effect
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Green text
+          ctx.font = fontSize + 'px "JetBrains Mono", monospace';
+          
+          for (let i = 0; i < drops.length; i++) {
+            // Random binary character
+            const char = chars[Math.floor(Math.random() * chars.length)];
+            
+            // Calculate x position
+            const x = i * fontSize;
+            const y = drops[i] * fontSize;
+            
+            // Brightness based on position (newer = brighter)
+            const brightness = Math.min(255, 100 + Math.random() * 155);
+            ctx.fillStyle = `rgb(0, ${brightness}, 0)`;
+            
+            // Draw character
+            ctx.fillText(char, x, y);
+            
+            // Add glow effect for some characters
+            if (Math.random() > 0.98) {
+              ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+              ctx.fillText(char, x, y);
+            }
+            
+            // Move drop down
+            drops[i] += speeds[i];
+            
+            // Reset drop to top with random delay
+            if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+              drops[i] = 0;
+              speeds[i] = 0.5 + Math.random() * 1.5;
+            }
+          }
+        }
+        
+        // Animate
+        setInterval(draw, 33);
+      }
+      
       // Topics storage
       let topics = [];
       let isRunning = false;
@@ -1672,10 +1851,139 @@ Sửa chữa thang máy tải hàng"
 
       // Initialize
       document.addEventListener("DOMContentLoaded", () => {
+        initMatrixRain();
         loadConfig();
         loadTopics();
         updateStats();
+        loadPresetList();
       });
+
+      // ============================================================================
+      // PRESET MANAGEMENT
+      // ============================================================================
+      
+      async function loadPresetList() {
+        try {
+          const response = await fetch("/api/presets");
+          const result = await response.json();
+          if (result.success) {
+            const select = document.getElementById("presetSelect");
+            select.innerHTML = '<option value="">-- Chọn site đã lưu --</option>';
+            result.presets.forEach(name => {
+              const option = document.createElement("option");
+              option.value = name;
+              option.textContent = name;
+              select.appendChild(option);
+            });
+          }
+        } catch (e) {
+          console.log("Could not load presets");
+        }
+      }
+
+      async function loadPreset() {
+        const select = document.getElementById("presetSelect");
+        const name = select.value;
+        if (!name) return;
+        
+        try {
+          const response = await fetch(`/api/presets/${encodeURIComponent(name)}`);
+          const result = await response.json();
+          if (result.success) {
+            const data = result.data;
+            document.getElementById("wpUsername").value = data.wp_username || "";
+            document.getElementById("wpPassword").value = data.wp_password || "";
+            document.getElementById("wpLoginUrl").value = data.wp_login_url || "";
+            document.getElementById("wpAdminUrl").value = data.wp_admin_url || "";
+            if (data.gemini_prompt) {
+              document.getElementById("geminiPrompt").value = data.gemini_prompt;
+            }
+            showToast(`Đã tải cấu hình: ${name}`, "success");
+          }
+        } catch (e) {
+          showToast("Không thể tải cấu hình", "error");
+        }
+      }
+
+      async function saveCurrentAsPreset() {
+        const wpLoginUrl = document.getElementById("wpLoginUrl").value;
+        if (!wpLoginUrl) {
+          showToast("Vui lòng nhập WordPress Login URL trước", "warning");
+          return;
+        }
+        
+        // Extract domain for preset name
+        let presetName = "";
+        try {
+          const url = new URL(wpLoginUrl);
+          presetName = url.hostname.replace("www.", "");
+        } catch {
+          presetName = prompt("Nhập tên cho cấu hình:", "my-site");
+        }
+        
+        if (!presetName) {
+          presetName = prompt("Nhập tên cho cấu hình:", "my-site");
+        }
+        
+        if (!presetName) return;
+        
+        const data = {
+          wp_username: document.getElementById("wpUsername").value,
+          wp_password: document.getElementById("wpPassword").value,
+          wp_login_url: document.getElementById("wpLoginUrl").value,
+          wp_admin_url: document.getElementById("wpAdminUrl").value,
+          gemini_prompt: document.getElementById("geminiPrompt").value
+        };
+        
+        try {
+          const response = await fetch(`/api/presets/${encodeURIComponent(presetName)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data)
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            showToast(`Đã lưu: ${presetName}`, "success");
+            loadPresetList();
+            // Select the saved preset
+            setTimeout(() => {
+              document.getElementById("presetSelect").value = presetName;
+            }, 100);
+          } else {
+            showToast("Không thể lưu cấu hình", "error");
+          }
+        } catch (e) {
+          showToast("Lỗi kết nối", "error");
+        }
+      }
+
+      async function deleteCurrentPreset() {
+        const select = document.getElementById("presetSelect");
+        const name = select.value;
+        if (!name) {
+          showToast("Vui lòng chọn preset để xóa", "warning");
+          return;
+        }
+        
+        if (!confirm(`Bạn có chắc muốn xóa cấu hình "${name}"?`)) return;
+        
+        try {
+          const response = await fetch(`/api/presets/${encodeURIComponent(name)}`, {
+            method: "DELETE"
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            showToast(`Đã xóa: ${name}`, "success");
+            loadPresetList();
+          } else {
+            showToast("Không thể xóa", "error");
+          }
+        } catch (e) {
+          showToast("Lỗi kết nối", "error");
+        }
+      }
 
       // Render content list as accordion
       let loadedContents = {};
@@ -2290,7 +2598,10 @@ Sửa chữa thang máy tải hàng"
           if (result.success) {
             isRunning = true;
             document.getElementById("startBtn").style.display = "none";
-            document.getElementById("stopBtn").style.display = "block";
+            document.getElementById("runningControls").style.display = "flex";
+            document.getElementById("pauseBtn").style.display = "block";
+            document.getElementById("resumeBtn").style.display = "none";
+            document.getElementById("pauseBanner").style.display = "none";
             document.getElementById("statusDot").classList.add("running");
             document.getElementById("statusText").textContent = "Running";
 
@@ -2315,7 +2626,8 @@ Sửa chữa thang máy tải hàng"
 
           isRunning = false;
           document.getElementById("startBtn").style.display = "block";
-          document.getElementById("stopBtn").style.display = "none";
+          document.getElementById("runningControls").style.display = "none";
+          document.getElementById("pauseBanner").style.display = "none";
           document.getElementById("statusDot").classList.remove("running");
           document.getElementById("statusText").textContent = "Stopped";
 
@@ -2324,9 +2636,46 @@ Sửa chữa thang máy tải hàng"
             statusInterval = null;
           }
 
-          showToast("Đã dừng!", "warning");
+          showToast("Đã kết thúc!", "warning");
         } catch (e) {
           showToast("Lỗi khi dừng", "error");
+        }
+      }
+
+      // Pause automation
+      async function pauseAutomation() {
+        try {
+          const response = await fetch("/api/pause", { method: "POST" });
+          const result = await response.json();
+          
+          if (result.success) {
+            document.getElementById("pauseBtn").style.display = "none";
+            document.getElementById("resumeBtn").style.display = "block";
+            document.getElementById("pauseBanner").style.display = "flex";
+            document.getElementById("pauseReason").textContent = "Đã tạm dừng bởi người dùng";
+            document.getElementById("statusText").textContent = "Paused";
+            showToast("Đã tạm dừng", "warning");
+          }
+        } catch (e) {
+          showToast("Lỗi khi tạm dừng", "error");
+        }
+      }
+
+      // Resume automation
+      async function resumeAutomation() {
+        try {
+          const response = await fetch("/api/resume", { method: "POST" });
+          const result = await response.json();
+          
+          if (result.success) {
+            document.getElementById("pauseBtn").style.display = "block";
+            document.getElementById("resumeBtn").style.display = "none";
+            document.getElementById("pauseBanner").style.display = "none";
+            document.getElementById("statusText").textContent = "Running";
+            showToast("Tiếp tục thực thi", "success");
+          }
+        } catch (e) {
+          showToast("Lỗi khi tiếp tục", "error");
         }
       }
 
@@ -2371,11 +2720,21 @@ Sửa chữa thang máy tải hàng"
             renderContentList(status.content_list);
           }
 
+          // Handle pause state from server (e.g., auto-paused on error)
+          if (status.is_paused && isRunning) {
+            document.getElementById("pauseBtn").style.display = "none";
+            document.getElementById("resumeBtn").style.display = "block";
+            document.getElementById("pauseBanner").style.display = "flex";
+            document.getElementById("pauseReason").textContent = status.pause_reason || "Đã tạm dừng";
+            document.getElementById("statusText").textContent = "Paused";
+          }
+
           // Check if finished
           if (!status.is_running && isRunning) {
             isRunning = false;
             document.getElementById("startBtn").style.display = "block";
-            document.getElementById("stopBtn").style.display = "none";
+            document.getElementById("runningControls").style.display = "none";
+            document.getElementById("pauseBanner").style.display = "none";
             document.getElementById("statusDot").classList.remove("running");
             document.getElementById("statusText").textContent = "Completed";
 

@@ -72,6 +72,8 @@ class AppState:
         self.current_title = ""
         self.current_keyword = ""
         self.content_list = []  # List of {title, keyword, content, word_count}
+        self.is_paused = False  # Pause state
+        self.pause_reason = ""  # Reason for pause (manual or error)
 
 state = AppState()
 
@@ -88,6 +90,45 @@ def add_log(message: str, log_type: str = "info"):
         state.logs = state.logs[-100:]
 
 # ============================================================================
+# SITE PRESETS MANAGEMENT
+# ============================================================================
+
+PRESETS_FILE = "wp_site_presets.json"
+
+def load_site_presets():
+    """Load site presets from JSON file."""
+    try:
+        if os.path.exists(PRESETS_FILE):
+            with open(PRESETS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading presets: {e}")
+    return {}
+
+def save_site_presets(presets: dict):
+    """Save site presets to JSON file."""
+    try:
+        with open(PRESETS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(presets, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving presets: {e}")
+        return False
+
+def wait_if_paused():
+    """Wait if automation is paused. Returns False if stopped."""
+    while state.is_paused and state.is_running:
+        time.sleep(0.5)
+    return state.is_running
+
+def pause_on_error(error_msg: str):
+    """Pause automation on error for user to fix."""
+    state.is_paused = True
+    state.pause_reason = error_msg
+    add_log(f"TẠM DỪNG: {error_msg}", "warning")
+    add_log("Sửa lỗi và bấm 'Tiếp tục' để chạy tiếp", "info")
+
+# ============================================================================
 # GEMINI CONTENT GENERATION
 # ============================================================================
 
@@ -97,7 +138,7 @@ Bạn là chuyên gia viết bài SEO. Viết PHẦN 1 của bài blog với ti�
 TỪ KHÓA SEO CHÍNH: "{keyword}"
 CÔNG TY: THANG MÁY KENZO VIỆT NAM
 
-⚠️ CHỈ VIẾT PHẦN 1 (khoảng 800 TỪ), bao gồm:
+CHỈ VIẾT PHẦN 1 (khoảng 800 TỪ), bao gồm:
 
 1. ĐOạN MỞ ĐẦU (200 từ):
 <p>Viết đoạn mở đầu hấp dẫn giới thiệu về <strong>{keyword}</strong>. Giải thích tại sao đây là chủ đề quan trọng, nêu bật lợi ích và giá trị. Đề cập đến THANG MÁY KENZO VIỆT NAM như đơn vị uy tín trong lĩnh vực này.</p>
@@ -133,7 +174,7 @@ Bạn là chuyên gia viết bài SEO. Viết PHẦN 2 (tiếp theo) của bài 
 TỪ KHÓA SEO CHÍNH: "{keyword}"
 CÔNG TY: THANG MÁY KENZO VIỆT NAM
 
-⚠️ CHỈ VIẾT PHẦN 2 (khoảng 800 TỪ), bao gồm:
+CHỈ VIẾT PHẦN 2 (khoảng 800 TỪ), bao gồm:
 
 1. <h2>Quy trình lắp đặt {keyword}</h2> (200 từ):
 <p>Mô tả chi tiết các bước lắp đặt <strong>{keyword}</strong>:</p>
@@ -244,7 +285,7 @@ def clean_gemini_content(content: str) -> str:
     
     cleaned_length = len(content)
     if original_length != cleaned_length:
-        add_log(f"🧹 Đã làm sạch nội dung: {original_length} → {cleaned_length} ký tự", "info")
+        add_log(f"Đã làm sạch nội dung: {original_length} → {cleaned_length} ký tự", "info")
     
     return content
 
@@ -294,32 +335,32 @@ def generate_content_ollama(title: str, keyword: str) -> Optional[str]:
         if not model or model == "llama3.2":
             model = "llama3.1:8b"
         
-        add_log(f"🤖 Đang tạo nội dung với Ollama ({model})...", "info")
-        add_log("⏳ Đang tạo Phần 1/2 (800+ từ)...", "info")
+        add_log(f"Đang tạo nội dung với Ollama ({model})...", "info")
+        add_log("Đang tạo Phần 1/2 (800+ từ)...", "info")
         
         # Generate Part 1
         prompt_part1 = PROMPT_PART1.format(title=title, keyword=keyword)
         part1 = call_ollama_api(prompt_part1, model)
         
         if not part1:
-            add_log("❌ Không thể tạo Phần 1", "error")
+            add_log("Không thể tạo Phần 1", "error")
             return None
         
         word_count_1 = len(part1.split())
-        add_log(f"📊 Phần 1: {word_count_1} từ", "info")
+        add_log(f"Phần 1: {word_count_1} từ", "info")
         
-        add_log("⏳ Đang tạo Phần 2/2 (800+ từ)...", "info")
+        add_log("Đang tạo Phần 2/2 (800+ từ)...", "info")
         
         # Generate Part 2
         prompt_part2 = PROMPT_PART2.format(title=title, keyword=keyword)
         part2 = call_ollama_api(prompt_part2, model)
         
         if not part2:
-            add_log("❌ Không thể tạo Phần 2", "error")
+            add_log("Không thể tạo Phần 2", "error")
             return None
         
         word_count_2 = len(part2.split())
-        add_log(f"📊 Phần 2: {word_count_2} từ", "info")
+        add_log(f"Phần 2: {word_count_2} từ", "info")
         
         # Combine parts + contact section
         contact = CONTACT_SECTION.format(keyword=keyword)
@@ -327,19 +368,19 @@ def generate_content_ollama(title: str, keyword: str) -> Optional[str]:
         
         # Total word count
         total_words = len(full_content.split())
-        add_log(f"📊 Tổng cộng: {total_words} từ", "success")
+        add_log(f"Tổng cộng: {total_words} từ", "success")
         
         if total_words < 1200:
-            add_log(f"⚠️ Nội dung ngắn hơn mong đợi ({total_words} từ)", "warning")
+            add_log(f"Nội dung ngắn hơn mong đợi ({total_words} từ)", "warning")
         
-        add_log(f"✅ Đã tạo nội dung cho: {title}", "success")
+        add_log(f"Đã tạo nội dung cho: {title}", "success")
         return full_content
         
     except requests.exceptions.Timeout:
-        add_log("❌ Ollama timeout - tạo nội dung quá lâu", "error")
+        add_log("Ollama timeout - tạo nội dung quá lâu", "error")
         return None
     except Exception as e:
-        add_log(f"❌ Lỗi Ollama: {e}", "error")
+        add_log(f"Lỗi Ollama: {e}", "error")
         return None
 
 
@@ -347,7 +388,7 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
     """Send a prompt to Gemini Chat and get the response."""
     try:
         # Wait for page to fully load
-        add_log("⏳ Đang chờ trang Gemini tải...", "info")
+        add_log("Đang chờ trang Gemini tải...", "info")
         time.sleep(5)
         
         # Reload page to ensure fresh state
@@ -374,26 +415,26 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
                 el = page.locator(selector).first
                 if el.is_visible(timeout=3000):
                     input_area = el
-                    add_log(f"📝 Tìm thấy ô nhập: {selector}", "info")
+                    add_log(f"Tìm thấy ô nhập: {selector}", "info")
                     break
             except:
                 continue
         
         if not input_area:
             # Try to find any editable element
-            add_log("⚠️ Đang thử các selector khác...", "warning")
+            add_log("Đang thử các selector khác...", "warning")
             try:
                 input_area = page.locator("[contenteditable='true']").first
                 if input_area.is_visible(timeout=5000):
-                    add_log("📝 Tìm thấy phần tử contenteditable", "info")
+                    add_log("Tìm thấy phần tử contenteditable", "info")
             except:
                 pass
         
         if not input_area:
-            add_log("❌ Không tìm thấy ô nhập Gemini", "error")
+            add_log("Không tìm thấy ô nhập Gemini", "error")
             # Take screenshot for debugging
             page.screenshot(path="/tmp/gemini_error.png")
-            add_log("📸 Đã lưu screenshot tại /tmp/gemini_error.png", "info")
+            add_log("Đã lưu screenshot tại /tmp/gemini_error.png", "info")
             return None
         
         # Click on the input area to focus
@@ -406,15 +447,15 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
         while '  ' in clean_prompt:
             clean_prompt = clean_prompt.replace('  ', ' ')
         
-        add_log("⌨️ Đang nhập prompt...", "info")
+        add_log("Đang nhập prompt...", "info")
         
         # Method 1: Try using fill() - most reliable
         try:
             input_area.fill(clean_prompt)
-            add_log("📝 Đã nhập prompt qua fill()", "info")
+            add_log("Đã nhập prompt qua fill()", "info")
         except:
             # Method 2: Use keyboard typing for the entire prompt
-            add_log("⌨️ Đang gõ bằng bàn phím...", "info")
+            add_log("Đang gõ bằng bàn phím...", "info")
             # Clear first
             page.keyboard.press("Meta+A")  # Cmd+A on Mac
             page.keyboard.press("Backspace")
@@ -441,7 +482,7 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
                 if send_btn.is_visible(timeout=2000):
                     send_btn.click()
                     sent = True
-                    add_log("📤 Đã gửi prompt tới Gemini", "info")
+                    add_log("Đã gửi prompt tới Gemini", "info")
                     break
             except:
                 continue
@@ -449,16 +490,28 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
         if not sent:
             # Try pressing Enter as fallback
             page.keyboard.press("Enter")
-            add_log("📤 Đã gửi prompt qua phím Enter", "info")
+            add_log("Đã gửi prompt qua phím Enter", "info")
         
         # Wait for response
-        add_log("⏳ Đang chờ Gemini trả lời (có thể mất 1-2 phút)...", "info")
-        time.sleep(10)  # Initial wait
+        add_log("Đang chờ Gemini trả lời (có thể mất 1-2 phút)...", "info")
+        time.sleep(5)  # Initial wait
         
         # Wait until response is complete
         max_wait = 180  # 3 minutes max
         waited = 0
         while waited < max_wait:
+            # Check for stop/pause
+            if not state.is_running:
+                add_log("Stopped while waiting for Gemini", "warning")
+                return None
+            
+            # Check if paused
+            if state.is_paused:
+                add_log("Paused - waiting...", "info")
+                if not wait_if_paused():
+                    return None
+                add_log("Resuming Gemini wait...", "info")
+            
             # Check for loading indicators
             loading_indicators = page.locator(".loading, .thinking, [aria-busy='true'], .response-streaming").all()
             if not loading_indicators or len(loading_indicators) == 0:
@@ -479,15 +532,15 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
             if not any_loading:
                 break
                 
-            time.sleep(3)
-            waited += 3
+            time.sleep(2)
+            waited += 2
             if waited % 15 == 0:
-                add_log(f"⏳ Vẫn đang chờ... ({waited}s)", "info")
+                add_log(f"Vẫn đang chờ... ({waited}s)", "info")
         
         time.sleep(5)  # Extra wait for rendering
         
         # Extract the response - try multiple selectors
-        add_log("📋 Đang trích xuất phản hồi...", "info")
+        add_log("Đang trích xuất phản hồi...", "info")
         
         response_text = ""
         
@@ -508,28 +561,28 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
                     last_response = responses[-1]
                     response_text = last_response.inner_html()
                     if response_text and len(response_text) > 100:
-                        add_log(f"✅ Tìm thấy phản hồi với selector: {selector}", "info")
+                        add_log(f"Tìm thấy phản hồi với selector: {selector}", "info")
                         break
             except:
                 continue
         
         if response_text:
             word_count = len(response_text.split())
-            add_log(f"📊 Nhận được {word_count} từ từ Gemini", "success")
+            add_log(f"Nhận được {word_count} từ từ Gemini", "success")
             return response_text
         else:
-            add_log("❌ Không thể trích xuất phản hồi Gemini", "error")
+            add_log("Không thể trích xuất phản hồi Gemini", "error")
             return None
             
     except Exception as e:
-        add_log(f"❌ Lỗi Gemini Chat: {e}", "error")
+        add_log(f"Lỗi Gemini Chat: {e}", "error")
         return None
 
 
 def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]:
     """Generate content using Gemini Chat web interface (free, no API key needed)."""
     try:
-        add_log("🌐 Đang mở Gemini Chat...", "info")
+        add_log("Đang mở Gemini Chat...", "info")
         
         # Navigate to Gemini Chat
         page.goto("https://gemini.google.com/app", wait_until="domcontentloaded", timeout=60000)
@@ -546,68 +599,100 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
             pass
         
         if needs_login:
-            add_log("⚠️ Vui lòng đăng nhập Google trong cửa sổ browser!", "warning")
-            add_log("⏳ Đang chờ đăng nhập (10 phút)...", "info")
+            add_log("Vui lòng đăng nhập Google trong cửa sổ browser!", "warning")
+            add_log("Đang chờ đăng nhập (10 phút)...", "info")
             
             # Wait up to 10 minutes for login
             login_wait = 0
             max_login_wait = 600  # 10 minutes
-            while login_wait < max_login_wait:
-                time.sleep(10)
-                login_wait += 10
+            while login_wait < max_login_wait and state.is_running:
+                # Check if paused
+                if state.is_paused:
+                    if not wait_if_paused():
+                        add_log("Stopped while waiting for login", "warning")
+                        return None
+                
+                time.sleep(5)
+                login_wait += 5
+                
+                # Check if stopped
+                if not state.is_running:
+                    add_log("Stopped by user", "warning")
+                    return None
                 
                 # Check if we're now on Gemini app page
                 current_url = page.url
                 if "gemini.google.com" in current_url and "accounts.google" not in current_url:
-                    add_log("✅ Đăng nhập thành công!", "success")
+                    add_log("Đăng nhập thành công!", "success")
                     time.sleep(3)  # Extra wait for page load
                     break
                     
                 remaining = max_login_wait - login_wait
                 if login_wait % 60 == 0:
-                    add_log(f"⏳ Còn {remaining // 60} phút...", "info")
+                    add_log(f"Còn {remaining // 60} phút...", "info")
         
         # Get custom prompt from config, or use default
         custom_prompt = state.config.get("gemini_prompt", "")
         
         if custom_prompt and "{title}" in custom_prompt and "{keyword}" in custom_prompt:
+            # Check stop/pause before generating
+            if not state.is_running:
+                return None
+            if state.is_paused:
+                if not wait_if_paused():
+                    return None
+            
             # Use custom single prompt
-            add_log("⏳ Đang tạo nội dung với prompt tùy chỉnh...", "info")
+            add_log("Đang tạo nội dung với prompt tùy chỉnh...", "info")
             prompt = custom_prompt.format(title=title, keyword=keyword)
             content = send_prompt_to_gemini_web(page, prompt)
             
             if not content:
-                add_log("❌ Không thể tạo nội dung", "error")
+                add_log("Không thể tạo nội dung", "error")
                 return None
             
             word_count = len(content.split())
-            add_log(f"📊 Đã tạo {word_count} từ", "info")
+            add_log(f"Đã tạo {word_count} từ", "info")
             
         else:
             # Fall back to two-part generation
-            add_log("⏳ Đang tạo Phần 1/2 với Gemini Chat...", "info")
+            # Check stop/pause
+            if not state.is_running:
+                return None
+            if state.is_paused:
+                if not wait_if_paused():
+                    return None
+            
+            add_log("Đang tạo Phần 1/2 với Gemini Chat...", "info")
             prompt1 = PROMPT_PART1.format(title=title, keyword=keyword)
             part1 = send_prompt_to_gemini_web(page, prompt1)
             
             if not part1:
-                add_log("❌ Không thể tạo Phần 1", "error")
+                add_log("Không thể tạo Phần 1", "error")
                 return None
             
             word_count_1 = len(part1.split())
-            add_log(f"📊 Phần 1: {word_count_1} từ", "info")
+            add_log(f"Phần 1: {word_count_1} từ", "info")
+            
+            # Check stop/pause before part 2
+            if not state.is_running:
+                return None
+            if state.is_paused:
+                if not wait_if_paused():
+                    return None
             
             time.sleep(3)
             
-            add_log("⏳ Đang tạo Phần 2/2 với Gemini Chat...", "info")
+            add_log("Đang tạo Phần 2/2 với Gemini Chat...", "info")
             prompt2 = PROMPT_PART2.format(title=title, keyword=keyword)
             part2 = send_prompt_to_gemini_web(page, prompt2)
             
             if not part2:
-                add_log("❌ Không thể tạo Phần 2", "error")
+                add_log("Không thể tạo Phần 2", "error")
                 return None
             
             word_count_2 = len(part2.split())
-            add_log(f"📊 Phần 2: {word_count_2} từ", "info")
+            add_log(f"Phần 2: {word_count_2} từ", "info")
             
             # Combine parts
             contact = CONTACT_SECTION.format(keyword=keyword)
@@ -617,13 +702,13 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
         content = clean_gemini_content(content)
         
         total_words = len(content.split())
-        add_log(f"📊 Tổng cộng: {total_words} từ", "success")
-        add_log(f"✅ Đã tạo nội dung cho: {title}", "success")
+        add_log(f"Tổng cộng: {total_words} từ", "success")
+        add_log(f"Đã tạo nội dung cho: {title}", "success")
         
         return content
         
     except Exception as e:
-        add_log(f"❌ Lỗi Gemini Chat: {e}", "error")
+        add_log(f"Lỗi Gemini Chat: {e}", "error")
         return None
 
 def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> Optional[str]:
@@ -639,7 +724,7 @@ def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> O
             model = genai.GenerativeModel('gemini-2.0-flash')
             
             # Generate Part 1
-            add_log("⏳ Generating Part 1/2 with Gemini...", "info")
+            add_log("Generating Part 1/2 with Gemini...", "info")
             prompt_part1 = PROMPT_PART1.format(title=title, keyword=keyword)
             response1 = model.generate_content(
                 prompt_part1,
@@ -659,10 +744,10 @@ def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> O
                 part1 = part1[:-3]
             
             word_count_1 = len(part1.split())
-            add_log(f"📊 Part 1: {word_count_1} words", "info")
+            add_log(f"Part 1: {word_count_1} words", "info")
             
             # Generate Part 2
-            add_log("⏳ Generating Part 2/2 with Gemini...", "info")
+            add_log("Generating Part 2/2 with Gemini...", "info")
             prompt_part2 = PROMPT_PART2.format(title=title, keyword=keyword)
             response2 = model.generate_content(
                 prompt_part2,
@@ -682,15 +767,15 @@ def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> O
                 part2 = part2[:-3]
             
             word_count_2 = len(part2.split())
-            add_log(f"📊 Part 2: {word_count_2} words", "info")
+            add_log(f"Part 2: {word_count_2} words", "info")
             
             # Combine
             contact = CONTACT_SECTION.format(keyword=keyword)
             full_content = part1.strip() + "\n\n" + part2.strip() + "\n\n" + contact
             
             total_words = len(full_content.split())
-            add_log(f"📊 Total: {total_words} words", "success")
-            add_log(f"✅ Generated content for: {title}", "success")
+            add_log(f"Total: {total_words} words", "success")
+            add_log(f"Generated content for: {title}", "success")
             
             return full_content
             
@@ -698,13 +783,13 @@ def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> O
             error_str = str(e)
             if "429" in error_str or "quota" in error_str.lower():
                 wait_time = 60 * (attempt + 1)
-                add_log(f"⏳ Rate limit hit. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...", "warning")
+                add_log(f"Rate limit hit. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...", "warning")
                 time.sleep(wait_time)
             else:
-                add_log(f"❌ Error generating content: {e}", "error")
+                add_log(f"Error generating content: {e}", "error")
                 return None
     
-    add_log(f"❌ Failed to generate content after {max_retries} retries", "error")
+    add_log(f"Failed to generate content after {max_retries} retries", "error")
     return None
 
 
@@ -715,13 +800,13 @@ def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
     if provider == "ollama":
         # Check if Ollama is running
         if not check_ollama():
-            add_log("❌ Ollama is not running! Please start Ollama first.", "error")
-            add_log("💡 Run: ollama serve", "info")
+            add_log("Ollama is not running! Please start Ollama first.", "error")
+            add_log("Run: ollama serve", "info")
             return None
         return generate_content_ollama(title, keyword)
     elif provider == "gemini_web":
         if page is None:
-            add_log("❌ Gemini Web requires browser page", "error")
+            add_log("Gemini Web requires browser page", "error")
             return None
         return generate_content_gemini_web(page, title, keyword)
     else:
@@ -750,7 +835,7 @@ def login_to_wordpress(page: Page) -> bool:
         add_log(f"👤 Username: {username}", "info")
         
         if not login_url or not username or not password:
-            add_log("❌ Missing login credentials!", "error")
+            add_log("Missing login credentials!", "error")
             return False
         
         # Navigate to login page
@@ -762,7 +847,7 @@ def login_to_wordpress(page: Page) -> bool:
         
         # Check if already logged in
         if "wp-admin" in current_url and "wp-login" not in current_url:
-            add_log("✅ Already logged in!", "success")
+            add_log("Already logged in!", "success")
             return True
         
         # Wait for login form - try multiple selectors
@@ -773,15 +858,15 @@ def login_to_wordpress(page: Page) -> bool:
             try:
                 if page.locator(selector).first.is_visible(timeout=3000):
                     login_form_found = True
-                    add_log(f"📝 Tìm thấy form đăng nhập: {selector}", "info")
+                    add_log(f"Tìm thấy form đăng nhập: {selector}", "info")
                     break
             except:
                 continue
         
         if not login_form_found:
-            add_log("❌ Could not find login form!", "error")
+            add_log("Could not find login form!", "error")
             page.screenshot(path="/tmp/wp_login_error.png")
-            add_log("📸 Screenshot saved to /tmp/wp_login_error.png", "info")
+            add_log("Screenshot saved to /tmp/wp_login_error.png", "info")
             return False
         
         # Fill login form - try different selectors
@@ -796,7 +881,7 @@ def login_to_wordpress(page: Page) -> bool:
                     input_field.click()
                     input_field.fill("")
                     input_field.fill(username)
-                    add_log(f"📝 Filled username in {selector}", "info")
+                    add_log(f"Filled username in {selector}", "info")
                     break
             except:
                 continue
@@ -811,7 +896,7 @@ def login_to_wordpress(page: Page) -> bool:
                     input_field.click()
                     input_field.fill("")
                     input_field.fill(password)
-                    add_log(f"📝 Filled password in {selector}", "info")
+                    add_log(f"Filled password in {selector}", "info")
                     break
             except:
                 continue
@@ -826,13 +911,13 @@ def login_to_wordpress(page: Page) -> bool:
                 submit_btn = page.locator(selector).first
                 if submit_btn.is_visible(timeout=2000):
                     submit_btn.click()
-                    add_log(f"⏳ Clicked submit: {selector}", "info")
+                    add_log(f"Clicked submit: {selector}", "info")
                     break
             except:
                 continue
         
         # Wait for navigation
-        add_log("⏳ Đang chờ đăng nhập...", "info")
+        add_log("Đang chờ đăng nhập...", "info")
         time.sleep(2)
         
         # Try waiting for wp-admin URL
@@ -847,7 +932,7 @@ def login_to_wordpress(page: Page) -> bool:
         
         # Success indicators
         if "wp-admin" in current_url and "wp-login" not in current_url:
-            add_log("✅ Successfully logged into WordPress!", "success")
+            add_log("Successfully logged into WordPress!", "success")
             wait_for_network_idle(page)
             return True
         
@@ -858,24 +943,24 @@ def login_to_wordpress(page: Page) -> bool:
                 error_msg = page.locator(selector).first
                 if error_msg.is_visible(timeout=1000):
                     error_text = error_msg.inner_text()
-                    add_log(f"❌ Login error: {error_text[:100]}", "error")
+                    add_log(f"Login error: {error_text[:100]}", "error")
                     return False
             except:
                 continue
         
         # If we're still on login page
         if "wp-login" in current_url or "login" in current_url.lower():
-            add_log("❌ Login failed: Still on login page", "error")
+            add_log("Login failed: Still on login page", "error")
             page.screenshot(path="/tmp/wp_login_failed.png")
-            add_log("📸 Screenshot saved to /tmp/wp_login_failed.png", "info")
+            add_log("Screenshot saved to /tmp/wp_login_failed.png", "info")
             return False
         
         # Assume success if no errors detected
-        add_log("✅ Login appears successful", "success")
+        add_log("Login appears successful", "success")
         return True
         
     except Exception as e:
-        add_log(f"❌ Login failed: {e}", "error")
+        add_log(f"Login failed: {e}", "error")
         try:
             page.screenshot(path="/tmp/wp_login_exception.png")
         except:
@@ -892,9 +977,9 @@ def navigate_to_new_post(page: Page) -> bool:
         # Wait for Classic Editor to load - check for title field
         try:
             page.wait_for_selector("#title, input[name='post_title']", timeout=10000)
-            add_log("📝 Classic Editor loaded", "info")
+            add_log("Classic Editor loaded", "info")
         except:
-            add_log("⚠️ Editor may not have loaded properly", "warning")
+            add_log("Editor may not have loaded properly", "warning")
         
         # Dismiss any notices
         try:
@@ -906,11 +991,11 @@ def navigate_to_new_post(page: Page) -> bool:
         except:
             pass
         
-        add_log("📝 Navigated to new post editor", "info")
+        add_log("Navigated to new post editor", "info")
         return True
         
     except Exception as e:
-        add_log(f"❌ Failed to navigate to new post: {e}", "error")
+        add_log(f"Failed to navigate to new post: {e}", "error")
         return False
 
 def set_post_title(page: Page, title: str) -> bool:
@@ -923,20 +1008,20 @@ def set_post_title(page: Page, title: str) -> bool:
             title_input.click()
             title_input.fill("")  # Clear first
             title_input.fill(title)
-            add_log(f"📝 Set title: {title[:50]}...", "info")
+            add_log(f"Set title: {title[:50]}...", "info")
             return True
         else:
-            add_log("❌ Title field not visible", "error")
+            add_log("Title field not visible", "error")
             return False
             
     except Exception as e:
-        add_log(f"❌ Failed to set title: {e}", "error")
+        add_log(f"Failed to set title: {e}", "error")
         return False
 
 def set_post_content(page: Page, content: str) -> bool:
     """Set the post content (Classic Editor with TinyMCE)."""
     try:
-        add_log("📝 Đang thêm nội dung...", "info")
+        add_log("Đang thêm nội dung...", "info")
         time.sleep(0.5)
         
         content_added = False
@@ -948,7 +1033,7 @@ def set_post_content(page: Page, content: str) -> bool:
             if text_tab.is_visible(timeout=3000):
                 text_tab.click()
                 time.sleep(0.5)
-                add_log("📝 Đã chuyển sang chế độ Text/HTML", "info")
+                add_log("Đã chuyển sang chế độ Text/HTML", "info")
                 
                 # Fill the content textarea
                 content_textarea = page.locator("#content").first
@@ -959,7 +1044,7 @@ def set_post_content(page: Page, content: str) -> bool:
                     content_added = True
                     add_log("📄 Content added via textarea", "success")
         except Exception as e:
-            add_log(f"⚠️ Textarea method failed: {e}", "warning")
+            add_log(f"Textarea method failed: {e}", "warning")
         
         # Method 2: JavaScript injection to textarea
         if not content_added:
@@ -985,7 +1070,7 @@ def set_post_content(page: Page, content: str) -> bool:
                 content_added = True
                 add_log("📄 Content added via JavaScript", "success")
             except Exception as e:
-                add_log(f"⚠️ JavaScript method failed: {e}", "warning")
+                add_log(f"JavaScript method failed: {e}", "warning")
         
         # Method 3: TinyMCE iframe (Visual mode)
         if not content_added:
@@ -1001,22 +1086,22 @@ def set_post_content(page: Page, content: str) -> bool:
                     content_added = True
                     add_log("📄 Content added via TinyMCE iframe", "success")
             except Exception as e:
-                add_log(f"⚠️ TinyMCE method failed: {e}", "warning")
+                add_log(f"TinyMCE method failed: {e}", "warning")
         
         if content_added:
             return True
         else:
-            add_log("❌ Failed to add content - all methods failed", "error")
+            add_log("Failed to add content - all methods failed", "error")
             return False
         
     except Exception as e:
-        add_log(f"❌ Failed to set content: {e}", "error")
+        add_log(f"Failed to set content: {e}", "error")
         return False
 
 def set_rank_math_keyword(page: Page, keyword: str) -> bool:
     """Set the Rank Math SEO focus keyword."""
     try:
-        add_log(f"🔑 Setting Rank Math keyword: {keyword}", "info")
+        add_log(f"Setting Rank Math keyword: {keyword}", "info")
         
         # Scroll down to Rank Math section
         page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
@@ -1050,7 +1135,7 @@ def set_rank_math_keyword(page: Page, keyword: str) -> bool:
             # Press Enter to add the keyword
             keyword_input.press("Enter")
             time.sleep(0.5)
-            add_log(f"✅ Rank Math keyword set: {keyword}", "success")
+            add_log(f"Rank Math keyword set: {keyword}", "success")
             return True
         else:
             # Try JavaScript method
@@ -1066,14 +1151,14 @@ def set_rank_math_keyword(page: Page, keyword: str) -> bool:
                         return false;
                     }
                 """, keyword)
-                add_log(f"✅ Rank Math keyword set via JS: {keyword}", "success")
+                add_log(f"Rank Math keyword set via JS: {keyword}", "success")
                 return True
             except:
-                add_log("⚠️ Rank Math keyword field not found", "warning")
+                add_log("Rank Math keyword field not found", "warning")
                 return False
         
     except Exception as e:
-        add_log(f"⚠️ Error setting Rank Math keyword: {e}", "warning")
+        add_log(f"Error setting Rank Math keyword: {e}", "warning")
         return False
 
 def select_random_image(page: Page, alt_text: str) -> bool:
@@ -1083,11 +1168,11 @@ def select_random_image(page: Page, alt_text: str) -> bool:
         try:
             page.wait_for_selector(".media-modal", timeout=5000)
         except:
-            add_log("⚠️ Không tìm thấy modal chọn ảnh", "warning")
+            add_log("Không tìm thấy modal chọn ảnh", "warning")
             return False
         
         # Wait for images to load (reduced from 8s to 3s)
-        add_log("⏳ Waiting for media library to load...", "info")
+        add_log("Waiting for media library to load...", "info")
         time.sleep(3)
         
         # Click on "Thư viện Media" tab if available to ensure we see images
@@ -1103,30 +1188,45 @@ def select_random_image(page: Page, alt_text: str) -> bool:
         images = page.locator(".attachments .attachment, li.attachment").all()
         
         if not images:
-            add_log("⚠️ No images found in media library", "warning")
+            add_log("No images found in media library", "warning")
             force_close_all_modals(page)
             return False
         
-        add_log(f"📸 Tìm thấy {len(images)} hình ảnh", "info")
+        add_log(f"Tìm thấy {len(images)} hình ảnh", "info")
         
         # Select first visible image (more reliable than random)
         for i, img in enumerate(images[:5]):  # Try first 5 images
             try:
                 if img.is_visible(timeout=500):
                     img.click()
-                    add_log(f"📸 Clicked image {i+1}", "info")
+                    add_log(f"Clicked image {i+1}", "info")
                     time.sleep(1)
                     break
             except:
                 continue
         
-        # Set alt text if input is available
-        try:
-            alt_input = page.locator("input[data-setting='alt'], #attachment-details-alt-text").first
-            if alt_input.is_visible(timeout=1000):
-                alt_input.fill(alt_text)
-        except:
-            pass
+        # Set alt text with keyword
+        time.sleep(0.5)  # Wait for details panel
+        alt_selectors = [
+            "input[data-setting='alt']",
+            "#attachment-details-alt-text",
+            ".attachment-details input[type='text']",
+            "input[name='alt']"
+        ]
+        
+        for alt_sel in alt_selectors:
+            try:
+                alt_input = page.locator(alt_sel).first
+                if alt_input.is_visible(timeout=800):
+                    alt_input.click()
+                    alt_input.fill("")  # Clear first
+                    time.sleep(0.1)
+                    alt_input.fill(alt_text)
+                    add_log(f"Featured image alt: {alt_text}", "info")
+                    time.sleep(0.2)
+                    break
+            except:
+                continue
         
         # Click "Đặt ảnh đại diện" / "Set featured image" button
         set_featured_selectors = [
@@ -1143,7 +1243,7 @@ def select_random_image(page: Page, alt_text: str) -> bool:
                 btn = page.locator(selector).first
                 if btn.is_visible(timeout=1000):
                     btn.click()
-                    add_log(f"✅ Clicked: {selector}", "success")
+                    add_log(f"Clicked: {selector}", "success")
                     clicked = True
                     time.sleep(1)
                     break
@@ -1151,7 +1251,7 @@ def select_random_image(page: Page, alt_text: str) -> bool:
                 continue
         
         if not clicked:
-            add_log("⚠️ Could not find set featured image button", "warning")
+            add_log("Could not find set featured image button", "warning")
             force_close_all_modals(page)
             return False
         
@@ -1162,14 +1262,14 @@ def select_random_image(page: Page, alt_text: str) -> bool:
         return True
         
     except Exception as e:
-        add_log(f"⚠️ Error in image selection: {e}", "warning")
+        add_log(f"Error in image selection: {e}", "warning")
         force_close_all_modals(page)
         return False
 
 def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
     """Insert images after H2 headings using Visual Editor."""
     try:
-        add_log("🖼️ Đang chèn hình vào bài viết...", "info")
+        add_log("Đang chèn hình vào bài viết...", "info")
         close_all_modals(page)
         
         # Switch to Visual mode
@@ -1184,16 +1284,24 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
         # Get H2 headings
         h2_elements = page.frame_locator("#content_ifr").locator("h2").all()
         if not h2_elements:
-            add_log("⚠️ Không tìm thấy tiêu đề H2", "warning")
+            add_log("Không tìm thấy tiêu đề H2", "warning")
             return False
         
-        add_log(f"📝 Tìm thấy {len(h2_elements)} tiêu đề H2", "info")
+        add_log(f"Tìm thấy {len(h2_elements)} tiêu đề H2", "info")
         images_inserted = 0
         
         # Insert after 1st, 3rd, 5th H2
         for h2_index in [0, 2, 4]:
             if images_inserted >= max_images or h2_index >= len(h2_elements):
                 break
+            
+            # Check stop/pause
+            if not state.is_running:
+                add_log("Stopped while inserting images", "warning")
+                return False
+            if state.is_paused:
+                if not wait_if_paused():
+                    return False
             
             try:
                 # Position cursor after H2
@@ -1217,11 +1325,27 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                     images[random.randint(0, min(len(images) - 1, 10))].click()
                     time.sleep(0.5)
                     
-                    # Set alt text
+                    # Set alt text with keyword
                     try:
-                        alt = page.locator("input[data-setting='alt']").first
-                        if alt.is_visible(timeout=500):
-                            alt.fill(keyword)
+                        time.sleep(0.3)  # Wait for sidebar to load
+                        alt_selectors = [
+                            "input[data-setting='alt']",
+                            "#attachment-details-alt-text",
+                            ".attachment-details input[type='text']",
+                            "input.attachment-alt-text"
+                        ]
+                        for alt_sel in alt_selectors:
+                            try:
+                                alt = page.locator(alt_sel).first
+                                if alt.is_visible(timeout=500):
+                                    alt.click()
+                                    alt.fill("")  # Clear first
+                                    time.sleep(0.1)
+                                    alt.fill(keyword)
+                                    add_log(f"Alt text đã set: {keyword}", "info")
+                                    break
+                            except:
+                                continue
                     except:
                         pass
                     
@@ -1240,7 +1364,7 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                             if btn.is_visible(timeout=500):
                                 btn.click()
                                 images_inserted += 1
-                                add_log(f"🖼️ Đã chèn hình {images_inserted} sau H2 #{h2_index + 1}", "success")
+                                add_log(f"Đã chèn hình {images_inserted} sau H2 #{h2_index + 1}", "success")
                                 time.sleep(0.5)
                                 break
                         except:
@@ -1253,11 +1377,11 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                 continue
         
         close_all_modals(page)
-        add_log(f"✅ Đã chèn {images_inserted} hình", "success")
+        add_log(f"Đã chèn {images_inserted} hình", "success")
         return images_inserted > 0
         
     except Exception as e:
-        add_log(f"⚠️ Lỗi chèn hình: {e}", "warning")
+        add_log(f"Lỗi chèn hình: {e}", "warning")
         close_all_modals(page)
         return False
 
@@ -1304,7 +1428,7 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         images = page.locator(".attachments .attachment, li.attachment").all()
         
         if not images:
-            add_log("⚠️ No images found in media library", "warning")
+            add_log("No images found in media library", "warning")
             page.locator(".media-modal-close").first.click()
             return False
         
@@ -1313,15 +1437,34 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         random_image.click()
         time.sleep(1)
         
-        # Set alt text
-        alt_input = page.locator("input[data-setting='alt'], #attachment-details-alt-text, input[name='alt'], .setting input[type='text'][data-setting='alt']").first
-        try:
-            if alt_input.is_visible(timeout=2000):
-                alt_input.fill("")
-                alt_input.fill(alt_text)
-                time.sleep(0.5)
-        except:
-            pass
+        # Set alt text with keyword
+        time.sleep(0.5)  # Wait for details panel to load
+        alt_selectors = [
+            "input[data-setting='alt']",
+            "#attachment-details-alt-text",
+            ".attachment-details input[type='text']",
+            "input[name='alt']",
+            ".setting input[type='text'][data-setting='alt']"
+        ]
+        
+        alt_set = False
+        for alt_sel in alt_selectors:
+            try:
+                alt_input = page.locator(alt_sel).first
+                if alt_input.is_visible(timeout=1000):
+                    alt_input.click()
+                    alt_input.fill("")  # Clear first
+                    time.sleep(0.1)
+                    alt_input.fill(alt_text)
+                    add_log(f"Alt text đã set: {alt_text}", "info")
+                    alt_set = True
+                    time.sleep(0.3)
+                    break
+            except:
+                continue
+        
+        if not alt_set:
+            add_log("Không thể set alt text", "warning")
         
         # Click "Chèn vào bài viết" / "Insert into post"
         insert_buttons = [
@@ -1350,7 +1493,7 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         return False
         
     except Exception as e:
-        add_log(f"⚠️ Error selecting image for content: {e}", "warning")
+        add_log(f"Error selecting image for content: {e}", "warning")
         try:
             page.locator(".media-modal-close").first.click()
         except:
@@ -1368,21 +1511,21 @@ def select_first_category(page: Page) -> bool:
             first_checkbox = checkboxes[0]
             if not first_checkbox.is_checked():
                 first_checkbox.check()
-            add_log("✅ Selected first category", "success")
+            add_log("Selected first category", "success")
             return True
         else:
-            add_log("⚠️ No categories found", "warning")
+            add_log("No categories found", "warning")
         
         return False
         
     except Exception as e:
-        add_log(f"⚠️ Error selecting category: {e}", "warning")
+        add_log(f"Error selecting category: {e}", "warning")
         return False
 
 def set_featured_image(page: Page, keyword: str) -> bool:
     """Set featured image (Classic Editor) with improved reliability."""
     try:
-        add_log("🖼️ Setting featured image...", "info")
+        add_log("Setting featured image...", "info")
         
         # First, close any open modals
         force_close_all_modals(page)
@@ -1414,14 +1557,14 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                     link.scroll_into_view_if_needed()
                     time.sleep(0.3)
                     link.click()
-                    add_log(f"📸 Clicked: {selector}", "info")
+                    add_log(f"Clicked: {selector}", "info")
                     clicked = True
                     break
             except:
                 continue
         
         if not clicked:
-            add_log("⚠️ Không tìm thấy link ảnh đại diện", "warning")
+            add_log("Không tìm thấy link ảnh đại diện", "warning")
             return False
         
         # Wait for media modal to open
@@ -1430,16 +1573,16 @@ def set_featured_image(page: Page, keyword: str) -> bool:
         # Try to wait for modal with longer timeout
         try:
             page.wait_for_selector(".media-modal", timeout=10000)
-            add_log("📸 Modal chọn ảnh đã mở", "info")
+            add_log("Modal chọn ảnh đã mở", "info")
         except:
-            add_log("⚠️ Modal không mở, đang thử lại...", "warning")
+            add_log("Modal không mở, đang thử lại...", "warning")
             # Try clicking again
             try:
                 page.locator("#set-post-thumbnail, a:has-text('Đặt ảnh đại diện')").first.click()
                 time.sleep(3)
                 page.wait_for_selector(".media-modal", timeout=10000)
             except:
-                add_log("❌ Vẫn không tìm thấy modal", "error")
+                add_log("Vẫn không tìm thấy modal", "error")
                 return False
         
         # Wait for images to load
@@ -1460,11 +1603,11 @@ def set_featured_image(page: Page, keyword: str) -> bool:
         images = page.locator(".attachments .attachment, li.attachment, .attachment-preview").all()
         
         if not images:
-            add_log("⚠️ No images found in media library", "warning")
+            add_log("No images found in media library", "warning")
             force_close_all_modals(page)
             return False
         
-        add_log(f"📸 Tìm thấy {len(images)} hình ảnh", "info")
+        add_log(f"Tìm thấy {len(images)} hình ảnh", "info")
         
         # Click first visible image
         image_clicked = False
@@ -1472,7 +1615,7 @@ def set_featured_image(page: Page, keyword: str) -> bool:
             try:
                 if img.is_visible(timeout=500):
                     img.click()
-                    add_log(f"📸 Selected image {i+1}", "info")
+                    add_log(f"Selected image {i+1}", "info")
                     image_clicked = True
                     time.sleep(1)
                     break
@@ -1480,7 +1623,7 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                 continue
         
         if not image_clicked:
-            add_log("⚠️ Could not click any image", "warning")
+            add_log("Could not click any image", "warning")
             force_close_all_modals(page)
             return False
         
@@ -1507,7 +1650,7 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                 btn = page.locator(selector).first
                 if btn.is_visible(timeout=1000):
                     btn.click()
-                    add_log(f"✅ Clicked button: {selector}", "success")
+                    add_log(f"Clicked button: {selector}", "success")
                     button_clicked = True
                     time.sleep(1)
                     break
@@ -1515,7 +1658,7 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                 continue
         
         if not button_clicked:
-            add_log("⚠️ Could not find Set Featured Image button", "warning")
+            add_log("Could not find Set Featured Image button", "warning")
             force_close_all_modals(page)
             return False
         
@@ -1523,11 +1666,11 @@ def set_featured_image(page: Page, keyword: str) -> bool:
         time.sleep(1)
         force_close_all_modals(page)
         
-        add_log("✅ Đã đặt ảnh đại diện thành công!", "success")
+        add_log("Đã đặt ảnh đại diện thành công!", "success")
         return True
         
     except Exception as e:
-        add_log(f"⚠️ Error setting featured image: {e}", "warning")
+        add_log(f"Error setting featured image: {e}", "warning")
         force_close_all_modals(page)
         return False
 
@@ -1576,7 +1719,7 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
                     time.sleep(0.5)
         
         # Click Publish/Schedule button - in Classic Editor it's just #publish
-        add_log("📤 Preparing to publish...", "info")
+        add_log("Preparing to publish...", "info")
         
         # Wait a moment for any overlays to disappear
         time.sleep(1)
@@ -1591,16 +1734,16 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
         # Try to click using JavaScript to bypass any overlay
         try:
             page.evaluate("document.getElementById('publish').click()")
-            add_log("📤 Clicked publish button", "info")
+            add_log("Clicked publish button", "info")
         except Exception as js_err:
-            add_log(f"⚠️ JS click failed: {js_err}, trying regular click", "warning")
+            add_log(f"JS click failed: {js_err}, trying regular click", "warning")
             # Fallback to regular click
             publish_btn = page.locator("#publish, input#publish").first
             if publish_btn.is_visible(timeout=3000):
                 publish_btn.click(force=True)
         
         # Wait for page to reload - this is critical
-        add_log("⏳ Đang lưu bài viết...", "info")
+        add_log("Đang lưu bài viết...", "info")
         time.sleep(4)
         
         # Multiple ways to check for success
@@ -1619,7 +1762,7 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
                 success_msg = page.locator(selector).first
                 if success_msg.is_visible(timeout=2000):
                     success_detected = True
-                    add_log("✅ Success message detected", "info")
+                    add_log("Success message detected", "info")
                     break
         except:
             pass
@@ -1629,14 +1772,14 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
             current_url = page.url
             if "post.php" in current_url and "action=edit" in current_url:
                 success_detected = True
-                add_log("✅ Post saved - now on edit page", "info")
+                add_log("Post saved - now on edit page", "info")
         
         # Method 3: Check URL for message parameter
         if not success_detected:
             current_url = page.url
             if "message=" in current_url:
                 success_detected = True
-                add_log("✅ Post saved - message in URL", "info")
+                add_log("Post saved - message in URL", "info")
         
         # Method 4: Check if View Post link exists
         if not success_detected:
@@ -1644,7 +1787,7 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
                 view_post = page.locator("a:has-text('View post'), a:has-text('Xem bài viết')").first
                 if view_post.is_visible(timeout=2000):
                     success_detected = True
-                    add_log("✅ View post link found", "info")
+                    add_log("View post link found", "info")
             except:
                 pass
         
@@ -1653,19 +1796,19 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
             current_url = page.url
             if "post=" in current_url:
                 success_detected = True
-                add_log("✅ Post ID found in URL", "info")
+                add_log("Post ID found in URL", "info")
         
         if success_detected:
             action = "Scheduled" if is_schedule else "Published"
-            add_log(f"✅ {action} successfully!", "success")
+            add_log(f"{action} successfully!", "success")
             return True
         else:
-            add_log("⚠️ Could not confirm publish status, but continuing...", "warning")
+            add_log("Could not confirm publish status, but continuing...", "warning")
             # Return True anyway since the click happened
             return True
         
     except Exception as e:
-        add_log(f"❌ Error publishing: {e}", "error")
+        add_log(f"Error publishing: {e}", "error")
         return False
 
 def create_single_post(page: Page, index: int, topic: dict, content: str, start_date: datetime) -> bool:
@@ -1673,7 +1816,7 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
     title = topic["title"]
     keyword = topic["keyword"]
     
-    add_log(f"📝 Đang tạo bài {index + 1}: {title}", "info")
+    add_log(f"Đang tạo bài {index + 1}: {title}", "info")
     
     try:
         # Calculate publish date based on posts_per_day
@@ -1712,7 +1855,14 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         now = datetime.now()
         is_schedule = publish_date > now
         
-        add_log(f"📅 Ngày đăng: {publish_date.strftime('%Y-%m-%d %H:%M')} (Ngày {days_offset + 1}, Slot {slot_in_day + 1}/{posts_per_day})", "info")
+        add_log(f"Ngày đăng: {publish_date.strftime('%Y-%m-%d %H:%M')} (Ngày {days_offset + 1}, Slot {slot_in_day + 1}/{posts_per_day})", "info")
+        
+        # Check stop/pause
+        if not state.is_running:
+            return False
+        if state.is_paused:
+            if not wait_if_paused():
+                return False
         
         if not navigate_to_new_post(page):
             return False
@@ -1720,12 +1870,26 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         if not set_post_title(page, title):
             return False
         
+        # Check stop/pause before content
+        if not state.is_running:
+            return False
+        if state.is_paused:
+            if not wait_if_paused():
+                return False
+        
         # Add content - this is critical
         if not set_post_content(page, content):
-            add_log("⚠️ Content may not have been added properly", "warning")
+            add_log("Content may not have been added properly", "warning")
         
         # Set Rank Math SEO keyword
         set_rank_math_keyword(page, keyword)
+        
+        # Check stop/pause before images
+        if not state.is_running:
+            return False
+        if state.is_paused:
+            if not wait_if_paused():
+                return False
         
         # Insert images after alternating H2 headings (1st, 3rd, 5th)
         insert_images_after_h2(page, keyword, max_images=3)
@@ -1736,6 +1900,13 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         # Skip featured image - removed by user request
         # set_featured_image(page, keyword)
         
+        # Check stop/pause before publish
+        if not state.is_running:
+            return False
+        if state.is_paused:
+            if not wait_if_paused():
+                return False
+        
         # Publish or schedule
         if not publish_or_schedule_post(page, is_schedule, publish_date if is_schedule else None):
             return False
@@ -1743,13 +1914,13 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         return True
         
     except Exception as e:
-        add_log(f"❌ Error creating post: {e}", "error")
+        add_log(f"Error creating post: {e}", "error")
         return False
 
 def run_automation():
     """Main automation function that runs in a separate thread."""
     if not PLAYWRIGHT_AVAILABLE:
-        add_log("❌ Playwright not available. Please install it first.", "error")
+        add_log("Playwright not available. Please install it first.", "error")
         state.is_running = False
         return
     
@@ -1759,7 +1930,7 @@ def run_automation():
     state.failed_posts = 0
     state.logs = []
     
-    add_log("🚀 Starting WordPress Auto Poster...", "info")
+    add_log("Starting WordPress Auto Poster...", "info")
     
     provider = state.config.get("ai_provider", "ollama")
     total_topics = len(state.topics)
@@ -1768,12 +1939,17 @@ def run_automation():
     
     # For non-gemini_web providers, generate content first
     if provider != "gemini_web":
-        add_log(f"📝 Phase 1: Generating content with {provider.upper()}...", "info")
+        add_log(f"Phase 1: Generating content with {provider.upper()}...", "info")
         state.current_task = "Generating content..."
         
         for i, topic in enumerate(state.topics):
             if not state.is_running:
-                add_log("⏹️ Stopped by user", "warning")
+                add_log("Stopped by user", "warning")
+                return
+            
+            # Check if paused
+            if not wait_if_paused():
+                add_log("Stopped while paused", "warning")
                 return
             
             state.current_task = f"Generating content {i+1}/{total_topics}..."
@@ -1785,23 +1961,23 @@ def run_automation():
                 time.sleep(state.config["delay_between_requests"])
         
         successful_gen = sum(1 for c in state.generated_contents if c is not None)
-        add_log(f"✅ Generated {successful_gen}/{total_topics} articles", "success")
+        add_log(f"Generated {successful_gen}/{total_topics} articles", "success")
         
         if successful_gen == 0:
-            add_log("❌ No content generated. Stopping.", "error")
+            add_log("No content generated. Stopping.", "error")
             state.is_running = False
             return
     else:
-        add_log("📝 Gemini Web Chat: Content will be generated in browser...", "info")
+        add_log("Gemini Web Chat: Content will be generated in browser...", "info")
     
     # Phase 2: WordPress automation
-    add_log("🌐 Phase 2: WordPress Automation...", "info")
+    add_log("Phase 2: WordPress Automation...", "info")
     state.current_task = "Starting browser..."
     
     start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     with sync_playwright() as p:
-        add_log("🦁 Starting Brave browser...", "info")
+        add_log("Starting Brave browser...", "info")
         
         # Use persistent context to save login sessions
         import os
@@ -1825,7 +2001,7 @@ def run_automation():
             ]
         )
         
-        add_log("✅ Brave browser started (login sessions saved)", "success")
+        add_log("Brave browser started (login sessions saved)", "success")
         
         # Get existing page or create new one
         if context.pages:
@@ -1838,11 +2014,16 @@ def run_automation():
         try:
             # For Gemini Web, generate content first using browser
             if provider == "gemini_web":
-                add_log("🌐 Phase 1: Generating content with Gemini Web Chat...", "info")
+                add_log("Phase 1: Generating content with Gemini Web Chat...", "info")
                 
                 for i, topic in enumerate(state.topics):
                     if not state.is_running:
-                        add_log("⏹️ Stopped by user", "warning")
+                        add_log("Stopped by user", "warning")
+                        break
+                    
+                    # Check if paused
+                    if not wait_if_paused():
+                        add_log("Stopped while paused", "warning")
                         break
                     
                     state.current_task = f"Generating content {i+1}/{total_topics} via Gemini Web..."
@@ -1875,28 +2056,33 @@ def run_automation():
                         time.sleep(3)  # Short delay between Gemini requests
                 
                 successful_gen = sum(1 for c in state.generated_contents if c is not None)
-                add_log(f"✅ Generated {successful_gen}/{total_topics} articles via Gemini Web", "success")
+                add_log(f"Generated {successful_gen}/{total_topics} articles via Gemini Web", "success")
                 
                 if successful_gen == 0:
-                    add_log("❌ No content generated. Stopping.", "error")
+                    add_log("No content generated. Stopping.", "error")
                     state.is_running = False
                     context.close()
                     return
             
             # Now login to WordPress
             if not login_to_wordpress(page):
-                add_log("❌ Failed to login. Exiting...", "error")
+                add_log("Failed to login. Exiting...", "error")
                 state.is_running = False
                 context.close()
                 return
             
             for i, (topic, content) in enumerate(zip(state.topics, state.generated_contents)):
                 if not state.is_running:
-                    add_log("⏹️ Stopped by user", "warning")
+                    add_log("Stopped by user", "warning")
+                    break
+                
+                # Check if paused
+                if not wait_if_paused():
+                    add_log("Stopped while paused", "warning")
                     break
                 
                 if content is None:
-                    add_log(f"⏭️ Skipping post {i+1} - no content", "warning")
+                    add_log(f"Skipping post {i+1} - no content", "warning")
                     state.failed_posts += 1
                     continue
                 
@@ -1909,7 +2095,7 @@ def run_automation():
                     else:
                         state.failed_posts += 1
                 except Exception as e:
-                    add_log(f"❌ Error on post {i+1}: {e}", "error")
+                    add_log(f"Error on post {i+1}: {e}", "error")
                     state.failed_posts += 1
                 
                 state.progress = ((total_topics + i + 1) / state.total_tasks) * 100
@@ -1918,10 +2104,10 @@ def run_automation():
                     time.sleep(3)
             
             # Summary
-            add_log(f"📊 SUMMARY: {state.successful_posts} successful, {state.failed_posts} failed", "success")
+            add_log(f"SUMMARY: {state.successful_posts} successful, {state.failed_posts} failed", "success")
             
         except Exception as e:
-            add_log(f"❌ Critical error: {e}", "error")
+            add_log(f"Critical error: {e}", "error")
         finally:
             time.sleep(2)
             context.close()
@@ -1948,6 +2134,8 @@ def get_status():
     ]
     return jsonify({
         "is_running": state.is_running,
+        "is_paused": state.is_paused,
+        "pause_reason": state.pause_reason,
         "current_task": state.current_task,
         "progress": state.progress,
         "successful_posts": state.successful_posts,
@@ -1974,6 +2162,42 @@ def handle_topics():
         state.topics = request.json.get('topics', [])
         return jsonify({"success": True, "count": len(state.topics)})
     return jsonify(state.topics)
+
+@app.route('/api/presets', methods=['GET'])
+def list_presets():
+    """List all saved site presets."""
+    presets = load_site_presets()
+    return jsonify({"success": True, "presets": list(presets.keys())})
+
+@app.route('/api/presets/<name>', methods=['GET', 'PUT', 'DELETE'])
+def manage_preset(name):
+    """Get, save, or delete a site preset."""
+    presets = load_site_presets()
+    
+    if request.method == 'GET':
+        if name in presets:
+            return jsonify({"success": True, "data": presets[name]})
+        return jsonify({"success": False, "message": "Preset not found"})
+    
+    elif request.method == 'PUT':
+        data = request.json
+        presets[name] = {
+            "wp_username": data.get("wp_username", ""),
+            "wp_password": data.get("wp_password", ""),
+            "wp_login_url": data.get("wp_login_url", ""),
+            "wp_admin_url": data.get("wp_admin_url", ""),
+            "gemini_prompt": data.get("gemini_prompt", "")
+        }
+        if save_site_presets(presets):
+            return jsonify({"success": True, "message": f"Preset '{name}' saved"})
+        return jsonify({"success": False, "message": "Could not save preset"})
+    
+    elif request.method == 'DELETE':
+        if name in presets:
+            del presets[name]
+            if save_site_presets(presets):
+                return jsonify({"success": True, "message": f"Preset '{name}' deleted"})
+        return jsonify({"success": False, "message": "Preset not found"})
 
 @app.route('/api/content/<int:index>')
 def get_content(index):
@@ -2004,7 +2228,7 @@ def update_content(index):
             if index < len(state.generated_contents):
                 state.generated_contents[index] = new_content
             
-            add_log(f"📝 Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
+            add_log(f"Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
             return jsonify({"success": True, "word_count": word_count})
     return jsonify({"success": False, "message": "Content not found"})
 
@@ -2023,7 +2247,7 @@ def delete_content(index):
         if index < len(state.topics):
             del state.topics[index]
         
-        add_log(f"🗑️ Đã xóa: {deleted_title}", "warning")
+        add_log(f"Đã xóa: {deleted_title}", "warning")
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Content not found"})
 
@@ -2050,8 +2274,10 @@ def start_automation():
     if not state.config.get("wp_username"):
         return jsonify({"success": False, "message": "WordPress credentials not configured"})
     
-    # Clear previous content list
+    # Clear previous content list and reset pause state
     state.content_list = []
+    state.is_paused = False
+    state.pause_reason = ""
     
     # Start in background thread
     thread = threading.Thread(target=run_automation)
@@ -2063,7 +2289,27 @@ def start_automation():
 @app.route('/api/stop', methods=['POST'])
 def stop_automation():
     state.is_running = False
-    add_log("⏹️ Stop requested by user", "warning")
+    state.is_paused = False
+    state.pause_reason = ""
+    add_log("Đã dừng bởi người dùng", "warning")
+    return jsonify({"success": True})
+
+@app.route('/api/pause', methods=['POST'])
+def pause_automation():
+    if not state.is_running:
+        return jsonify({"success": False, "message": "Not running"})
+    state.is_paused = True
+    state.pause_reason = "Tạm dừng bởi người dùng"
+    add_log("Đã tạm dừng", "warning")
+    return jsonify({"success": True})
+
+@app.route('/api/resume', methods=['POST'])
+def resume_automation():
+    if not state.is_running:
+        return jsonify({"success": False, "message": "Not running"})
+    state.is_paused = False
+    state.pause_reason = ""
+    add_log("Tiếp tục thực thi...", "success")
     return jsonify({"success": True})
 
 @app.route('/api/ollama/start', methods=['POST'])

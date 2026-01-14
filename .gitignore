@@ -55,6 +55,7 @@ Thumbs.db
 # Config files with sensitive data
 config.json
 .env
+wp_site_presets.json
 
 # Playwright
 playwright-report/
