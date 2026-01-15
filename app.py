@@ -3,386 +3,68 @@
 WordPress Auto Poster - Web Interface
 ======================================
 A beautiful web interface for the WordPress Auto Poster with AI content generation.
-Supports: Gemini API, Ollama (free, local)
+Supports: Gemini API, Gemini Web, Ollama (free, local)
 """
 
-import json
 import os
 import random
+import re
 import threading
 import time
 import requests
 from datetime import datetime, timedelta
 from typing import Optional
-from flask import Flask, render_template, request, jsonify, Response
+
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
-# Gemini AI
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-
-# Check Ollama availability
-def check_ollama():
-    try:
-        response = requests.get("http://localhost:11434/api/tags", timeout=2)
-        return response.status_code == 200
-    except:
-        return False
-
-OLLAMA_AVAILABLE = check_ollama()
+# Import from local modules
+from config import (
+    state, add_log, wait_if_paused, pause_on_error,
+    load_site_presets, save_site_presets,
+    PRESETS_FILE, TIMEOUT_SHORT, TIMEOUT_MEDIUM, TIMEOUT_LONG,
+    SLEEP_SHORT, SLEEP_MEDIUM, SLEEP_LONG, BROWSER_DATA_DIR
+)
+from prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION, clean_gemini_content
+from ai_providers.ollama import (
+    generate_content_ollama as _generate_content_ollama,
+    check_ollama, OLLAMA_AVAILABLE
+)
+from ai_providers.gemini_api import (
+    generate_content_gemini as _generate_content_gemini,
+    GEMINI_AVAILABLE
+)
 
 # Playwright
 try:
-    from playwright.sync_api import sync_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
+    from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
+# Flask app
 app = Flask(__name__)
 CORS(app)
 
-# Global state
-class AppState:
-    def __init__(self):
-        self.is_running = False
-        self.current_task = ""
-        self.progress = 0
-        self.total_tasks = 0
-        self.logs = []
-        self.config = {
-            "ai_provider": "ollama",  # "ollama" or "gemini"
-            "ollama_model": "llama3.1:8b",  # Default Ollama model (larger, better quality)
-            "gemini_api_key": "",
-            "wp_username": "",
-            "wp_password": "",
-            "wp_login_url": "",
-            "wp_admin_url": "",
-            "posts_per_day": 2,
-            "delay_between_requests": 5,  # Ollama is faster, less delay needed
-            "headless_mode": False
-        }
-        self.topics = []
-        self.generated_contents = []
-        self.successful_posts = 0
-        self.failed_posts = 0
-        self.current_content = None
-        self.current_title = ""
-        self.current_keyword = ""
-        self.content_list = []  # List of {title, keyword, content, word_count}
-        self.is_paused = False  # Pause state
-        self.pause_reason = ""  # Reason for pause (manual or error)
-
-state = AppState()
-
-def add_log(message: str, log_type: str = "info"):
-    """Add a log message with timestamp."""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    state.logs.append({
-        "time": timestamp,
-        "message": message,
-        "type": log_type
-    })
-    # Keep only last 100 logs
-    if len(state.logs) > 100:
-        state.logs = state.logs[-100:]
-
 # ============================================================================
-# SITE PRESETS MANAGEMENT
+# WRAPPER FUNCTIONS (to pass state.config and add_log)
 # ============================================================================
-
-PRESETS_FILE = "wp_site_presets.json"
-
-def load_site_presets():
-    """Load site presets from JSON file."""
-    try:
-        if os.path.exists(PRESETS_FILE):
-            with open(PRESETS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"Error loading presets: {e}")
-    return {}
-
-def save_site_presets(presets: dict):
-    """Save site presets to JSON file."""
-    try:
-        with open(PRESETS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(presets, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        print(f"Error saving presets: {e}")
-        return False
-
-def wait_if_paused():
-    """Wait if automation is paused. Returns False if stopped."""
-    while state.is_paused and state.is_running:
-        time.sleep(0.5)
-    return state.is_running
-
-def pause_on_error(error_msg: str):
-    """Pause automation on error for user to fix."""
-    state.is_paused = True
-    state.pause_reason = error_msg
-    add_log(f"TẠM DỪNG: {error_msg}", "warning")
-    add_log("Sửa lỗi và bấm 'Tiếp tục' để chạy tiếp", "info")
-
-# ============================================================================
-# GEMINI CONTENT GENERATION
-# ============================================================================
-
-PROMPT_PART1 = """
-Bạn là chuyên gia viết bài SEO. Viết PHẦN 1 của bài blog với tiêu đề: "{title}"
-
-TỪ KHÓA SEO CHÍNH: "{keyword}"
-CÔNG TY: THANG MÁY KENZO VIỆT NAM
-
-CHỈ VIẾT PHẦN 1 (khoảng 800 TỪ), bao gồm:
-
-1. ĐOạN MỞ ĐẦU (200 từ):
-<p>Viết đoạn mở đầu hấp dẫn giới thiệu về <strong>{keyword}</strong>. Giải thích tại sao đây là chủ đề quan trọng, nêu bật lợi ích và giá trị. Đề cập đến THANG MÁY KENZO VIỆT NAM như đơn vị uy tín trong lĩnh vực này.</p>
-
-2. <h2>Tổng quan về {keyword}</h2> (200 từ):
-<p>Viết đoạn chi tiết về khái niệm, định nghĩa, tầm quan trọng của <strong>{keyword}</strong>. Mô tả các đặc điểm chính, ứng dụng phổ biến.</p>
-
-3. <h2>Lợi ích nổi bật của {keyword}</h2> (200 từ):
-<p>Giải thích chi tiết các lợi ích:</p>
-<ul>
-<li>An toàn và tiện nghi</li>
-<li>Tiết kiệm không gian</li>
-<li>Tăng giá trị bất động sản</li>
-<li>Phù hợp nhiều đối tượng</li>
-</ul>
-<p>Mô tả cụ thể từng lợi ích với <strong>{keyword}</strong>.</p>
-
-4. <h2>Báo giá {keyword} mới nhất năm 2025</h2> (200 từ):
-<p>Cung cấp thông tin chi tiết về mức giá, các yếu tố ảnh hưởng đến giá, so sánh giá của các loại khác nhau.</p>
-
-QUY TẮC:
-- CHỈ DÙNG HTML (<h2>, <p>, <ul>, <li>, <strong>)
-- KHÔNG dùng Markdown (##, **)
-- Từ khóa "{keyword}" phải in đậm: <strong>{keyword}</strong>
-- Mỗi phần PHẢI có ít nhất 200 từ
-
-Xuất ra HTML thuần túy, bắt đầu bằng <p>.
-"""
-
-PROMPT_PART2 = """
-Bạn là chuyên gia viết bài SEO. Viết PHẦN 2 (tiếp theo) của bài blog với tiêu đề: "{title}"
-
-TỪ KHÓA SEO CHÍNH: "{keyword}"
-CÔNG TY: THANG MÁY KENZO VIỆT NAM
-
-CHỈ VIẾT PHẦN 2 (khoảng 800 TỪ), bao gồm:
-
-1. <h2>Quy trình lắp đặt {keyword}</h2> (200 từ):
-<p>Mô tả chi tiết các bước lắp đặt <strong>{keyword}</strong>:</p>
-<ul>
-<li>Bước 1: Khảo sát và tư vấn</li>
-<li>Bước 2: Thiết kế và báo giá</li>
-<li>Bước 3: Thi công lắp đặt</li>
-<li>Bước 4: Nghiệm thu và bàn giao</li>
-</ul>
-
-2. <h2>Kinh nghiệm chọn {keyword} phù hợp</h2> (200 từ):
-<p>Chia sẻ kinh nghiệm, tiêu chí lựa chọn <strong>{keyword}</strong> chất lượng. Các yếu tố cần xem xét như thương hiệu, bảo hành, dịch vụ hậu mãi.</p>
-
-3. <h2>Câu hỏi thường gặp về {keyword}</h2> (200 từ):
-<h3>Câu hỏi 1: Chi phí lắp đặt {keyword} là bao nhiêu?</h3>
-<p>Trả lời chi tiết về chi phí...</p>
-<h3>Câu hỏi 2: Thời gian lắp đặt {keyword} mất bao lâu?</h3>
-<p>Trả lời chi tiết về thời gian...</p>
-<h3>Câu hỏi 3: Bảo trì {keyword} như thế nào?</h3>
-<p>Trả lời chi tiết về bảo trì...</p>
-
-4. <h2>Kết luận</h2> (200 từ):
-<p>Tóm tắt các điểm chính về <strong>{keyword}</strong>. Kêu gọi khách hàng liên hệ THANG MÁY KENZO VIỆT NAM để được tư vấn và báo giá tốt nhất.</p>
-
-QUY TẮC:
-- CHỈ DÙNG HTML (<h2>, <h3>, <p>, <ul>, <li>, <strong>)
-- KHÔNG dùng Markdown (##, **)
-- Từ khóa "{keyword}" phải in đậm: <strong>{keyword}</strong>
-- Mỗi phần PHẢI có ít nhất 200 từ
-
-Xuất ra HTML thuần túy, bắt đầu bằng <h2>.
-"""
-
-CONTACT_SECTION = """
-<h2>Liên hệ THANG MÁY KENZO VIỆT NAM</h2>
-<p>Nếu bạn cần tư vấn về <strong>{keyword}</strong>, hãy liên hệ ngay với chúng tôi:</p>
-<p><strong>CÔNG TY TNHH THANG MÁY KENZO VIỆT NAM</strong></p>
-<ul>
-<li>Trụ sở: 07 Đường DD5, Phường Tân Hưng Thuận, Quận 12, TP.HCM</li>
-<li>Xưởng: B15/6A Liên Ấp 1-2-3, H. Bình Chánh, TP.HCM</li>
-<li>Chi nhánh Bình Dương: 113, NE3, Chánh Phú Hoà, Bến Cát - ĐT: 0932 619 668</li>
-<li>Chi nhánh Quy Nhơn: Tổ 15, Khu 2, P. Nhơn Bình - ĐT: 0937 596 248</li>
-<li>Email: thanhtienelevator@gmail.com</li>
-<li>Website: <a href="https://suachuathangmay247.com">suachuathangmay247.com</a> | <a href="https://thangmaykenzo.com">thangmaykenzo.com</a></li>
-</ul>
-"""
-
-def clean_gemini_content(content: str) -> str:
-    """Clean Gemini response by removing intro and outro text."""
-    import re
-    
-    if not content:
-        return content
-    
-    original_length = len(content)
-    
-    # ===== REMOVE INTRO TEXT =====
-    # Find the first H1 or H2 tag and remove everything before it
-    first_heading_match = re.search(r'<h[12][^>]*>', content, re.IGNORECASE)
-    if first_heading_match:
-        content = content[first_heading_match.start():]
-    
-    # ===== REMOVE OUTRO TEXT (after contact section) =====
-    # Find the LAST occurrence of website links
-    last_link_pos = -1
-    
-    # Look for the actual website URLs
-    website_patterns = [
-        r'thangmaykenzo\.com[^<]*</a>',
-        r'suachuathangmay247\.com[^<]*</a>',
-        r'thangmaykenzo\.com[^<]*</li>',
-        r'suachuathangmay247\.com[^<]*</li>',
-    ]
-    
-    for pattern in website_patterns:
-        for match in re.finditer(pattern, content, re.IGNORECASE):
-            if match.end() > last_link_pos:
-                last_link_pos = match.end()
-    
-    # If we found a website link, cut everything after the parent list closes
-    if last_link_pos > 0:
-        remaining = content[last_link_pos:]
-        
-        # Find the end of the list (</ul> or </li></ul>)
-        end_list_match = re.search(r'(</li>\s*)*</ul>', remaining, re.IGNORECASE)
-        if end_list_match:
-            cut_point = last_link_pos + end_list_match.end()
-            content = content[:cut_point]
-    
-    # ===== REMOVE GEMINI SUGGESTIONS =====
-    # Remove common Gemini outro patterns that appear AFTER contact
-    outro_patterns = [
-        r'<h[23][^>]*>\s*Next Steps[^<]*</h[23]>.*$',
-        r'<p>\s*Would you like me to.*$',
-        r'<p>\s*Do you want me to.*$',
-        r'<p>\s*Let me know if you.*$',
-        r'<p>\s*Shall I.*$',
-        r'<strong>\s*Next Steps.*$',
-    ]
-    
-    for pattern in outro_patterns:
-        content = re.sub(pattern, '', content, flags=re.IGNORECASE | re.DOTALL)
-    
-    # ===== CLEAN UP =====
-    # Remove trailing whitespace and empty tags
-    content = re.sub(r'\s*<p>\s*</p>\s*', '', content)
-    content = re.sub(r'\s+$', '', content)
-    
-    cleaned_length = len(content)
-    if original_length != cleaned_length:
-        add_log(f"Đã làm sạch nội dung: {original_length} → {cleaned_length} ký tự", "info")
-    
-    return content
-
-
-
-def call_ollama_api(prompt: str, model: str) -> Optional[str]:
-    """Call Ollama API with given prompt."""
-    try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.6,
-                    "num_predict": 6000,
-                    "num_ctx": 8192
-                }
-            },
-            timeout=600
-        )
-        
-        if response.status_code == 200:
-            result = response.json()
-            content = result.get("response", "")
-            
-            # Clean up
-            if content.startswith("```html"):
-                content = content[7:]
-            if content.startswith("```"):
-                content = content[3:]
-            if content.endswith("```"):
-                content = content[:-3]
-            
-            return content.strip()
-        return None
-    except:
-        return None
 
 def generate_content_ollama(title: str, keyword: str) -> Optional[str]:
-    """Generate blog content using Ollama in 2 parts for 1500+ words."""
-    try:
-        model = state.config.get("ollama_model", "llama3.1:8b")
-        
-        # Fallback if model name is empty or invalid
-        if not model or model == "llama3.2":
-            model = "llama3.1:8b"
-        
-        add_log(f"Đang tạo nội dung với Ollama ({model})...", "info")
-        add_log("Đang tạo Phần 1/2 (800+ từ)...", "info")
-        
-        # Generate Part 1
-        prompt_part1 = PROMPT_PART1.format(title=title, keyword=keyword)
-        part1 = call_ollama_api(prompt_part1, model)
-        
-        if not part1:
-            add_log("Không thể tạo Phần 1", "error")
-            return None
-        
-        word_count_1 = len(part1.split())
-        add_log(f"Phần 1: {word_count_1} từ", "info")
-        
-        add_log("Đang tạo Phần 2/2 (800+ từ)...", "info")
-        
-        # Generate Part 2
-        prompt_part2 = PROMPT_PART2.format(title=title, keyword=keyword)
-        part2 = call_ollama_api(prompt_part2, model)
-        
-        if not part2:
-            add_log("Không thể tạo Phần 2", "error")
-            return None
-        
-        word_count_2 = len(part2.split())
-        add_log(f"Phần 2: {word_count_2} từ", "info")
-        
-        # Combine parts + contact section
-        contact = CONTACT_SECTION.format(keyword=keyword)
-        full_content = part1 + "\n\n" + part2 + "\n\n" + contact
-        
-        # Total word count
-        total_words = len(full_content.split())
-        add_log(f"Tổng cộng: {total_words} từ", "success")
-        
-        if total_words < 1200:
-            add_log(f"Nội dung ngắn hơn mong đợi ({total_words} từ)", "warning")
-        
-        add_log(f"Đã tạo nội dung cho: {title}", "success")
-        return full_content
-        
-    except requests.exceptions.Timeout:
-        add_log("Ollama timeout - tạo nội dung quá lâu", "error")
-        return None
-    except Exception as e:
-        add_log(f"Lỗi Ollama: {e}", "error")
-        return None
+    """Wrapper for Ollama content generation."""
+    return _generate_content_ollama(title, keyword, state.config, add_log)
 
+def generate_content_gemini(title: str, keyword: str) -> Optional[str]:
+    """Wrapper for Gemini API content generation."""
+    return _generate_content_gemini(
+        title, keyword, 
+        state.config.get("gemini_api_key", ""),
+        add_log
+    )
+
+# ============================================================================
+# GEMINI WEB CONTENT GENERATION (Browser-based, free, no API key)
+# ============================================================================
 
 def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
     """Send a prompt to Gemini Chat and get the response."""
@@ -711,86 +393,6 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
         add_log(f"Lỗi Gemini Chat: {e}", "error")
         return None
 
-def generate_content_gemini(title: str, keyword: str, max_retries: int = 3) -> Optional[str]:
-    """Generate blog content using Google Gemini API in 2 parts."""
-    if not GEMINI_AVAILABLE:
-        add_log("Gemini library not available", "error")
-        return None
-    
-    genai.configure(api_key=state.config["gemini_api_key"])
-    
-    for attempt in range(max_retries):
-        try:
-            model = genai.GenerativeModel('gemini-2.0-flash')
-            
-            # Generate Part 1
-            add_log("Generating Part 1/2 with Gemini...", "info")
-            prompt_part1 = PROMPT_PART1.format(title=title, keyword=keyword)
-            response1 = model.generate_content(
-                prompt_part1,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=4096,
-                )
-            )
-            part1 = response1.text.strip()
-            
-            # Clean up part 1
-            if part1.startswith("```html"):
-                part1 = part1[7:]
-            if part1.startswith("```"):
-                part1 = part1[3:]
-            if part1.endswith("```"):
-                part1 = part1[:-3]
-            
-            word_count_1 = len(part1.split())
-            add_log(f"Part 1: {word_count_1} words", "info")
-            
-            # Generate Part 2
-            add_log("Generating Part 2/2 with Gemini...", "info")
-            prompt_part2 = PROMPT_PART2.format(title=title, keyword=keyword)
-            response2 = model.generate_content(
-                prompt_part2,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=0.7,
-                    max_output_tokens=4096,
-                )
-            )
-            part2 = response2.text.strip()
-            
-            # Clean up part 2
-            if part2.startswith("```html"):
-                part2 = part2[7:]
-            if part2.startswith("```"):
-                part2 = part2[3:]
-            if part2.endswith("```"):
-                part2 = part2[:-3]
-            
-            word_count_2 = len(part2.split())
-            add_log(f"Part 2: {word_count_2} words", "info")
-            
-            # Combine
-            contact = CONTACT_SECTION.format(keyword=keyword)
-            full_content = part1.strip() + "\n\n" + part2.strip() + "\n\n" + contact
-            
-            total_words = len(full_content.split())
-            add_log(f"Total: {total_words} words", "success")
-            add_log(f"Generated content for: {title}", "success")
-            
-            return full_content
-            
-        except Exception as e:
-            error_str = str(e)
-            if "429" in error_str or "quota" in error_str.lower():
-                wait_time = 60 * (attempt + 1)
-                add_log(f"Rate limit hit. Waiting {wait_time}s before retry {attempt + 1}/{max_retries}...", "warning")
-                time.sleep(wait_time)
-            else:
-                add_log(f"Error generating content: {e}", "error")
-                return None
-    
-    add_log(f"Failed to generate content after {max_retries} retries", "error")
-    return None
 
 
 def generate_content(title: str, keyword: str, page=None) -> Optional[str]:

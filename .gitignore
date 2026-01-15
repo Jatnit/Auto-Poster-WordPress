@@ -2,6 +2,7 @@
 .venv/
 venv/
 env/
+.agent/
 
 # Python cache
 __pycache__/
