@@ -869,32 +869,31 @@ def select_random_image(page: Page, alt_text: str) -> bool:
         return False
 
 def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
-    """Insert images after H2 headings using Visual Editor."""
+    """Insert images after H2 headings using Visual Editor.
+    
+    Inserts images after H2 at positions 1, 3, 5 (indices 0, 2, 4).
+    Re-fetches H2 elements after each insert to avoid stale references.
+    """
     try:
         add_log("Đang chèn hình vào bài viết...", "info")
         close_all_modals(page)
         
-        # Switch to Visual mode
+        # Switch to Visual mode first
         try:
             visual_tab = page.locator("#content-tmce").first
-            if visual_tab.is_visible(timeout=1000):
+            if visual_tab.is_visible(timeout=2000):
                 visual_tab.click()
-                time.sleep(0.5)
-        except:
-            pass
+                time.sleep(1)
+                add_log("Switched to Visual mode", "info")
+        except Exception as e:
+            add_log(f"Could not switch to Visual mode: {e}", "warning")
         
-        # Get H2 headings
-        h2_elements = page.frame_locator("#content_ifr").locator("h2").all()
-        if not h2_elements:
-            add_log("Không tìm thấy tiêu đề H2", "warning")
-            return False
-        
-        add_log(f"Tìm thấy {len(h2_elements)} tiêu đề H2", "info")
+        # H2 positions to insert images after (1st, 3rd, 5th = index 0, 2, 4)
+        target_h2_indices = [0, 2, 4]
         images_inserted = 0
         
-        # Insert after 1st, 3rd, 5th H2
-        for h2_index in [0, 2, 4]:
-            if images_inserted >= max_images or h2_index >= len(h2_elements):
+        for target_index in target_h2_indices:
+            if images_inserted >= max_images:
                 break
             
             # Check stop/pause
@@ -906,86 +905,155 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                     return False
             
             try:
-                # Position cursor after H2
-                h2_elements[h2_index].click()
-                page.keyboard.press("End")
-                page.keyboard.press("Enter")
+                add_log(f"Attempting to insert image after H2 #{target_index + 1}...", "info")
+                
+                # IMPORTANT: Re-fetch H2 elements each iteration (DOM changes after insert)
+                page.wait_for_timeout(500)  # Wait for DOM to settle
+                h2_elements = page.frame_locator("#content_ifr").locator("h2").all()
+                
+                if not h2_elements:
+                    add_log("No H2 elements found in iframe", "warning")
+                    return False
+                
+                if target_index >= len(h2_elements):
+                    add_log(f"H2 #{target_index + 1} not found (only {len(h2_elements)} H2s)", "info")
+                    continue
+                
+                # Click on the H2 to position cursor
+                h2_element = h2_elements[target_index]
+                h2_element.scroll_into_view_if_needed()
+                time.sleep(0.3)
+                h2_element.click()
                 time.sleep(0.2)
                 
-                # Open media modal
-                add_btn = page.locator("#insert-media-button, .add_media").first
-                if not add_btn.is_visible(timeout=1000):
-                    continue
-                    
-                add_btn.click()
-                page.wait_for_selector(".media-modal", timeout=3000)
-                time.sleep(0.8)
+                # Move to end of H2 and create new line
+                page.keyboard.press("End")
+                page.keyboard.press("Enter")
+                time.sleep(0.3)
                 
-                # Select image
+                # Click Add Media button
+                add_btn = page.locator("#insert-media-button, .add_media").first
+                if not add_btn.is_visible(timeout=2000):
+                    add_log(f"Add Media button not visible for H2 #{target_index + 1}", "warning")
+                    continue
+                
+                add_btn.click()
+                add_log("Clicked Add Media button", "info")
+                
+                # Wait for media modal to appear
+                try:
+                    page.wait_for_selector(".media-modal", timeout=5000)
+                    time.sleep(1.5)  # Wait for images to load
+                except:
+                    add_log("Media modal did not appear", "warning")
+                    close_all_modals(page)
+                    continue
+                
+                # Click Media Library tab if available
+                try:
+                    lib_tab = page.locator(".media-menu-item:has-text('Thư viện Media'), .media-menu-item:has-text('Media Library')").first
+                    if lib_tab.is_visible(timeout=1000):
+                        lib_tab.click()
+                        time.sleep(1)
+                except:
+                    pass
+                
+                # Select a random image
                 images = page.locator(".attachments .attachment, li.attachment").all()
-                if images:
-                    images[random.randint(0, min(len(images) - 1, 10))].click()
-                    time.sleep(0.5)
-                    
-                    # Set alt text with keyword
-                    try:
-                        time.sleep(0.3)  # Wait for sidebar to load
-                        alt_selectors = [
-                            "input[data-setting='alt']",
-                            "#attachment-details-alt-text",
-                            ".attachment-details input[type='text']",
-                            "input.attachment-alt-text"
-                        ]
-                        for alt_sel in alt_selectors:
-                            try:
-                                alt = page.locator(alt_sel).first
-                                if alt.is_visible(timeout=500):
-                                    alt.click()
-                                    alt.fill("")  # Clear first
-                                    time.sleep(0.1)
-                                    alt.fill(keyword)
-                                    add_log(f"Alt text đã set: {keyword}", "info")
-                                    break
-                            except:
-                                continue
-                    except:
-                        pass
-                    
-                    # Set link to attachment page
-                    try:
-                        link = page.locator("select[data-setting='link']").first
-                        if link.is_visible(timeout=500):
-                            link.select_option("post")
-                    except:
-                        pass
-                    
-                    # Insert
-                    for sel in ["button.media-button-insert", "button:has-text('Chèn vào bài viết')"]:
+                if not images:
+                    add_log("No images in media library", "warning")
+                    close_all_modals(page)
+                    continue
+                
+                # Pick a random image from first 10
+                img_index = random.randint(0, min(len(images) - 1, 9))
+                images[img_index].click()
+                time.sleep(0.8)
+                add_log(f"Selected image {img_index + 1}", "info")
+                
+                # Set alt text with keyword
+                try:
+                    alt_selectors = [
+                        "input[data-setting='alt']",
+                        "#attachment-details-alt-text",
+                        ".attachment-details input[type='text']",
+                        "input.attachment-alt-text"
+                    ]
+                    for alt_sel in alt_selectors:
                         try:
-                            btn = page.locator(sel).first
-                            if btn.is_visible(timeout=500):
-                                btn.click()
-                                images_inserted += 1
-                                add_log(f"Đã chèn hình {images_inserted} sau H2 #{h2_index + 1}", "success")
-                                time.sleep(0.5)
+                            alt = page.locator(alt_sel).first
+                            if alt.is_visible(timeout=800):
+                                alt.click()
+                                alt.fill("")
+                                time.sleep(0.1)
+                                alt.fill(keyword)
+                                add_log(f"Alt text set: {keyword}", "info")
                                 break
                         except:
                             continue
+                except:
+                    pass
                 
+                # Set link to attachment page (optional)
+                try:
+                    link = page.locator("select[data-setting='link']").first
+                    if link.is_visible(timeout=500):
+                        link.select_option("post")
+                except:
+                    pass
+                
+                # Click Insert into post button
+                inserted = False
+                insert_selectors = [
+                    "button.media-button-insert",
+                    "button:has-text('Chèn vào bài viết')",
+                    "button:has-text('Insert into post')",
+                    ".media-button-insert"
+                ]
+                
+                for sel in insert_selectors:
+                    try:
+                        btn = page.locator(sel).first
+                        if btn.is_visible(timeout=1000):
+                            btn.click()
+                            inserted = True
+                            images_inserted += 1
+                            add_log(f"Inserted image {images_inserted} after H2 #{target_index + 1}", "success")
+                            time.sleep(1)  # Wait for insert to complete
+                            break
+                    except:
+                        continue
+                
+                if not inserted:
+                    add_log(f"Failed to insert image after H2 #{target_index + 1}", "warning")
+                
+                # Close modal and wait before next iteration
                 close_all_modals(page)
+                time.sleep(0.5)
+                
+                # Switch back to Visual mode for next iteration
+                try:
+                    visual_tab = page.locator("#content-tmce").first
+                    if visual_tab.is_visible(timeout=1000):
+                        visual_tab.click()
+                        time.sleep(0.5)
+                except:
+                    pass
                 
             except Exception as e:
+                add_log(f"Error inserting image after H2 #{target_index + 1}: {e}", "warning")
                 close_all_modals(page)
                 continue
         
         close_all_modals(page)
-        add_log(f"Đã chèn {images_inserted} hình", "success")
+        add_log(f"Total images inserted: {images_inserted}/{max_images}", "success")
         return images_inserted > 0
         
     except Exception as e:
-        add_log(f"Lỗi chèn hình: {e}", "warning")
+        add_log(f"Error in insert_images_after_h2: {e}", "error")
         close_all_modals(page)
         return False
+
 
 def close_all_modals(page: Page, max_attempts: int = 2):
     """Close all media modals efficiently."""
