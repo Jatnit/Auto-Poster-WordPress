@@ -1298,6 +1298,138 @@ def add_post_tags(page: Page, tags: str) -> bool:
         return False
 
 
+def set_featured_image_debug(page: Page, keyword: str) -> bool:
+    """Debug version of set_featured_image with screenshots."""
+    import os
+    screenshot_dir = "/Users/jatnit/Documents/Workflow/debug_screenshots"
+    os.makedirs(screenshot_dir, exist_ok=True)
+    
+    try:
+        add_log("DEBUG: Setting featured image...", "info")
+        
+        # Screenshot 1: Before clicking
+        page.screenshot(path=f"{screenshot_dir}/1_before_click.png")
+        add_log("Screenshot 1 saved", "info")
+        
+        # Close any modals first
+        force_close_all_modals(page)
+        time.sleep(0.5)
+        
+        # Click the featured image link using JS
+        result = page.evaluate("""
+            () => {
+                const link = document.querySelector('#set-post-thumbnail') || 
+                             document.querySelector('#postimagediv a');
+                if (link) {
+                    link.click();
+                    return 'clicked: ' + link.textContent;
+                }
+                return 'not_found';
+            }
+        """)
+        add_log(f"JS click: {result}", "info")
+        
+        time.sleep(3)
+        
+        # Screenshot 2: After clicking link
+        page.screenshot(path=f"{screenshot_dir}/2_after_click.png")
+        add_log("Screenshot 2 saved", "info")
+        
+        # Check what's on the page
+        modal_check = page.evaluate("""
+            () => {
+                const info = {
+                    media_modal: !!document.querySelector('.media-modal'),
+                    media_frame: !!document.querySelector('.media-frame'),
+                    tb_window: !!document.querySelector('#TB_window'),
+                    attachments: document.querySelectorAll('.attachment').length,
+                    body_classes: document.body.className
+                };
+                return JSON.stringify(info);
+            }
+        """)
+        add_log(f"Page state: {modal_check}", "info")
+        
+        # Try to find and click an image using PLAYWRIGHT (more reliable than JS)
+        time.sleep(2)
+        
+        try:
+            import random
+            # Use Playwright to click directly
+            attachments = page.locator(".attachments .attachment").all()
+            if attachments:
+                # Pick a random one from first 10
+                idx = random.randint(0, min(len(attachments), 10) - 1)
+                attachment = attachments[idx]
+                
+                # Click with force to bypass any overlays
+                attachment.click(force=True)
+                add_log(f"Playwright clicked image {idx + 1} of {len(attachments)}", "info")
+                
+                # Wait for selection
+                time.sleep(2)
+                
+                # Check if selection worked by looking for details panel
+                has_selection = page.evaluate("""
+                    () => {
+                        const selected = document.querySelector('.attachment.selected, .attachment.details');
+                        const detailsPanel = document.querySelector('.attachment-details, .attachment-info');
+                        return {
+                            selected: !!selected,
+                            hasDetails: !!detailsPanel
+                        };
+                    }
+                """)
+                add_log(f"Selection state: {has_selection}", "info")
+                
+                # If not selected, try clicking inner preview
+                if not has_selection.get('selected'):
+                    preview = attachment.locator(".attachment-preview").first
+                    if preview.is_visible(timeout=1000):
+                        preview.click(force=True)
+                        add_log("Clicked inner preview", "info")
+                        time.sleep(1)
+            else:
+                add_log("No attachments found via Playwright", "warning")
+        except Exception as e:
+            add_log(f"Playwright click error: {e}", "warning")
+        
+        # Screenshot 3: After selecting image
+        page.screenshot(path=f"{screenshot_dir}/3_after_select.png")
+        add_log("Screenshot 3 saved", "info")
+        
+        # Try to click the set featured image button
+        btn_result = page.evaluate("""
+            () => {
+                const btn = document.querySelector('button.media-button-select') ||
+                           document.querySelector('.media-button-select') ||
+                           document.querySelector('button.button-primary');
+                if (btn) {
+                    btn.click();
+                    return 'clicked_button: ' + btn.textContent;
+                }
+                return 'no_button_found';
+            }
+        """)
+        add_log(f"Button click: {btn_result}", "info")
+        
+        time.sleep(1)
+        
+        # Screenshot 4: Final state
+        page.screenshot(path=f"{screenshot_dir}/4_final.png")
+        add_log("Screenshot 4 saved", "info")
+        
+        add_log(f"DEBUG COMPLETE - Check screenshots in {screenshot_dir}", "success")
+        
+        force_close_all_modals(page)
+        return True
+        
+    except Exception as e:
+        add_log(f"DEBUG Error: {e}", "error")
+        page.screenshot(path=f"{screenshot_dir}/error.png")
+        return False
+
+
 def set_featured_image(page: Page, keyword: str) -> bool:
     """Set featured image using JavaScript to open media modal.
     
@@ -1789,9 +1921,9 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         if tags:
             add_post_tags(page, tags)
         
-        # Featured image temporarily disabled due to modal detection issues
-        # TODO: Fix WordPress media modal interaction
-        # set_featured_image(page, keyword)
+        # NOTE: Featured image disabled - WordPress media modal không tương thích
+        # Bạn có thể thêm ảnh đại diện thủ công sau khi bài được publish
+        # set_featured_image_debug(page, keyword)
         
         # Check stop/pause before publish
         if not state.is_running:
