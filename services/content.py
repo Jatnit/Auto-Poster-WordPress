@@ -1,34 +1,10 @@
-"""
-Content Generation Service
-===========================
-Unified interface for content generation across different AI providers.
-"""
-
 from typing import Optional, Callable
 from config.settings import state, add_log
 from config.prompts import clean_gemini_content
 
 
-def generate_content(
-    title: str, 
-    keyword: str, 
-    page=None,
-    provider: str = None
-) -> Optional[str]:
-    """
-    Generate content using the configured AI provider.
-    
-    Args:
-        title: Post title
-        keyword: SEO keyword
-        page: Playwright page (required for gemini_web)
-        provider: Override AI provider (optional)
-    
-    Returns:
-        Generated HTML content or None
-    """
+def generate_content(title: str, keyword: str, page=None, provider: str = None) -> Optional[str]:
     ai_provider = provider or state.config.get("ai_provider", "gemini_api")
-    
     add_log(f"Generating content with {ai_provider}...", "info")
     
     content = None
@@ -46,7 +22,6 @@ def generate_content(
         add_log(f"Unknown AI provider: {ai_provider}", "error")
         return None
     
-    # Clean content if from Gemini
     if content and "gemini" in ai_provider:
         content = clean_gemini_content(content)
     
@@ -54,7 +29,6 @@ def generate_content(
 
 
 def _generate_with_gemini_api(title: str, keyword: str) -> Optional[str]:
-    """Generate content using Gemini API."""
     try:
         from ai_providers.gemini_api import generate_content_gemini, GEMINI_AVAILABLE
         
@@ -75,7 +49,6 @@ def _generate_with_gemini_api(title: str, keyword: str) -> Optional[str]:
 
 
 def _generate_with_ollama(title: str, keyword: str) -> Optional[str]:
-    """Generate content using Ollama."""
     try:
         from ai_providers.ollama import generate_content_ollama, OLLAMA_AVAILABLE
         
@@ -91,29 +64,11 @@ def _generate_with_ollama(title: str, keyword: str) -> Optional[str]:
 
 
 def _generate_with_gemini_web(page, title: str, keyword: str) -> Optional[str]:
-    """Generate content using Gemini Web interface."""
-    # This will be imported from app.py later
-    # For now, return None and let app.py handle it
     add_log("Gemini Web generation delegated to app.py", "info")
     return None
 
 
-def batch_generate_content(
-    topics: list,
-    page=None,
-    on_progress: Callable[[int, int], None] = None
-) -> list:
-    """
-    Generate content for multiple topics.
-    
-    Args:
-        topics: List of topic dicts with 'title' and 'keyword'
-        page: Playwright page (for gemini_web)
-        on_progress: Callback(current, total) for progress updates
-    
-    Returns:
-        List of generated contents (None for failed ones)
-    """
+def batch_generate_content(topics: list, page=None, on_progress: Callable[[int, int], None] = None) -> list:
     contents = []
     total = len(topics)
     

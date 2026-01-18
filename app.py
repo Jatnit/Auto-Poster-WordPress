@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-WordPress Auto Poster - Web Interface
-======================================
-A beautiful web interface for the WordPress Auto Poster with AI content generation.
-Supports: Gemini API, Gemini Web, Ollama (free, local)
-"""
 
 import os
 import random
@@ -18,7 +12,6 @@ from typing import Optional
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
-# Import from local modules
 from config.settings import (
     state, add_log, wait_if_paused, pause_on_error,
     load_site_presets, save_site_presets,
@@ -35,39 +28,30 @@ from ai_providers.gemini_api import (
     GEMINI_AVAILABLE
 )
 
-# Playwright
 try:
     from playwright.sync_api import sync_playwright, Page, TimeoutError as PlaywrightTimeoutError
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
-# Flask app
 app = Flask(__name__)
 CORS(app)
 
-# ============================================================================
 # WRAPPER FUNCTIONS (to pass state.config and add_log)
-# ============================================================================
 
 def generate_content_ollama(title: str, keyword: str) -> Optional[str]:
-    """Wrapper for Ollama content generation."""
     return _generate_content_ollama(title, keyword, state.config, add_log)
 
 def generate_content_gemini(title: str, keyword: str) -> Optional[str]:
-    """Wrapper for Gemini API content generation."""
     return _generate_content_gemini(
         title, keyword, 
         state.config.get("gemini_api_key", ""),
         add_log
     )
 
-# ============================================================================
 # GEMINI WEB CONTENT GENERATION (Browser-based, free, no API key)
-# ============================================================================
 
 def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
-    """Send a prompt to Gemini Chat and get the response."""
     try:
         # Wait for page to fully load
         add_log("Đang chờ trang Gemini tải...", "info")
@@ -262,7 +246,6 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
 
 
 def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]:
-    """Generate content using Gemini Chat web interface (free, no API key needed)."""
     try:
         add_log("Đang mở Gemini Chat...", "info")
         
@@ -396,7 +379,6 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
 
 
 def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
-    """Generate content using the configured AI provider."""
     provider = state.config.get("ai_provider", "ollama")
     
     if provider == "ollama":
@@ -414,9 +396,7 @@ def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
     else:
         return generate_content_gemini(title, keyword)
 
-# ============================================================================
 # WORDPRESS AUTOMATION
-# ============================================================================
 
 def wait_for_network_idle(page: Page, timeout: int = 10000):
     try:
@@ -425,7 +405,6 @@ def wait_for_network_idle(page: Page, timeout: int = 10000):
         pass
 
 def login_to_wordpress(page: Page) -> bool:
-    """Login to WordPress with improved error handling."""
     try:
         add_log("🔐 Logging into WordPress...", "info")
         
@@ -570,7 +549,6 @@ def login_to_wordpress(page: Page) -> bool:
         return False
 
 def navigate_to_new_post(page: Page) -> bool:
-    """Navigate to create new post page (Classic Editor)."""
     try:
         page.goto(f"{state.config['wp_admin_url']}/post-new.php", wait_until="domcontentloaded")
         wait_for_network_idle(page, timeout=15000)
@@ -601,7 +579,6 @@ def navigate_to_new_post(page: Page) -> bool:
         return False
 
 def set_post_title(page: Page, title: str) -> bool:
-    """Set the post title (Classic Editor)."""
     try:
         # Classic Editor title field - ID is always "title"
         title_input = page.locator("#title")
@@ -621,7 +598,6 @@ def set_post_title(page: Page, title: str) -> bool:
         return False
 
 def set_post_content(page: Page, content: str) -> bool:
-    """Set the post content (Classic Editor with TinyMCE)."""
     try:
         add_log("Đang thêm nội dung...", "info")
         time.sleep(0.5)
@@ -701,7 +677,6 @@ def set_post_content(page: Page, content: str) -> bool:
         return False
 
 def set_rank_math_keyword(page: Page, keyword: str) -> bool:
-    """Set the Rank Math SEO focus keyword."""
     try:
         add_log(f"Setting Rank Math keyword: {keyword}", "info")
         
@@ -764,7 +739,6 @@ def set_rank_math_keyword(page: Page, keyword: str) -> bool:
         return False
 
 def select_random_image(page: Page, alt_text: str) -> bool:
-    """Select a random image from media library for featured image."""
     try:
         # Wait for media modal to appear
         try:
@@ -1056,7 +1030,6 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
 
 
 def close_all_modals(page: Page, max_attempts: int = 2):
-    """Close all media modals efficiently."""
     try:
         for _ in range(max_attempts):
             # Quick Escape key press
@@ -1088,7 +1061,6 @@ force_close_all_modals = close_all_modals
 close_any_media_modal = close_all_modals
 
 def select_random_image_for_content(page: Page, alt_text: str) -> bool:
-    """Select an image from media library and insert it into content."""
     try:
         # Wait for media modal
         page.wait_for_selector(".media-modal", timeout=10000)
@@ -1171,7 +1143,6 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         return False
 
 def select_first_category(page: Page) -> bool:
-    """Select first category (Classic Editor)."""
     try:
         # Get all category checkboxes directly
         checkboxes = page.locator("#categorychecklist input[type='checkbox']").all()
@@ -1562,7 +1533,6 @@ def set_featured_image(page: Page, keyword: str) -> bool:
         return False
 
 def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: datetime = None) -> bool:
-    """Publish or schedule post (Classic Editor)."""
     try:
         # For scheduling in Classic Editor
         if is_schedule and publish_date:
@@ -1699,7 +1669,6 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
         return False
 
 def create_single_post(page: Page, index: int, topic: dict, content: str, start_date: datetime) -> bool:
-    """Create a single WordPress post."""
     title = topic["title"]
     keyword = topic["keyword"]
     
@@ -1811,7 +1780,6 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         return False
 
 def run_automation():
-    """Main automation function that runs in a separate thread."""
     if not PLAYWRIGHT_AVAILABLE:
         add_log("Playwright not available. Please install it first.", "error")
         state.is_running = False
@@ -2010,9 +1978,7 @@ def run_automation():
     state.is_running = False
     add_log("WordPress Auto Poster completed!", "success")
 
-# ============================================================================
 # FLASK ROUTES
-# ============================================================================
 
 @app.route('/')
 def index():
@@ -2058,13 +2024,11 @@ def handle_topics():
 
 @app.route('/api/presets', methods=['GET'])
 def list_presets():
-    """List all saved site presets."""
     presets = load_site_presets()
     return jsonify({"success": True, "presets": list(presets.keys())})
 
 @app.route('/api/presets/<name>', methods=['GET', 'PUT', 'DELETE'])
 def manage_preset(name):
-    """Get, save, or delete a site preset."""
     presets = load_site_presets()
     
     if request.method == 'GET':
@@ -2094,7 +2058,6 @@ def manage_preset(name):
 
 @app.route('/api/content/<int:index>')
 def get_content(index):
-    """Get full content by index for accordion expansion."""
     if 0 <= index < len(state.content_list):
         return jsonify({
             "success": True,
@@ -2104,7 +2067,6 @@ def get_content(index):
 
 @app.route('/api/content/<int:index>', methods=['PUT'])
 def update_content(index):
-    """Update content by index - allows editing without stopping automation."""
     if 0 <= index < len(state.content_list):
         data = request.json
         if 'content' in data:
@@ -2127,7 +2089,6 @@ def update_content(index):
 
 @app.route('/api/content/<int:index>', methods=['DELETE'])
 def delete_content(index):
-    """Delete content by index - removes from list without stopping automation."""
     if 0 <= index < len(state.content_list):
         deleted_title = state.content_list[index]['title']
         del state.content_list[index]
@@ -2207,7 +2168,6 @@ def resume_automation():
 
 @app.route('/api/ollama/start', methods=['POST'])
 def start_ollama():
-    """Start Ollama service using brew services."""
     try:
         import subprocess
         result = subprocess.run(
@@ -2234,7 +2194,6 @@ def start_ollama():
 
 @app.route('/api/ollama/stop', methods=['POST'])
 def stop_ollama():
-    """Stop Ollama service using brew services."""
     try:
         import subprocess
         result = subprocess.run(
@@ -2257,7 +2216,6 @@ def stop_ollama():
 
 @app.route('/api/ollama/status', methods=['GET'])
 def ollama_status():
-    """Get Ollama service status."""
     is_running = check_ollama()
     return jsonify({
         "running": is_running,

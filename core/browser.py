@@ -1,22 +1,13 @@
-"""
-Browser Management
-==================
-Lazy loading Playwright browser for improved startup performance.
-"""
-
 from typing import Optional
 from config.settings import add_log, BROWSER_DATA_DIR
 
-# Lazy load Playwright - only import when needed
 _playwright = None
 _browser = None
 _context = None
-
 PLAYWRIGHT_AVAILABLE = False
 
 
 def _init_playwright():
-    """Initialize Playwright lazily."""
     global _playwright, PLAYWRIGHT_AVAILABLE
     if _playwright is None:
         try:
@@ -31,7 +22,6 @@ def _init_playwright():
 
 
 def get_browser(headless: bool = True):
-    """Get or create browser instance."""
     global _browser
     
     playwright = _init_playwright()
@@ -61,7 +51,6 @@ def get_browser(headless: bool = True):
 
 
 def get_page(headless: bool = True):
-    """Get a new page from browser."""
     browser = get_browser(headless)
     if browser is None:
         return None
@@ -75,7 +64,6 @@ def get_page(headless: bool = True):
 
 
 def close_browser():
-    """Close browser and cleanup."""
     global _browser, _playwright
     
     if _browser:
@@ -95,7 +83,6 @@ def close_browser():
 
 
 def is_playwright_available():
-    """Check if Playwright is available."""
     global PLAYWRIGHT_AVAILABLE
     if not PLAYWRIGHT_AVAILABLE:
         _init_playwright()
