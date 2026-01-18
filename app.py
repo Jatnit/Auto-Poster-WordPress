@@ -1299,125 +1299,221 @@ def add_post_tags(page: Page, tags: str) -> bool:
 
 
 def set_featured_image(page: Page, keyword: str) -> bool:
-    """Set featured image (Classic Editor) with improved reliability."""
+    """Set featured image using JavaScript to open media modal.
+    
+    New approach:
+    1. Use JavaScript to trigger WordPress media frame
+    2. Wait for modal with multiple fallbacks
+    3. Select random unused image
+    4. Set alt text = keyword
+    5. Click set featured image button
+    """
     try:
         add_log("Setting featured image...", "info")
         
         # First, close any open modals
         force_close_all_modals(page)
-        time.sleep(1)
+        time.sleep(0.5)
         
-        # Scroll to Featured Image section
+        # Method 1: Try JavaScript click on the link
+        modal_opened = False
+        
         try:
-            featured_box = page.locator("#postimagediv, #postimagediv-hide").first
-            if featured_box.is_visible(timeout=2000):
-                featured_box.scroll_into_view_if_needed()
-                time.sleep(0.5)
-        except:
-            pass
+            # Use JavaScript to click the link and trigger the modal
+            result = page.evaluate("""
+                () => {
+                    // Try clicking the set featured image link via JavaScript
+                    const link = document.querySelector('#set-post-thumbnail') || 
+                                 document.querySelector('a[href*="type=set-post-thumbnail"]') ||
+                                 document.querySelector('#postimagediv a');
+                    if (link) {
+                        link.click();
+                        return 'clicked';
+                    }
+                    return 'not_found';
+                }
+            """)
+            add_log(f"JS click result: {result}", "info")
+            time.sleep(3)
+            
+            # Debug: Check what modal elements exist
+            modal_info = page.evaluate("""
+                () => {
+                    const modals = [];
+                    if (document.querySelector('.media-modal')) modals.push('media-modal');
+                    if (document.querySelector('.media-frame')) modals.push('media-frame');
+                    if (document.querySelector('#TB_window')) modals.push('TB_window');
+                    if (document.querySelector('.media-modal-content')) modals.push('media-modal-content');
+                    if (document.querySelector('.attachment-details')) modals.push('attachment-details');
+                    return modals.length > 0 ? modals.join(', ') : 'none';
+                }
+            """)
+            add_log(f"Modal elements found: {modal_info}", "info")
+            
+            # Check if any modal opened
+            if modal_info != 'none':
+                modal_opened = True
+                add_log("Modal detected via JS check", "info")
+            else:
+                try:
+                    page.wait_for_selector(".media-modal, .media-frame, #TB_window", timeout=3000)
+                    modal_opened = True
+                    add_log("Media modal opened via JS click", "info")
+                except:
+                    pass
+        except Exception as e:
+            add_log(f"JS click failed: {e}", "warning")
         
-        # Try multiple selectors for the "Set featured image" link
-        link_selectors = [
-            "#set-post-thumbnail",
-            "a:has-text('Đặt ảnh đại diện')",
-            "a:has-text('Set featured image')",
-            "#postimagediv a",
-            ".inside a"
-        ]
-        
-        clicked = False
-        for selector in link_selectors:
+        # Method 2: Try direct Playwright click with force
+        if not modal_opened:
             try:
-                link = page.locator(selector).first
-                if link.is_visible(timeout=1000):
-                    link.scroll_into_view_if_needed()
-                    time.sleep(0.3)
-                    link.click()
-                    add_log(f"Clicked: {selector}", "info")
-                    clicked = True
-                    break
+                link = page.locator("#set-post-thumbnail, #postimagediv a").first
+                if link.is_visible(timeout=2000):
+                    link.click(force=True)
+                    time.sleep(3)
+                    # Check for both media-modal and thickbox
+                    try:
+                        page.wait_for_selector(".media-modal, #TB_window, .media-frame", timeout=5000)
+                        modal_opened = True
+                        add_log("Modal opened via force click", "info")
+                    except:
+                        pass
             except:
-                continue
+                pass
         
-        if not clicked:
-            add_log("Không tìm thấy link ảnh đại diện", "warning")
-            return False
-        
-        # Wait for media modal to open
-        time.sleep(2)
-        
-        # Try to wait for modal with longer timeout
-        try:
-            page.wait_for_selector(".media-modal", timeout=10000)
-            add_log("Modal chọn ảnh đã mở", "info")
-        except:
-            add_log("Modal không mở, đang thử lại...", "warning")
-            # Try clicking again
+        # Method 3: Try triggering the WordPress media frame directly
+        if not modal_opened:
             try:
-                page.locator("#set-post-thumbnail, a:has-text('Đặt ảnh đại diện')").first.click()
+                result = page.evaluate("""
+                    () => {
+                        if (typeof wp !== 'undefined' && wp.media) {
+                            // Create a new media frame for featured image
+                            const frame = wp.media({
+                                title: 'Chọn ảnh đại diện',
+                                button: { text: 'Đặt ảnh đại diện' },
+                                library: { type: 'image' },
+                                multiple: false
+                            });
+                            frame.open();
+                            return 'opened';
+                        }
+                        return 'wp_not_found';
+                    }
+                """)
+                add_log(f"WP media frame: {result}", "info")
                 time.sleep(3)
-                page.wait_for_selector(".media-modal", timeout=10000)
-            except:
-                add_log("Vẫn không tìm thấy modal", "error")
-                return False
+                
+                # Check for modal with multiple selectors
+                try:
+                    page.wait_for_selector(".media-modal, #TB_window, .media-frame, .media-modal-content", timeout=8000)
+                    modal_opened = True
+                    add_log("Modal opened via wp.media", "info")
+                except:
+                    # Try waiting a bit more
+                    time.sleep(2)
+                    if page.locator(".media-modal, .media-frame").count() > 0:
+                        modal_opened = True
+                        add_log("Modal found after extra wait", "info")
+            except Exception as e:
+                add_log(f"WP media frame failed: {e}", "warning")
+        
+        if not modal_opened:
+            add_log("Could not open media modal - skipping featured image", "warning")
+            return False
         
         # Wait for images to load
         time.sleep(3)
         
         # Click on Media Library tab if available
         try:
-            media_lib_tab = page.locator(".media-menu-item:has-text('Thư viện Media'), .media-menu-item:has-text('Media Library')").first
+            media_lib_tab = page.locator(".media-menu-item:has-text('Thư viện Media'), .media-menu-item:has-text('Media Library'), .media-menu-item:has-text('Chọn từ thư viện')").first
             if media_lib_tab.is_visible(timeout=1000):
                 media_lib_tab.click()
                 time.sleep(2)
-                add_log("📂 Đã chuyển sang Thư viện Media", "info")
+                add_log("Switched to Media Library", "info")
         except:
             pass
         
-        # Find images
-        time.sleep(2)  # Extra wait for images to load
-        images = page.locator(".attachments .attachment, li.attachment, .attachment-preview").all()
+        # Wait for images to fully load
+        time.sleep(2)
         
-        if not images:
-            add_log("No images found in media library", "warning")
-            force_close_all_modals(page)
-            return False
-        
-        add_log(f"Tìm thấy {len(images)} hình ảnh", "info")
-        
-        # Click first visible image
-        image_clicked = False
-        for i, img in enumerate(images[:5]):
-            try:
-                if img.is_visible(timeout=500):
-                    img.click()
-                    add_log(f"Selected image {i+1}", "info")
-                    image_clicked = True
-                    time.sleep(1)
-                    break
-            except:
-                continue
-        
-        if not image_clicked:
-            add_log("Could not click any image", "warning")
-            force_close_all_modals(page)
-            return False
-        
-        # Set alt text if available
+        # Use JavaScript to select a random image (more reliable than visibility check)
         try:
-            alt_input = page.locator("input[data-setting='alt']").first
-            if alt_input.is_visible(timeout=1000):
-                alt_input.fill(keyword)
-        except:
-            pass
+            import random
+            
+            # Get total number of images and select random one via JS
+            result = page.evaluate("""
+                (usedIndices) => {
+                    const attachments = document.querySelectorAll('.attachments .attachment, li.attachment, .attachment');
+                    if (attachments.length === 0) return { success: false, error: 'no_images' };
+                    
+                    // Get available indices (not in usedIndices)
+                    const availableIndices = [];
+                    for (let i = 0; i < Math.min(attachments.length, 30); i++) {
+                        if (!usedIndices.includes(i)) {
+                            availableIndices.push(i);
+                        }
+                    }
+                    
+                    // If all used, reset to all indices
+                    const indicesToUse = availableIndices.length > 0 ? availableIndices : 
+                                        Array.from({length: Math.min(attachments.length, 30)}, (_, i) => i);
+                    
+                    // Pick random index
+                    const randomIndex = indicesToUse[Math.floor(Math.random() * indicesToUse.length)];
+                    const img = attachments[randomIndex];
+                    
+                    if (img) {
+                        img.click();
+                        return { success: true, index: randomIndex, total: attachments.length, available: indicesToUse.length };
+                    }
+                    return { success: false, error: 'click_failed' };
+                }
+            """, list(state.used_featured_images))
+            
+            if result.get('success'):
+                selected_idx = result.get('index', 0)
+                state.used_featured_images.add(selected_idx)
+                add_log(f"Selected image #{selected_idx + 1} via JS ({result.get('available')} available of {result.get('total')})", "info")
+                time.sleep(1)
+            else:
+                add_log(f"Could not select image: {result.get('error')}", "warning")
+                force_close_all_modals(page)
+                return False
+                
+        except Exception as e:
+            add_log(f"Error selecting image via JS: {e}", "warning")
+            force_close_all_modals(page)
+            return False
         
-        # Click "Đặt ảnh đại diện" / "Set featured image" button
+        # Set alt text = keyword using JavaScript (more reliable)
+        time.sleep(1)
+        try:
+            page.evaluate("""
+                (keyword) => {
+                    // Try multiple selectors for alt input
+                    const altInput = document.querySelector("input[data-setting='alt']") ||
+                                    document.querySelector("#attachment-details-alt-text") ||
+                                    document.querySelector(".attachment-details input[type='text']");
+                    if (altInput) {
+                        altInput.value = keyword;
+                        altInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        altInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        return true;
+                    }
+                    return false;
+                }
+            """, keyword)
+            add_log(f"Alt text: {keyword}", "info")
+        except:
+            pass  # Alt text is optional
+        
+        # Click "Đặt ảnh đại diện" button
         button_selectors = [
             "button.media-button-select",
             "button:has-text('Đặt ảnh đại diện')",
             "button:has-text('Set featured image')",
             ".media-button-select",
-            "button.button-primary"
         ]
         
         button_clicked = False
@@ -1426,7 +1522,7 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                 btn = page.locator(selector).first
                 if btn.is_visible(timeout=1000):
                     btn.click()
-                    add_log(f"Clicked button: {selector}", "success")
+                    add_log("Featured image set!", "success")
                     button_clicked = True
                     time.sleep(1)
                     break
@@ -1434,15 +1530,30 @@ def set_featured_image(page: Page, keyword: str) -> bool:
                 continue
         
         if not button_clicked:
-            add_log("Could not find Set Featured Image button", "warning")
+            # Try JavaScript click as fallback
+            try:
+                page.evaluate("""
+                    () => {
+                        const btn = document.querySelector('.media-button-select') || 
+                                   document.querySelector('button.button-primary');
+                        if (btn) btn.click();
+                    }
+                """)
+                add_log("Featured image set via JS!", "success")
+                button_clicked = True
+                time.sleep(1)
+            except:
+                pass
+        
+        if not button_clicked:
+            add_log("Could not click Set Featured Image button", "warning")
             force_close_all_modals(page)
             return False
         
         # Close any remaining modals
-        time.sleep(1)
+        time.sleep(0.5)
         force_close_all_modals(page)
         
-        add_log("Đã đặt ảnh đại diện thành công!", "success")
         return True
         
     except Exception as e:
@@ -1678,7 +1789,8 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         if tags:
             add_post_tags(page, tags)
         
-        # Skip featured image - removed by user request
+        # Featured image temporarily disabled due to modal detection issues
+        # TODO: Fix WordPress media modal interaction
         # set_featured_image(page, keyword)
         
         # Check stop/pause before publish

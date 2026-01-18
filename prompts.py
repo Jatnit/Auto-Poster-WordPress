@@ -139,25 +139,77 @@ def clean_gemini_content(content: str, log_func=None) -> str:
             cut_point = last_link_pos + end_list_match.end()
             content = content[:cut_point]
     
-    # Remove common Gemini outro patterns
+    # Remove common Gemini outro/meta patterns
     outro_patterns = [
+        # English patterns
         r'<h[23][^>]*>\s*Next Steps[^<]*</h[23]>.*$',
         r'<p>\s*Would you like me to.*$',
         r'<p>\s*Do you want me to.*$',
         r'<p>\s*Let me know if you.*$',
         r'<p>\s*Shall I.*$',
         r'<strong>\s*Next Steps.*$',
+        
+        # Vietnamese meta notes - các ghi chú trong ngoặc đơn
+        r'\(Lưu ý:.*?\)',
+        r'\(Ghi chú:.*?\)',
+        r'\(Chú ý:.*?\)',
+        r'\(Tham khảo:.*?\)',
+        r'\(Note:.*?\)',
+        
+        # Remove trailing notes after </ul> or </p>
+        r'</ul>\s*\n*\s*\(.*?\)\s*$',
+        r'</p>\s*\n*\s*\(.*?\)\s*$',
+        
+        # Gemini meta instructions at end
+        r'<p>\s*\(.*?SEO.*?\)\s*</p>\s*$',
+        r'<p>\s*\(.*?bài viết.*?\)\s*</p>\s*$',
+        r'<p>\s*\(.*?từ khóa.*?\)\s*</p>\s*$',
+        r'\(.*?1500.*?chữ.*?\)',
+        r'\(.*?phân bố rải rác.*?\)',
+        
+        # Remove any trailing text in parentheses at the very end
+        r'\s*\([^)]{50,}\)\s*$',  # Long text in parentheses at end
     ]
     
     for pattern in outro_patterns:
         content = re.sub(pattern, '', content, flags=re.IGNORECASE | re.DOTALL)
     
+    # Remove lines that are just meta/instructions (not in HTML tags)
+    lines = content.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        stripped = line.strip()
+        # Skip empty lines at the end
+        if not stripped:
+            cleaned_lines.append(line)
+            continue
+        # Skip lines that are just parenthetical notes
+        if stripped.startswith('(') and stripped.endswith(')'):
+            continue
+        # Skip lines with common meta keywords
+        meta_keywords = [
+            'để bài viết đạt', 'SEO', 'từ khóa', 'tỷ lệ từ khóa',
+            'mật độ từ khóa', 'phân bố rải rác', 'lịch sử loài',
+            'có thể bổ sung thêm', 'để đảm bảo', 'sức mạnh SEO'
+        ]
+        is_meta = stripped.startswith('(') and any(kw.lower() in stripped.lower() for kw in meta_keywords)
+        if is_meta:
+            continue
+        cleaned_lines.append(line)
+    
+    content = '\n'.join(cleaned_lines)
+    
     # Clean up trailing whitespace and empty tags
     content = re.sub(r'\s*<p>\s*</p>\s*', '', content)
     content = re.sub(r'\s+$', '', content)
     
+    # Remove any trailing parenthetical content
+    content = re.sub(r'\s*\([^)]*$', '', content)  # Unclosed parenthesis at end
+    
     cleaned_length = len(content)
     if original_length != cleaned_length and log_func:
-        log_func(f"Cleaned content: {original_length} → {cleaned_length} chars", "info")
+        removed = original_length - cleaned_length
+        log_func(f"Cleaned content: {original_length} → {cleaned_length} chars (-{removed})", "info")
     
     return content
+

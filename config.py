@@ -73,6 +73,9 @@ class AppState:
         self.current_title: str = ""
         self.current_keyword: str = ""
         self.content_list: List[Dict[str, Any]] = []
+        
+        # Track used featured images to avoid duplicates within session
+        self.used_featured_images: set = set()
     
     def reset(self):
         """Reset state for new automation run."""
@@ -88,6 +91,8 @@ class AppState:
         self.current_content = ""
         self.current_title = ""
         self.current_keyword = ""
+        # Reset used featured images for new session
+        self.used_featured_images = set()
 
 # Global state instance
 state = AppState()
