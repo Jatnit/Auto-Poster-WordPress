@@ -1467,7 +1467,7 @@ Website: https://suachuathangmay247.com
                 <input type="checkbox" id="headlessMode" />
                 <span class="toggle-slider"></span>
               </label>
-            </div>
+          </div>
           </div>
 
           <button class="btn btn-secondary btn-large" onclick="saveConfig()">
@@ -1518,6 +1518,15 @@ Website: https://suachuathangmay247.com
                 style="border-color: var(--accent-primary);"
               />
             </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">🏷️ Tags (dùng chung cho tất cả - phân cách bằng dấu phẩy)</label>
+              <input
+                type="text"
+                class="form-input"
+                id="sharedTags"
+                placeholder="hoa lan hồ điệp, chậu hoa lan hồ điệp, lan hồ điệp tím..."
+              />
+            </div>
             <div class="form-group">
               <label class="form-label">📝 Danh sách tiêu đề (mỗi dòng 1 tiêu đề)</label>
               <textarea
@@ -1556,6 +1565,13 @@ Sửa chữa thang máy tải hàng"
                 class="form-input"
                 id="newKeyword"
                 placeholder="Từ khóa SEO..."
+              />
+              <input
+                type="text"
+                class="form-input"
+                id="newTags"
+                placeholder="Tags (phân cách bằng dấu phẩy)..."
+                style="flex: 2;"
               />
               <button
                 class="btn btn-primary btn-icon tooltip"
@@ -2347,9 +2363,11 @@ Sửa chữa thang máy tải hàng"
       function addTopic() {
         const titleInput = document.getElementById("newTitle");
         const keywordInput = document.getElementById("newKeyword");
+        const tagsInput = document.getElementById("newTags");
 
         const title = titleInput.value.trim();
         const keyword = keywordInput.value.trim();
+        const tags = tagsInput ? tagsInput.value.trim() : "";
 
         if (!title) {
           showToast("Vui lòng nhập tiêu đề", "warning");
@@ -2359,10 +2377,12 @@ Sửa chữa thang máy tải hàng"
         topics.push({
           title: title,
           keyword: keyword || title,
+          tags: tags,
         });
 
         titleInput.value = "";
         keywordInput.value = "";
+        if (tagsInput) tagsInput.value = "";
 
         renderTopics();
         saveTopics();
@@ -2400,6 +2420,7 @@ Sửa chữa thang máy tải hàng"
       // Add multiple titles with shared keyword
       function addBulkTitles() {
         const sharedKeyword = document.getElementById("sharedKeyword").value.trim();
+        const sharedTags = document.getElementById("sharedTags") ? document.getElementById("sharedTags").value.trim() : "";
         const titlesText = document.getElementById("bulkTitles").value.trim();
 
         if (!sharedKeyword) {
@@ -2425,7 +2446,7 @@ Sửa chữa thang máy tải hàng"
           return;
         }
 
-        // Add each title with the shared keyword
+        // Add each title with the shared keyword and tags
         let addedCount = 0;
         titles.forEach(title => {
           // Check for duplicates
@@ -2433,7 +2454,7 @@ Sửa chữa thang máy tải hàng"
             t => t.title.toLowerCase() === title.toLowerCase()
           );
           if (!isDuplicate) {
-            topics.push({ title: title, keyword: sharedKeyword });
+            topics.push({ title: title, keyword: sharedKeyword, tags: sharedTags });
             addedCount++;
           }
         });
@@ -2442,9 +2463,10 @@ Sửa chữa thang máy tải hàng"
           renderTopics();
           saveTopics();
           updateStats();
-          showToast(`Đã thêm ${addedCount} tiêu đề với từ khóa "${sharedKeyword}"`, "success");
+          const tagsInfo = sharedTags ? ` + tags` : "";
+          showToast(`Đã thêm ${addedCount} tiêu đề với từ khóa "${sharedKeyword}"${tagsInfo}`, "success");
           
-          // Clear the textarea but keep the keyword
+          // Clear the textarea but keep the keyword and tags
           document.getElementById("bulkTitles").value = "";
         } else {
           showToast("Tất cả tiêu đề đã tồn tại!", "warning");
@@ -2535,6 +2557,7 @@ Sửa chữa thang máy tải hàng"
                     <div class="topic-content">
                         <div class="topic-title">${escapeHtml(topic.title)}</div>
                         <div class="topic-keyword"><i class="fas fa-key"></i> ${escapeHtml(topic.keyword)}</div>
+                        ${topic.tags ? `<div class="topic-tags" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;"><i class="fas fa-tags"></i> ${escapeHtml(topic.tags.substring(0, 60))}${topic.tags.length > 60 ? '...' : ''}</div>` : ''}
                     </div>
                     <button class="topic-delete" onclick="deleteTopic(${index})">
                         <i class="fas fa-times"></i>

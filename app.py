@@ -1192,6 +1192,112 @@ def select_first_category(page: Page) -> bool:
         add_log(f"Error selecting category: {e}", "warning")
         return False
 
+def add_post_tags(page: Page, tags: str) -> bool:
+    """Add tags to WordPress post (Classic Editor).
+    
+    Args:
+        page: Playwright page object
+        tags: Comma-separated tags string
+    """
+    try:
+        if not tags or not tags.strip():
+            add_log("No tags to add", "info")
+            return True
+        
+        add_log(f"Adding tags: {tags[:50]}...", "info")
+        
+        # Scroll to Tags section
+        try:
+            tags_box = page.locator("#tagsdiv-post_tag, #tagsdiv, .tagsdiv").first
+            if tags_box.is_visible(timeout=2000):
+                tags_box.scroll_into_view_if_needed()
+                time.sleep(0.5)
+        except:
+            pass
+        
+        # Find the tags input field
+        tag_input_selectors = [
+            "#new-tag-post_tag",
+            "input.newtag",
+            "#newtag",
+            "input[name='newtag[post_tag]']",
+            ".tagsdiv input[type='text']"
+        ]
+        
+        tag_input = None
+        for selector in tag_input_selectors:
+            try:
+                input_el = page.locator(selector).first
+                if input_el.is_visible(timeout=1000):
+                    tag_input = input_el
+                    add_log(f"Found tags input: {selector}", "info")
+                    break
+            except:
+                continue
+        
+        if not tag_input:
+            add_log("Could not find tags input field", "warning")
+            return False
+        
+        # Clear and fill the tags input
+        tag_input.click()
+        tag_input.fill("")
+        time.sleep(0.2)
+        tag_input.fill(tags.strip())
+        time.sleep(0.3)
+        
+        # Click the "Add" / "Thêm" button
+        add_button_selectors = [
+            "input.tagadd",
+            "button.tagadd",
+            "#tagsdiv-post_tag .tagadd",
+            "input[value='Thêm']",
+            "input[value='Add']",
+            ".tagsdiv input[type='button']"
+        ]
+        
+        for selector in add_button_selectors:
+            try:
+                btn = page.locator(selector).first
+                if btn.is_visible(timeout=1000):
+                    btn.click()
+                    add_log("Clicked Add tags button", "success")
+                    time.sleep(0.5)
+                    
+                    # Verify tags were added by checking tag cloud
+                    try:
+                        tag_cloud = page.locator(".tagchecklist, .the-tags").first
+                        if tag_cloud.is_visible(timeout=1000):
+                            add_log("Tags added successfully", "success")
+                    except:
+                        pass
+                    
+                    return True
+            except:
+                continue
+        
+        # Try JavaScript fallback to click the add button
+        try:
+            page.evaluate("""
+                () => {
+                    const addBtn = document.querySelector('.tagadd, input.tagadd');
+                    if (addBtn) addBtn.click();
+                }
+            """)
+            add_log("Clicked Add tags button via JS", "success")
+            time.sleep(0.5)
+            return True
+        except:
+            pass
+        
+        add_log("Could not find Add tags button", "warning")
+        return False
+        
+    except Exception as e:
+        add_log(f"Error adding tags: {e}", "warning")
+        return False
+
+
 def set_featured_image(page: Page, keyword: str) -> bool:
     """Set featured image (Classic Editor) with improved reliability."""
     try:
@@ -1566,6 +1672,11 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         
         # Select category
         select_first_category(page)
+        
+        # Add tags from topic (if available)
+        tags = topic.get("tags", "")
+        if tags:
+            add_post_tags(page, tags)
         
         # Skip featured image - removed by user request
         # set_featured_image(page, keyword)

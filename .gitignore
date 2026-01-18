@@ -57,6 +57,7 @@ Thumbs.db
 config.json
 .env
 wp_site_presets.json
+READTOME.md
 
 # Playwright
 playwright-report/
