@@ -7,7 +7,7 @@ Content generation using Google Gemini API.
 import time
 from typing import Optional
 
-from prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION
+from config.prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION
 
 # Check Gemini availability
 try:

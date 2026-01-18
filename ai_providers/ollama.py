@@ -7,7 +7,7 @@ Content generation using local Ollama models.
 import requests
 from typing import Optional
 
-from prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION
+from config.prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION
 
 # ============================================================================
 # OLLAMA AVAILABILITY

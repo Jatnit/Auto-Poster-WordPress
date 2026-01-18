@@ -19,13 +19,13 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
 # Import from local modules
-from config import (
+from config.settings import (
     state, add_log, wait_if_paused, pause_on_error,
     load_site_presets, save_site_presets,
     PRESETS_FILE, TIMEOUT_SHORT, TIMEOUT_MEDIUM, TIMEOUT_LONG,
     SLEEP_SHORT, SLEEP_MEDIUM, SLEEP_LONG, BROWSER_DATA_DIR
 )
-from prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION, clean_gemini_content
+from config.prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION, clean_gemini_content
 from ai_providers.ollama import (
     generate_content_ollama as _generate_content_ollama,
     check_ollama, OLLAMA_AVAILABLE
@@ -297,7 +297,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
                 time.sleep(5)
                 login_wait += 5
                 
-                # Check if stopped
+                # Check if stopped 
                 if not state.is_running:
                     add_log("Stopped by user", "warning")
                     return None
