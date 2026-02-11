@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
@@ -21,8 +21,18 @@
         --accent-primary: #00ff00;
         --accent-secondary: #00cc00;
         --accent-tertiary: #33ff33;
-        --accent-gradient: linear-gradient(135deg, #00ff00 0%, #00cc00 50%, #009900 100%);
-        --accent-gradient-hover: linear-gradient(135deg, #33ff33 0%, #00ff00 50%, #00cc00 100%);
+        --accent-gradient: linear-gradient(
+          135deg,
+          #00ff00 0%,
+          #00cc00 50%,
+          #009900 100%
+        );
+        --accent-gradient-hover: linear-gradient(
+          135deg,
+          #33ff33 0%,
+          #00ff00 50%,
+          #00cc00 100%
+        );
         --text-primary: #00ff00;
         --text-secondary: #00cc00;
         --text-muted: #008800;
@@ -125,14 +135,25 @@
         justify-content: center;
         font-size: 1.5rem;
         color: var(--accent-primary);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.1);
+        box-shadow:
+          0 0 20px rgba(0, 255, 0, 0.3),
+          inset 0 0 20px rgba(0, 255, 0, 0.1);
         transition: all 0.3s ease;
         animation: pulse 2s ease-in-out infinite;
       }
 
       @keyframes pulse {
-        0%, 100% { box-shadow: 0 0 20px rgba(0, 255, 0, 0.3), inset 0 0 20px rgba(0, 255, 0, 0.1); }
-        50% { box-shadow: 0 0 40px rgba(0, 255, 0, 0.5), inset 0 0 30px rgba(0, 255, 0, 0.2); }
+        0%,
+        100% {
+          box-shadow:
+            0 0 20px rgba(0, 255, 0, 0.3),
+            inset 0 0 20px rgba(0, 255, 0, 0.1);
+        }
+        50% {
+          box-shadow:
+            0 0 40px rgba(0, 255, 0, 0.5),
+            inset 0 0 30px rgba(0, 255, 0, 0.2);
+        }
       }
 
       .logo-icon:hover {
@@ -189,7 +210,8 @@
       }
 
       @keyframes blink {
-        0%, 100% {
+        0%,
+        100% {
           opacity: 1;
         }
         50% {
@@ -300,7 +322,9 @@
       .form-input:focus {
         outline: none;
         border-color: var(--accent-primary);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.2), inset 0 0 10px rgba(0, 255, 0, 0.05);
+        box-shadow:
+          0 0 20px rgba(0, 255, 0, 0.2),
+          inset 0 0 10px rgba(0, 255, 0, 0.05);
         background: rgba(0, 30, 0, 0.9);
       }
 
@@ -491,7 +515,12 @@
         left: -100%;
         width: 100%;
         height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(0, 255, 0, 0.3), transparent);
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(0, 255, 0, 0.3),
+          transparent
+        );
         transition: left 0.5s ease;
       }
 
@@ -501,7 +530,9 @@
 
       .btn-primary:hover {
         background: rgba(0, 255, 0, 0.1);
-        box-shadow: 0 0 30px rgba(0, 255, 0, 0.4), inset 0 0 20px rgba(0, 255, 0, 0.1);
+        box-shadow:
+          0 0 30px rgba(0, 255, 0, 0.4),
+          inset 0 0 20px rgba(0, 255, 0, 0.1);
         text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
       }
 
@@ -769,8 +800,13 @@
       }
 
       @keyframes cursorBlink {
-        0%, 100% { border-color: var(--accent-primary); }
-        50% { border-color: transparent; }
+        0%,
+        100% {
+          border-color: var(--accent-primary);
+        }
+        50% {
+          border-color: transparent;
+        }
       }
 
       /* Control buttons */
@@ -851,8 +887,8 @@
         color: var(--text-secondary);
       }
 
-      .content-preview-body h1, 
-      .content-preview-body h2, 
+      .content-preview-body h1,
+      .content-preview-body h2,
       .content-preview-body h3 {
         color: var(--text-primary);
         margin: 1rem 0 0.5rem 0;
@@ -868,7 +904,7 @@
         margin-bottom: 0.75rem;
       }
 
-      .content-preview-body ul, 
+      .content-preview-body ul,
       .content-preview-body ol {
         margin-left: 1.5rem;
         margin-bottom: 0.75rem;
@@ -1120,7 +1156,7 @@
         min-height: 500px;
         border: none;
         border-radius: 0;
-        font-family: 'Consolas', 'Monaco', monospace;
+        font-family: "Consolas", "Monaco", monospace;
         font-size: 0.85rem;
         line-height: 1.6;
         padding: 1rem;
@@ -1160,7 +1196,8 @@
         margin-bottom: 0.75rem;
       }
 
-      .edit-preview ul, .edit-preview ol {
+      .edit-preview ul,
+      .edit-preview ol {
         margin-left: 1.5rem;
         margin-bottom: 0.75rem;
       }
@@ -1182,8 +1219,9 @@
         .edit-split-view {
           grid-template-columns: 1fr;
         }
-        
-        .edit-textarea, .edit-preview {
+
+        .edit-textarea,
+        .edit-preview {
           min-height: 300px;
         }
       }
@@ -1332,7 +1370,9 @@
         background: var(--bg-card);
         border: 2px solid var(--accent-primary);
         border-radius: var(--radius);
-        box-shadow: 0 0 50px rgba(0, 255, 0, 0.4), inset 0 0 30px rgba(0, 255, 0, 0.05);
+        box-shadow:
+          0 0 50px rgba(0, 255, 0, 0.4),
+          inset 0 0 30px rgba(0, 255, 0, 0.05);
         max-width: 450px;
         width: 90%;
         transform: scale(0.8) translateY(-20px);
@@ -1461,8 +1501,13 @@
       }
 
       @keyframes modalPulse {
-        0%, 100% { box-shadow: 0 0 50px rgba(0, 255, 0, 0.4); }
-        50% { box-shadow: 0 0 70px rgba(0, 255, 0, 0.6); }
+        0%,
+        100% {
+          box-shadow: 0 0 50px rgba(0, 255, 0, 0.4);
+        }
+        50% {
+          box-shadow: 0 0 70px rgba(0, 255, 0, 0.6);
+        }
       }
 
       .modal-overlay.show .modal-dialog {
@@ -1508,18 +1553,42 @@
           <!-- AI Provider - Only Gemini Web Chat -->
           <div class="form-group">
             <label class="form-label">🤖 AI Provider</label>
-            <div style="padding: 0.75rem; background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)); border-radius: 8px; border: 1px solid rgba(99, 102, 241, 0.3);">
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 1.5rem;">🌐</span>
+            <div
+              style="
+                padding: 0.75rem;
+                background: linear-gradient(
+                  135deg,
+                  rgba(99, 102, 241, 0.2),
+                  rgba(139, 92, 246, 0.2)
+                );
+                border-radius: 8px;
+                border: 1px solid rgba(99, 102, 241, 0.3);
+              "
+            >
+              <div style="display: flex; align-items: center; gap: 10px">
+                <span style="font-size: 1.5rem">🌐</span>
                 <div>
-                  <strong style="color: var(--text-primary);">Gemini Web Chat</strong>
-                  <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 0.25rem 0 0 0;">
+                  <strong style="color: var(--text-primary)"
+                    >Gemini Web Chat</strong
+                  >
+                  <p
+                    style="
+                      font-size: 0.8rem;
+                      color: var(--text-secondary);
+                      margin: 0.25rem 0 0 0;
+                    "
+                  >
                     Miễn phí • Tự động chat với Gemini • Cần đăng nhập Google
                   </p>
                 </div>
               </div>
             </div>
-            <input type="hidden" name="aiProvider" value="gemini_web" id="providerGeminiWeb">
+            <input
+              type="hidden"
+              name="aiProvider"
+              value="gemini_web"
+              id="providerGeminiWeb"
+            />
           </div>
 
           <!-- Gemini Web Prompt Template (always visible) -->
@@ -1529,9 +1598,14 @@
               class="form-input"
               id="geminiPrompt"
               rows="10"
-              style="font-family: monospace; font-size: 0.85rem; line-height: 1.5;"
+              style="
+                font-family: monospace;
+                font-size: 0.85rem;
+                line-height: 1.5;
+              "
               placeholder="Nhập prompt mẫu..."
-            >Viết bài blog chuẩn SEO google với tiêu đề "{title}". THANG MÁY KENZO VIỆT NAM chuyên lắp đặt, sửa chữa, bảo trì thang máy. Từ khóa SEO "{keyword}". Từ khóa in đậm, bài viết trên 1500 từ.
+            >
+Viết bài blog chuẩn SEO google với tiêu đề "{title}". THANG MÁY KENZO VIỆT NAM chuyên lắp đặt, sửa chữa, bảo trì thang máy. Từ khóa SEO "{keyword}". Từ khóa in đậm, bài viết trên 1500 từ.
 Từ khóa SEO lặp lại không vượt quá 3%.
 Thông tin cần tư vấn liên hệ: CÔNG TY TNHH THANG MÁY KENZO VIỆT NAM
 Trụ sở: 07 Đường DD5, Phường Tân Hưng Thuận, Quận 12, TP.HCM
@@ -1540,29 +1614,65 @@ Chi nhánh Bình Dương: 113, NE3, Chánh Phú Hoà, Bến Cát, Bình Dương 
 Chi nhánh Quy Nhơn: Tổ 15, Khu 2, P. Nhơn Bình, Tp. Quy nhơn - ĐT: 0937 596 248
 Mail: thanhtienelevator@gmail.com
 Website: https://suachuathangmay247.com
-         https://thangmaykenzo.com</textarea>
-            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
-              💡 Sử dụng <code>{title}</code> và <code>{keyword}</code> để chèn tiêu đề và từ khóa SEO
+         https://thangmaykenzo.com</textarea
+            >
+            <div
+              style="
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                margin-top: 0.5rem;
+              "
+            >
+              💡 Sử dụng <code>{title}</code> và <code>{keyword}</code> để chèn
+              tiêu đề và từ khóa SEO
             </div>
           </div>
 
           <!-- Site Preset Selector -->
-          <div class="form-group" style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
+          <div
+            class="form-group"
+            style="
+              margin-bottom: 1.5rem;
+              padding-bottom: 1.5rem;
+              border-bottom: 1px solid var(--border-color);
+            "
+          >
             <label class="form-label">
               <i class="fas fa-bookmark"></i> Chọn cấu hình đã lưu
             </label>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <select class="form-input" id="presetSelect" style="flex: 1;" onchange="loadPreset()">
+            <div style="display: flex; gap: 0.5rem; align-items: center">
+              <select
+                class="form-input"
+                id="presetSelect"
+                style="flex: 1"
+                onchange="loadPreset()"
+              >
                 <option value="">-- Chọn site đã lưu --</option>
               </select>
-              <button class="btn btn-primary" onclick="saveCurrentAsPreset()" title="Lưu cấu hình hiện tại" style="padding: 10px 14px;">
+              <button
+                class="btn btn-primary"
+                onclick="saveCurrentAsPreset()"
+                title="Lưu cấu hình hiện tại"
+                style="padding: 10px 14px"
+              >
                 <i class="fas fa-save"></i>
               </button>
-              <button class="btn btn-delete" onclick="deleteCurrentPreset()" title="Xóa preset đã chọn" style="padding: 10px 14px;">
+              <button
+                class="btn btn-delete"
+                onclick="deleteCurrentPreset()"
+                title="Xóa preset đã chọn"
+                style="padding: 10px 14px"
+              >
                 <i class="fas fa-trash"></i>
               </button>
             </div>
-            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+            <div
+              style="
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                margin-top: 0.5rem;
+              "
+            >
               💾 Lưu cấu hình để sử dụng nhanh cho nhiều website
             </div>
           </div>
@@ -1641,7 +1751,7 @@ Website: https://suachuathangmay247.com
                 <input type="checkbox" id="headlessMode" />
                 <span class="toggle-slider"></span>
               </label>
-          </div>
+            </div>
           </div>
 
           <button class="btn btn-secondary btn-large" onclick="saveConfig()">
@@ -1659,21 +1769,24 @@ Website: https://suachuathangmay247.com
         </div>
         <div class="card-body">
           <!-- Mode Selector -->
-          <div class="mode-selector" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
-            <button 
-              class="btn mode-btn active" 
+          <div
+            class="mode-selector"
+            style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem"
+          >
+            <button
+              class="btn mode-btn active"
               id="modeSharedKeyword"
               onclick="switchInputMode('shared')"
-              style="flex: 1; padding: 10px 16px; font-size: 0.8rem;"
+              style="flex: 1; padding: 10px 16px; font-size: 0.8rem"
             >
               <i class="fas fa-key"></i>
               Nhiều tiêu đề + 1 từ khóa
             </button>
-            <button 
-              class="btn mode-btn" 
+            <button
+              class="btn mode-btn"
               id="modeIndividualKeyword"
               onclick="switchInputMode('individual')"
-              style="flex: 1; padding: 10px 16px; font-size: 0.8rem;"
+              style="flex: 1; padding: 10px 16px; font-size: 0.8rem"
             >
               <i class="fas fa-tags"></i>
               Mỗi tiêu đề + từ khóa riêng
@@ -1682,18 +1795,23 @@ Website: https://suachuathangmay247.com
 
           <!-- Shared Keyword Mode (Default) -->
           <div id="sharedKeywordMode">
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">🔑 Từ khóa SEO (dùng chung cho tất cả)</label>
+            <div class="form-group" style="margin-bottom: 1rem">
+              <label class="form-label"
+                >🔑 Từ khóa SEO (dùng chung cho tất cả)</label
+              >
               <input
                 type="text"
                 class="form-input"
                 id="sharedKeyword"
                 placeholder="Nhập từ khóa SEO chung..."
-                style="border-color: var(--accent-primary);"
+                style="border-color: var(--accent-primary)"
               />
             </div>
-            <div class="form-group" style="margin-bottom: 1rem;">
-              <label class="form-label">🏷️ Tags (dùng chung cho tất cả - phân cách bằng dấu phẩy)</label>
+            <div class="form-group" style="margin-bottom: 1rem">
+              <label class="form-label"
+                >🏷️ Tags (dùng chung cho tất cả - phân cách bằng dấu
+                phẩy)</label
+              >
               <input
                 type="text"
                 class="form-input"
@@ -1702,7 +1820,9 @@ Website: https://suachuathangmay247.com
               />
             </div>
             <div class="form-group">
-              <label class="form-label">📝 Danh sách tiêu đề (mỗi dòng 1 tiêu đề)</label>
+              <label class="form-label"
+                >📝 Danh sách tiêu đề (mỗi dòng 1 tiêu đề)</label
+              >
               <textarea
                 class="form-input"
                 id="bulkTitles"
@@ -1712,13 +1832,13 @@ Ví dụ:
 Báo giá thang máy gia đình 2025
 Lắp đặt thang máy tải khách
 Sửa chữa thang máy tải hàng"
-                style="line-height: 1.6;"
+                style="line-height: 1.6"
               ></textarea>
             </div>
             <button
               class="btn btn-primary"
               onclick="addBulkTitles()"
-              style="width: 100%; margin-top: 0.75rem;"
+              style="width: 100%; margin-top: 0.75rem"
             >
               <i class="fas fa-plus-circle"></i>
               Thêm tất cả tiêu đề
@@ -1726,7 +1846,7 @@ Sửa chữa thang máy tải hàng"
           </div>
 
           <!-- Individual Keyword Mode -->
-          <div id="individualKeywordMode" style="display: none;">
+          <div id="individualKeywordMode" style="display: none">
             <div class="add-topic-form">
               <input
                 type="text"
@@ -1745,7 +1865,7 @@ Sửa chữa thang máy tải hàng"
                 class="form-input"
                 id="newTags"
                 placeholder="Tags (phân cách bằng dấu phẩy)..."
-                style="flex: 2;"
+                style="flex: 2"
               />
               <button
                 class="btn btn-primary btn-icon tooltip"
@@ -1758,7 +1878,11 @@ Sửa chữa thang máy tải hàng"
           </div>
 
           <!-- Topics List -->
-          <div class="topics-container" id="topicsContainer" style="margin-top: 1.25rem;">
+          <div
+            class="topics-container"
+            id="topicsContainer"
+            style="margin-top: 1.25rem"
+          >
             <div class="empty-state" id="emptyTopics">
               <i class="fas fa-folder-open"></i>
               <p>Chưa có chủ đề nào</p>
@@ -1786,19 +1910,163 @@ Sửa chữa thang máy tải hàng"
         </div>
       </div>
 
+      <!-- Date Distribution Card -->
+      <div class="card fade-in" id="dateDistributionCard">
+        <div class="card-header">
+          <i class="fas fa-calendar-alt"></i>
+          <h2>Phân bố ngày đăng</h2>
+        </div>
+        <div class="card-body">
+          <div id="dateDisabledOverlay" style="position: relative">
+            <div
+              id="dateDisabledMsg"
+              style="
+                text-align: center;
+                padding: 1.5rem;
+                color: var(--text-muted);
+                border: 1px dashed var(--border-color);
+                border-radius: var(--radius);
+              "
+            >
+              <i
+                class="fas fa-lock"
+                style="font-size: 1.5rem; margin-bottom: 0.5rem; display: block"
+              ></i>
+              <p>Vui lòng thêm tiêu đề bài viết trước</p>
+            </div>
+          </div>
+
+          <div id="dateInputSection" style="display: none">
+            <div
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem"
+            >
+              <div class="form-group">
+                <label class="form-label">📅 Ngày bắt đầu</label>
+                <input
+                  type="date"
+                  class="form-input"
+                  id="scheduleStartDate"
+                  onchange="validateDateDistribution()"
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label">📅 Ngày kết thúc</label>
+                <input
+                  type="date"
+                  class="form-input"
+                  id="scheduleEndDate"
+                  onchange="validateDateDistribution()"
+                />
+              </div>
+            </div>
+
+            <div
+              id="dateValidationMsg"
+              style="
+                margin-top: 0.75rem;
+                padding: 0.75rem 1rem;
+                border-radius: var(--radius-sm);
+                display: none;
+                font-size: 0.85rem;
+              "
+            ></div>
+
+            <div
+              id="dateSummary"
+              style="
+                margin-top: 1rem;
+                padding: 1rem;
+                background: var(--bg-input);
+                border: 1px solid var(--border-color);
+                border-radius: var(--radius);
+                display: none;
+              "
+            >
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: repeat(3, 1fr);
+                  gap: 0.75rem;
+                  text-align: center;
+                "
+              >
+                <div>
+                  <div style="color: var(--text-muted); font-size: 0.75rem">
+                    Tổng bài viết
+                  </div>
+                  <div
+                    id="summaryTotalPosts"
+                    style="
+                      font-size: 1.25rem;
+                      font-weight: 700;
+                      color: var(--accent-primary);
+                    "
+                  >
+                    0
+                  </div>
+                </div>
+                <div>
+                  <div style="color: var(--text-muted); font-size: 0.75rem">
+                    Tổng ngày
+                  </div>
+                  <div
+                    id="summaryTotalDays"
+                    style="
+                      font-size: 1.25rem;
+                      font-weight: 700;
+                      color: var(--accent-primary);
+                    "
+                  >
+                    0
+                  </div>
+                </div>
+                <div>
+                  <div style="color: var(--text-muted); font-size: 0.75rem">
+                    Bài/ngày
+                  </div>
+                  <div
+                    id="summaryPostsPerDay"
+                    style="
+                      font-size: 1.25rem;
+                      font-weight: 700;
+                      color: var(--accent-primary);
+                    "
+                  >
+                    0
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Progress Section -->
       <div class="card progress-section fade-in">
-        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <div
+          class="card-header"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <div style="display: flex; align-items: center; gap: 0.75rem">
             <i class="fas fa-tasks"></i>
             <h2>Tiến trình</h2>
           </div>
-          <button 
-            class="btn btn-icon tooltip" 
+          <button
+            class="btn btn-icon tooltip"
             data-tooltip="Bật/tắt âm thanh"
             onclick="toggleTypingSound()"
             id="soundToggleBtn"
-            style="padding: 0.5rem; font-size: 0.85rem; background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);"
+            style="
+              padding: 0.5rem;
+              font-size: 0.85rem;
+              background: transparent;
+              border: 1px solid var(--border-color);
+              color: var(--text-muted);
+            "
           >
             <i class="fas fa-volume-up" id="soundIcon"></i>
           </button>
@@ -1855,7 +2123,7 @@ Sửa chữa thang máy tải hàng"
               Bắt đầu
             </button>
             <!-- Running controls - shown after start -->
-            <div id="runningControls" style="display: none; gap: 1rem;">
+            <div id="runningControls" style="display: none; gap: 1rem">
               <button
                 class="btn btn-warning btn-large"
                 id="pauseBtn"
@@ -1868,7 +2136,7 @@ Sửa chữa thang máy tải hàng"
                 class="btn btn-primary btn-large"
                 id="resumeBtn"
                 onclick="resumeAutomation()"
-                style="display: none;"
+                style="display: none"
               >
                 <i class="fas fa-play"></i>
                 Tiếp tục
@@ -1884,7 +2152,7 @@ Sửa chữa thang máy tải hàng"
             </div>
           </div>
           <!-- Pause info banner -->
-          <div id="pauseBanner" class="pause-banner" style="display: none;">
+          <div id="pauseBanner" class="pause-banner" style="display: none">
             <i class="fas fa-exclamation-triangle"></i>
             <span id="pauseReason">Đã tạm dừng</span>
           </div>
@@ -1895,7 +2163,14 @@ Sửa chữa thang máy tải hàng"
       <div class="card progress-section fade-in">
         <div class="card-header">
           <i class="fas fa-file-alt"></i>
-          <h2>Nội dung đã tạo <span id="contentCount" style="font-size: 0.8rem; color: var(--text-muted);">(0)</span></h2>
+          <h2>
+            Nội dung đã tạo
+            <span
+              id="contentCount"
+              style="font-size: 0.8rem; color: var(--text-muted)"
+              >(0)</span
+            >
+          </h2>
         </div>
         <div class="card-body">
           <div class="content-list-container" id="contentListContainer">
@@ -1912,15 +2187,20 @@ Sửa chữa thang máy tải hàng"
     </div>
 
     <!-- Edit Content Modal -->
-    <div class="modal-overlay" id="editModal" style="display: none;">
+    <div class="modal-overlay" id="editModal" style="display: none">
       <div class="modal-content modal-wide">
         <div class="modal-header">
           <div>
             <h3><i class="fas fa-edit"></i> Chỉnh sửa nội dung</h3>
-            <span id="editTitle" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+            <span
+              id="editTitle"
+              style="color: var(--text-muted); font-size: 0.85rem"
+            ></span>
           </div>
-          <div style="display: flex; align-items: center; gap: 1rem;">
-            <span style="color: var(--text-muted); font-size: 0.85rem;">Số từ: <strong id="editWordCount">0</strong></span>
+          <div style="display: flex; align-items: center; gap: 1rem">
+            <span style="color: var(--text-muted); font-size: 0.85rem"
+              >Số từ: <strong id="editWordCount">0</strong></span
+            >
             <button class="btn btn-icon" onclick="closeEditModal()">
               <i class="fas fa-times"></i>
             </button>
@@ -1932,14 +2212,14 @@ Sửa chữa thang máy tải hàng"
             <div class="edit-panel-header">
               <i class="fas fa-code"></i> Mã HTML
             </div>
-            <textarea 
-              id="editContentArea" 
-              class="form-input edit-textarea" 
+            <textarea
+              id="editContentArea"
+              class="form-input edit-textarea"
               placeholder="Nhập nội dung HTML..."
               oninput="updateEditPreview()"
             ></textarea>
           </div>
-          
+
           <!-- Visual Preview -->
           <div class="edit-panel">
             <div class="edit-panel-header">
@@ -1969,12 +2249,24 @@ Sửa chữa thang máy tải hàng"
           <span class="modal-title" id="modalTitle">Xác nhận</span>
         </div>
         <div class="modal-body">
-          <p class="modal-message" id="modalMessage">Bạn có chắc chắn muốn thực hiện hành động này?</p>
-          <input type="text" class="modal-input" id="modalInput" style="display: none;" placeholder="">
+          <p class="modal-message" id="modalMessage">
+            Bạn có chắc chắn muốn thực hiện hành động này?
+          </p>
+          <input
+            type="text"
+            class="modal-input"
+            id="modalInput"
+            style="display: none"
+            placeholder=""
+          />
         </div>
         <div class="modal-footer">
-          <button class="modal-btn modal-btn-cancel" id="modalCancel">Hủy</button>
-          <button class="modal-btn modal-btn-confirm" id="modalConfirm">Xác nhận</button>
+          <button class="modal-btn modal-btn-cancel" id="modalCancel">
+            Hủy
+          </button>
+          <button class="modal-btn modal-btn-confirm" id="modalConfirm">
+            Xác nhận
+          </button>
         </div>
       </div>
     </div>
@@ -1985,73 +2277,72 @@ Sửa chữa thang máy tải hàng"
       <span id="toastMessage"></span>
     </div>
 
-
     <script>
       // ============================================================================
       // MATRIX RAIN EFFECT
       // ============================================================================
-      
+
       function initMatrixRain() {
-        const canvas = document.getElementById('matrixCanvas');
-        const ctx = canvas.getContext('2d');
-        
+        const canvas = document.getElementById("matrixCanvas");
+        const ctx = canvas.getContext("2d");
+
         // Set canvas size
         function resize() {
           canvas.width = window.innerWidth;
           canvas.height = window.innerHeight;
         }
         resize();
-        window.addEventListener('resize', resize);
-        
+        window.addEventListener("resize", resize);
+
         // Binary characters
-        const chars = '01';
+        const chars = "01";
         const fontSize = 14;
         const columns = Math.floor(canvas.width / fontSize);
-        
+
         // Array to track y position of each column
         const drops = [];
         for (let i = 0; i < columns; i++) {
           drops[i] = Math.random() * -100;
         }
-        
+
         // Speed variation for each column
         const speeds = [];
         for (let i = 0; i < columns; i++) {
           speeds[i] = 0.5 + Math.random() * 1.5;
         }
-        
+
         function draw() {
           // Semi-transparent black to create fade effect
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+          ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          
+
           // Green text
           ctx.font = fontSize + 'px "JetBrains Mono", monospace';
-          
+
           for (let i = 0; i < drops.length; i++) {
             // Random binary character
             const char = chars[Math.floor(Math.random() * chars.length)];
-            
+
             // Calculate x position
             const x = i * fontSize;
             const y = drops[i] * fontSize;
-            
+
             // Brightness based on position (newer = brighter)
             const brightness = Math.min(255, 100 + Math.random() * 155);
             ctx.fillStyle = `rgb(0, ${brightness}, 0)`;
-            
+
             // Draw character
             ctx.fillText(char, x, y);
-            
+
             // Add glow effect for some characters
             if (Math.random() > 0.98) {
-              ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+              ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
               ctx.fillText(char, x, y);
             }
-            
+
             // Move drop down
             drops[i] += speeds[i];
-            
+
             // Reset drop to top with random delay
             if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
               drops[i] = 0;
@@ -2059,11 +2350,11 @@ Sửa chữa thang máy tải hàng"
             }
           }
         }
-        
+
         // Animate
         setInterval(draw, 33);
       }
-      
+
       // Topics storage
       let topics = [];
       let isRunning = false;
@@ -2082,115 +2373,124 @@ Sửa chữa thang máy tải hàng"
       // ============================================================================
       // TYPEWRITER EFFECT WITH HACKER SOUND
       // ============================================================================
-      
+
       // Audio context for typing sounds
       let audioContext = null;
       let typingSoundEnabled = true;
       let lastLogCount = 0;
-      
+
       function initTypingSound() {
         // Initialize audio context on first user interaction
-        document.addEventListener('click', () => {
-          if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          }
-        }, { once: true });
+        document.addEventListener(
+          "click",
+          () => {
+            if (!audioContext) {
+              audioContext = new (
+                window.AudioContext || window.webkitAudioContext
+              )();
+            }
+          },
+          { once: true },
+        );
       }
-      
+
       // Play typing beep sound
       function playTypingSound() {
         if (!audioContext || !typingSoundEnabled) return;
-        
+
         try {
           const oscillator = audioContext.createOscillator();
           const gainNode = audioContext.createGain();
-          
+
           oscillator.connect(gainNode);
           gainNode.connect(audioContext.destination);
-          
+
           // Hacker terminal beep - short high frequency
           oscillator.frequency.value = 800 + Math.random() * 400; // 800-1200 Hz
-          oscillator.type = 'square';
-          
+          oscillator.type = "square";
+
           // Very short beep
           gainNode.gain.setValueAtTime(0.03, audioContext.currentTime);
-          gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
-          
+          gainNode.gain.exponentialRampToValueAtTime(
+            0.001,
+            audioContext.currentTime + 0.05,
+          );
+
           oscillator.start(audioContext.currentTime);
           oscillator.stop(audioContext.currentTime + 0.05);
         } catch (e) {
           // Ignore audio errors
         }
       }
-      
+
       // Typewriter effect for a single log entry
       function typewriterEffect(element, text, speed = 15) {
         return new Promise((resolve) => {
           let index = 0;
-          element.textContent = '';
-          element.style.borderRight = '2px solid var(--accent-primary)';
-          
+          element.textContent = "";
+          element.style.borderRight = "2px solid var(--accent-primary)";
+
           const type = () => {
             if (index < text.length) {
               element.textContent += text.charAt(index);
               playTypingSound();
               index++;
-              
+
               // Vary speed slightly for more natural effect
               const delay = speed + Math.random() * 10;
               setTimeout(type, delay);
             } else {
               // Remove cursor after typing
               setTimeout(() => {
-                element.style.borderRight = 'none';
+                element.style.borderRight = "none";
                 resolve();
               }, 200);
             }
           };
-          
+
           type();
         });
       }
-      
+
       // Track which logs have been typed
       let typedLogIndices = new Set();
-      
+
       // Render logs with typewriter effect for new entries
       async function renderLogsWithTypewriter(logs, logsContainer) {
         if (!logs || logs.length === 0) return;
-        
+
         // Check if we have new logs
         const newLogCount = logs.length;
         const hasNewLogs = newLogCount > lastLogCount;
-        
+
         if (!hasNewLogs) {
           // No new logs, just update existing
           return;
         }
-        
+
         // Get new logs only
         const newLogs = logs.slice(lastLogCount);
         lastLogCount = newLogCount;
-        
+
         // Add new log entries with typewriter effect
         for (const log of newLogs) {
-          const logEntry = document.createElement('div');
-          logEntry.className = 'log-entry';
+          const logEntry = document.createElement("div");
+          logEntry.className = "log-entry";
           logEntry.innerHTML = `
             <span class="log-time">${log.time}</span>
             <span class="log-message ${log.type}" data-full-text="${escapeHtml(log.message)}"></span>
           `;
           logsContainer.appendChild(logEntry);
-          
+
           // Apply typewriter effect to the message
-          const messageSpan = logEntry.querySelector('.log-message');
+          const messageSpan = logEntry.querySelector(".log-message");
           await typewriterEffect(messageSpan, log.message, 8);
-          
+
           // Scroll to bottom
           logsContainer.scrollTop = logsContainer.scrollHeight;
         }
       }
-      
+
       // Reset log tracking when starting new session
       function resetLogTracking() {
         lastLogCount = 0;
@@ -2200,17 +2500,17 @@ Sửa chữa thang máy tải hàng"
       // Toggle typing sound on/off
       function toggleTypingSound() {
         typingSoundEnabled = !typingSoundEnabled;
-        const icon = document.getElementById('soundIcon');
-        const btn = document.getElementById('soundToggleBtn');
-        
+        const icon = document.getElementById("soundIcon");
+        const btn = document.getElementById("soundToggleBtn");
+
         if (typingSoundEnabled) {
-          icon.className = 'fas fa-volume-up';
-          btn.style.color = 'var(--accent-primary)';
-          showToast('Âm thanh đã bật', 'success');
+          icon.className = "fas fa-volume-up";
+          btn.style.color = "var(--accent-primary)";
+          showToast("Âm thanh đã bật", "success");
         } else {
-          icon.className = 'fas fa-volume-mute';
-          btn.style.color = 'var(--text-muted)';
-          showToast('Âm thanh đã tắt', 'info');
+          icon.className = "fas fa-volume-mute";
+          btn.style.color = "var(--text-muted)";
+          showToast("Âm thanh đã tắt", "info");
         }
       }
 
@@ -2226,61 +2526,61 @@ Sửa chữa thang máy tải hàng"
        */
       function showConfirmDialog(message, options = {}) {
         return new Promise((resolve) => {
-          const modal = document.getElementById('customModal');
-          const modalHeader = document.getElementById('modalHeader');
-          const modalIcon = document.getElementById('modalIcon');
-          const modalTitle = document.getElementById('modalTitle');
-          const modalMessage = document.getElementById('modalMessage');
-          const modalInput = document.getElementById('modalInput');
-          const modalConfirm = document.getElementById('modalConfirm');
-          const modalCancel = document.getElementById('modalCancel');
+          const modal = document.getElementById("customModal");
+          const modalHeader = document.getElementById("modalHeader");
+          const modalIcon = document.getElementById("modalIcon");
+          const modalTitle = document.getElementById("modalTitle");
+          const modalMessage = document.getElementById("modalMessage");
+          const modalInput = document.getElementById("modalInput");
+          const modalConfirm = document.getElementById("modalConfirm");
+          const modalCancel = document.getElementById("modalCancel");
 
           // Reset modal
-          modalHeader.className = 'modal-header';
-          modalInput.style.display = 'none';
-          modalConfirm.className = 'modal-btn modal-btn-confirm';
-          
+          modalHeader.className = "modal-header";
+          modalInput.style.display = "none";
+          modalConfirm.className = "modal-btn modal-btn-confirm";
+
           // Set content
-          modalTitle.textContent = options.title || 'Xác nhận';
+          modalTitle.textContent = options.title || "Xác nhận";
           modalMessage.textContent = message;
-          modalConfirm.textContent = options.confirmText || 'Xác nhận';
-          modalCancel.textContent = options.cancelText || 'Hủy';
-          
+          modalConfirm.textContent = options.confirmText || "Xác nhận";
+          modalCancel.textContent = options.cancelText || "Hủy";
+
           // Set icon and style based on type
-          if (options.type === 'warning' || options.type === 'danger') {
-            modalHeader.classList.add('warning');
-            modalIcon.className = 'fas fa-exclamation-triangle';
-            if (options.type === 'danger') {
-              modalConfirm.className = 'modal-btn modal-btn-danger';
+          if (options.type === "warning" || options.type === "danger") {
+            modalHeader.classList.add("warning");
+            modalIcon.className = "fas fa-exclamation-triangle";
+            if (options.type === "danger") {
+              modalConfirm.className = "modal-btn modal-btn-danger";
             }
-          } else if (options.type === 'error') {
-            modalHeader.classList.add('error');
-            modalIcon.className = 'fas fa-times-circle';
+          } else if (options.type === "error") {
+            modalHeader.classList.add("error");
+            modalIcon.className = "fas fa-times-circle";
           } else {
-            modalIcon.className = 'fas fa-question-circle';
+            modalIcon.className = "fas fa-question-circle";
           }
 
           // Show modal
-          modal.classList.add('show');
+          modal.classList.add("show");
 
           // Handle confirm
           const handleConfirm = () => {
-            modal.classList.remove('show');
+            modal.classList.remove("show");
             cleanup();
             resolve(true);
           };
 
           // Handle cancel
           const handleCancel = () => {
-            modal.classList.remove('show');
+            modal.classList.remove("show");
             cleanup();
             resolve(false);
           };
 
           // Handle ESC key
           const handleKeydown = (e) => {
-            if (e.key === 'Escape') handleCancel();
-            if (e.key === 'Enter') handleConfirm();
+            if (e.key === "Escape") handleCancel();
+            if (e.key === "Enter") handleConfirm();
           };
 
           // Handle click outside
@@ -2290,17 +2590,17 @@ Sửa chữa thang máy tải hàng"
 
           // Cleanup listeners
           const cleanup = () => {
-            modalConfirm.removeEventListener('click', handleConfirm);
-            modalCancel.removeEventListener('click', handleCancel);
-            document.removeEventListener('keydown', handleKeydown);
-            modal.removeEventListener('click', handleOverlayClick);
+            modalConfirm.removeEventListener("click", handleConfirm);
+            modalCancel.removeEventListener("click", handleCancel);
+            document.removeEventListener("keydown", handleKeydown);
+            modal.removeEventListener("click", handleOverlayClick);
           };
 
           // Add listeners
-          modalConfirm.addEventListener('click', handleConfirm);
-          modalCancel.addEventListener('click', handleCancel);
-          document.addEventListener('keydown', handleKeydown);
-          modal.addEventListener('click', handleOverlayClick);
+          modalConfirm.addEventListener("click", handleConfirm);
+          modalCancel.addEventListener("click", handleCancel);
+          document.addEventListener("keydown", handleKeydown);
+          modal.addEventListener("click", handleOverlayClick);
         });
       }
 
@@ -2311,58 +2611,58 @@ Sửa chữa thang máy tải hàng"
        * @param {object} options - {title, placeholder}
        * @returns {Promise<string|null>}
        */
-      function showPromptDialog(message, defaultValue = '', options = {}) {
+      function showPromptDialog(message, defaultValue = "", options = {}) {
         return new Promise((resolve) => {
-          const modal = document.getElementById('customModal');
-          const modalHeader = document.getElementById('modalHeader');
-          const modalIcon = document.getElementById('modalIcon');
-          const modalTitle = document.getElementById('modalTitle');
-          const modalMessage = document.getElementById('modalMessage');
-          const modalInput = document.getElementById('modalInput');
-          const modalConfirm = document.getElementById('modalConfirm');
-          const modalCancel = document.getElementById('modalCancel');
+          const modal = document.getElementById("customModal");
+          const modalHeader = document.getElementById("modalHeader");
+          const modalIcon = document.getElementById("modalIcon");
+          const modalTitle = document.getElementById("modalTitle");
+          const modalMessage = document.getElementById("modalMessage");
+          const modalInput = document.getElementById("modalInput");
+          const modalConfirm = document.getElementById("modalConfirm");
+          const modalCancel = document.getElementById("modalCancel");
 
           // Reset modal
-          modalHeader.className = 'modal-header';
-          modalConfirm.className = 'modal-btn modal-btn-confirm';
-          
+          modalHeader.className = "modal-header";
+          modalConfirm.className = "modal-btn modal-btn-confirm";
+
           // Set content
-          modalTitle.textContent = options.title || 'Nhập thông tin';
+          modalTitle.textContent = options.title || "Nhập thông tin";
           modalMessage.textContent = message;
-          modalIcon.className = 'fas fa-edit';
-          modalConfirm.textContent = options.confirmText || 'Xác nhận';
-          modalCancel.textContent = options.cancelText || 'Hủy';
-          
+          modalIcon.className = "fas fa-edit";
+          modalConfirm.textContent = options.confirmText || "Xác nhận";
+          modalCancel.textContent = options.cancelText || "Hủy";
+
           // Show and setup input
-          modalInput.style.display = 'block';
+          modalInput.style.display = "block";
           modalInput.value = defaultValue;
-          modalInput.placeholder = options.placeholder || '';
+          modalInput.placeholder = options.placeholder || "";
 
           // Show modal
-          modal.classList.add('show');
-          
+          modal.classList.add("show");
+
           // Focus input after animation
           setTimeout(() => modalInput.focus(), 300);
 
           // Handle confirm
           const handleConfirm = () => {
             const value = modalInput.value.trim();
-            modal.classList.remove('show');
+            modal.classList.remove("show");
             cleanup();
             resolve(value || null);
           };
 
           // Handle cancel
           const handleCancel = () => {
-            modal.classList.remove('show');
+            modal.classList.remove("show");
             cleanup();
             resolve(null);
           };
 
           // Handle keydown
           const handleKeydown = (e) => {
-            if (e.key === 'Escape') handleCancel();
-            if (e.key === 'Enter') handleConfirm();
+            if (e.key === "Escape") handleCancel();
+            if (e.key === "Enter") handleConfirm();
           };
 
           // Handle click outside
@@ -2372,32 +2672,33 @@ Sửa chữa thang máy tải hàng"
 
           // Cleanup listeners
           const cleanup = () => {
-            modalConfirm.removeEventListener('click', handleConfirm);
-            modalCancel.removeEventListener('click', handleCancel);
-            document.removeEventListener('keydown', handleKeydown);
-            modal.removeEventListener('click', handleOverlayClick);
+            modalConfirm.removeEventListener("click", handleConfirm);
+            modalCancel.removeEventListener("click", handleCancel);
+            document.removeEventListener("keydown", handleKeydown);
+            modal.removeEventListener("click", handleOverlayClick);
           };
 
           // Add listeners
-          modalConfirm.addEventListener('click', handleConfirm);
-          modalCancel.addEventListener('click', handleCancel);
-          document.addEventListener('keydown', handleKeydown);
-          modal.addEventListener('click', handleOverlayClick);
+          modalConfirm.addEventListener("click", handleConfirm);
+          modalCancel.addEventListener("click", handleCancel);
+          document.addEventListener("keydown", handleKeydown);
+          modal.addEventListener("click", handleOverlayClick);
         });
       }
 
       // ============================================================================
       // PRESET MANAGEMENT
       // ============================================================================
-      
+
       async function loadPresetList() {
         try {
           const response = await fetch("/api/presets");
           const result = await response.json();
           if (result.success) {
             const select = document.getElementById("presetSelect");
-            select.innerHTML = '<option value="">-- Chọn site đã lưu --</option>';
-            result.presets.forEach(name => {
+            select.innerHTML =
+              '<option value="">-- Chọn site đã lưu --</option>';
+            result.presets.forEach((name) => {
               const option = document.createElement("option");
               option.value = name;
               option.textContent = name;
@@ -2413,18 +2714,25 @@ Sửa chữa thang máy tải hàng"
         const select = document.getElementById("presetSelect");
         const name = select.value;
         if (!name) return;
-        
+
         try {
-          const response = await fetch(`/api/presets/${encodeURIComponent(name)}`);
+          const response = await fetch(
+            `/api/presets/${encodeURIComponent(name)}`,
+          );
           const result = await response.json();
           if (result.success) {
             const data = result.data;
-            document.getElementById("wpUsername").value = data.wp_username || "";
-            document.getElementById("wpPassword").value = data.wp_password || "";
-            document.getElementById("wpLoginUrl").value = data.wp_login_url || "";
-            document.getElementById("wpAdminUrl").value = data.wp_admin_url || "";
+            document.getElementById("wpUsername").value =
+              data.wp_username || "";
+            document.getElementById("wpPassword").value =
+              data.wp_password || "";
+            document.getElementById("wpLoginUrl").value =
+              data.wp_login_url || "";
+            document.getElementById("wpAdminUrl").value =
+              data.wp_admin_url || "";
             if (data.gemini_prompt) {
-              document.getElementById("geminiPrompt").value = data.gemini_prompt;
+              document.getElementById("geminiPrompt").value =
+                data.gemini_prompt;
             }
             showToast(`Đã tải cấu hình: ${name}`, "success");
           }
@@ -2439,43 +2747,54 @@ Sửa chữa thang máy tải hàng"
           showToast("Vui lòng nhập WordPress Login URL trước", "warning");
           return;
         }
-        
+
         // Extract domain for preset name
         let presetName = "";
         try {
           const url = new URL(wpLoginUrl);
           presetName = url.hostname.replace("www.", "");
         } catch {
-          presetName = await showPromptDialog("Nhập tên cho cấu hình:", "my-site", {
-            title: "Lưu cấu hình",
-            placeholder: "Tên cấu hình..."
-          });
+          presetName = await showPromptDialog(
+            "Nhập tên cho cấu hình:",
+            "my-site",
+            {
+              title: "Lưu cấu hình",
+              placeholder: "Tên cấu hình...",
+            },
+          );
         }
-        
+
         if (!presetName) {
-          presetName = await showPromptDialog("Nhập tên cho cấu hình:", "my-site", {
-            title: "Lưu cấu hình",
-            placeholder: "Tên cấu hình..."
-          });
+          presetName = await showPromptDialog(
+            "Nhập tên cho cấu hình:",
+            "my-site",
+            {
+              title: "Lưu cấu hình",
+              placeholder: "Tên cấu hình...",
+            },
+          );
         }
-        
+
         if (!presetName) return;
-        
+
         const data = {
           wp_username: document.getElementById("wpUsername").value,
           wp_password: document.getElementById("wpPassword").value,
           wp_login_url: document.getElementById("wpLoginUrl").value,
           wp_admin_url: document.getElementById("wpAdminUrl").value,
-          gemini_prompt: document.getElementById("geminiPrompt").value
+          gemini_prompt: document.getElementById("geminiPrompt").value,
         };
-        
+
         try {
-          const response = await fetch(`/api/presets/${encodeURIComponent(presetName)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(data)
-          });
-          
+          const response = await fetch(
+            `/api/presets/${encodeURIComponent(presetName)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(data),
+            },
+          );
+
           const result = await response.json();
           if (result.success) {
             showToast(`Đã lưu: ${presetName}`, "success");
@@ -2499,21 +2818,27 @@ Sửa chữa thang máy tải hàng"
           showToast("Vui lòng chọn preset để xóa", "warning");
           return;
         }
-        
-        const confirmed = await showConfirmDialog(`Bạn có chắc muốn xóa cấu hình "${name}"?`, {
-          title: "Xóa cấu hình",
-          type: "danger",
-          confirmText: "Xóa",
-          cancelText: "Hủy"
-        });
-        
+
+        const confirmed = await showConfirmDialog(
+          `Bạn có chắc muốn xóa cấu hình "${name}"?`,
+          {
+            title: "Xóa cấu hình",
+            type: "danger",
+            confirmText: "Xóa",
+            cancelText: "Hủy",
+          },
+        );
+
         if (!confirmed) return;
-        
+
         try {
-          const response = await fetch(`/api/presets/${encodeURIComponent(name)}`, {
-            method: "DELETE"
-          });
-          
+          const response = await fetch(
+            `/api/presets/${encodeURIComponent(name)}`,
+            {
+              method: "DELETE",
+            },
+          );
+
           const result = await response.json();
           if (result.success) {
             showToast(`Đã xóa: ${name}`, "success");
@@ -2528,28 +2853,30 @@ Sửa chữa thang máy tải hàng"
 
       // Render content list as accordion
       let loadedContents = {};
-      
+
       function renderContentList(contentList) {
         const accordion = document.getElementById("contentAccordion");
         const emptyState = document.getElementById("contentListEmpty");
         const countBadge = document.getElementById("contentCount");
-        
+
         if (!contentList || contentList.length === 0) {
           emptyState.style.display = "block";
           accordion.innerHTML = "";
           countBadge.textContent = "(0)";
           return;
         }
-        
+
         emptyState.style.display = "none";
         countBadge.textContent = `(${contentList.length})`;
-        
+
         // Only update if count changed
         if (accordion.children.length === contentList.length) {
           return;
         }
-        
-        accordion.innerHTML = contentList.map((item, index) => `
+
+        accordion.innerHTML = contentList
+          .map(
+            (item, index) => `
           <div class="content-accordion-item" id="accordion-item-${index}">
             <div class="content-accordion-header" onclick="toggleContentAccordion(${index})">
               <div class="content-accordion-info">
@@ -2581,35 +2908,39 @@ Sửa chữa thang máy tải hàng"
               </div>
             </div>
           </div>
-        `).join("");
+        `,
+          )
+          .join("");
       }
 
       // Toggle accordion content
       async function toggleContentAccordion(index) {
         const body = document.getElementById(`accordion-body-${index}`);
         const btn = document.getElementById(`expand-btn-${index}`);
-        
+
         if (body.classList.contains("open")) {
           body.classList.remove("open");
           btn.classList.remove("active");
           btn.innerHTML = '<i class="fas fa-chevron-down"></i> Xem';
           return;
         }
-        
+
         // Close other open accordions
-        document.querySelectorAll(".content-accordion-body.open").forEach(el => {
-          el.classList.remove("open");
-        });
-        document.querySelectorAll(".btn-expand.active").forEach(el => {
+        document
+          .querySelectorAll(".content-accordion-body.open")
+          .forEach((el) => {
+            el.classList.remove("open");
+          });
+        document.querySelectorAll(".btn-expand.active").forEach((el) => {
           el.classList.remove("active");
           el.innerHTML = '<i class="fas fa-chevron-down"></i> Xem';
         });
-        
+
         // Open this one
         body.classList.add("open");
         btn.classList.add("active");
         btn.innerHTML = '<i class="fas fa-chevron-up"></i> Ẩn';
-        
+
         // Load content if not loaded
         if (!loadedContents[index]) {
           try {
@@ -2619,7 +2950,8 @@ Sửa chữa thang máy tải hàng"
               loadedContents[index] = result.data.content;
               body.innerHTML = result.data.content;
             } else {
-              body.innerHTML = '<p style="color: var(--error);">Không thể tải nội dung</p>';
+              body.innerHTML =
+                '<p style="color: var(--error);">Không thể tải nội dung</p>';
             }
           } catch (e) {
             body.innerHTML = '<p style="color: var(--error);">Lỗi kết nối</p>';
@@ -2640,7 +2972,7 @@ Sửa chữa thang máy tải hàng"
           }
           return;
         }
-        
+
         // Load first then copy
         try {
           const response = await fetch(`/api/content/${index}`);
@@ -2668,7 +3000,7 @@ Sửa chữa thang máy tải hàng"
 
       async function openEditModal(index) {
         currentEditIndex = index;
-        
+
         // Load content if not loaded
         let title = "";
         if (!loadedContents[index]) {
@@ -2684,16 +3016,17 @@ Sửa chữa thang máy tải hàng"
             return;
           }
         }
-        
+
         // Set title
         document.getElementById("editTitle").textContent = title;
-        
+
         // Set content in textarea
-        document.getElementById("editContentArea").value = loadedContents[index];
-        
+        document.getElementById("editContentArea").value =
+          loadedContents[index];
+
         // Update word count and preview
         updateEditPreview();
-        
+
         // Show modal
         document.getElementById("editModal").style.display = "flex";
       }
@@ -2706,42 +3039,50 @@ Sửa chữa thang máy tải hàng"
 
       function updateEditPreview() {
         const content = document.getElementById("editContentArea").value;
-        
+
         // Update preview
         document.getElementById("editPreview").innerHTML = content;
-        
+
         // Update word count
-        const textOnly = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-        const wordCount = textOnly.split(" ").filter(w => w.length > 0).length;
-        document.getElementById("editWordCount").textContent = wordCount.toLocaleString();
+        const textOnly = content
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        const wordCount = textOnly
+          .split(" ")
+          .filter((w) => w.length > 0).length;
+        document.getElementById("editWordCount").textContent =
+          wordCount.toLocaleString();
       }
 
       async function saveEditContent() {
         if (currentEditIndex === null) return;
-        
+
         const newContent = document.getElementById("editContentArea").value;
-        
+
         try {
           const response = await fetch(`/api/content/${currentEditIndex}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: newContent })
+            body: JSON.stringify({ content: newContent }),
           });
-          
+
           const result = await response.json();
           if (result.success) {
             // Update local cache
             loadedContents[currentEditIndex] = newContent;
-            
+
             // Update accordion body if open
-            const body = document.getElementById(`accordion-body-${currentEditIndex}`);
+            const body = document.getElementById(
+              `accordion-body-${currentEditIndex}`,
+            );
             if (body && body.classList.contains("open")) {
               body.innerHTML = newContent;
             }
-            
+
             showToast("Đã lưu thay đổi!", "success");
             closeEditModal();
-            
+
             // Force refresh content list
             const statusResponse = await fetch("/api/status");
             const status = await statusResponse.json();
@@ -2759,46 +3100,49 @@ Sửa chữa thang máy tải hàng"
       }
 
       async function deleteContentByIndex(index) {
-        const confirmed = await showConfirmDialog("Bạn có chắc muốn xóa nội dung này?", {
-          title: "Xóa nội dung",
-          type: "danger",
-          confirmText: "Xóa",
-          cancelText: "Hủy"
-        });
-        
+        const confirmed = await showConfirmDialog(
+          "Bạn có chắc muốn xóa nội dung này?",
+          {
+            title: "Xóa nội dung",
+            type: "danger",
+            confirmText: "Xóa",
+            cancelText: "Hủy",
+          },
+        );
+
         if (!confirmed) return;
-        
+
         try {
           const response = await fetch(`/api/content/${index}`, {
-            method: "DELETE"
+            method: "DELETE",
           });
-          
+
           const result = await response.json();
           if (result.success) {
             // Remove from local cache
             delete loadedContents[index];
-            
+
             // Refresh content list
             const statusResponse = await fetch("/api/status");
             const status = await statusResponse.json();
-            
+
             // Clear and re-render
             document.getElementById("contentAccordion").innerHTML = "";
             loadedContents = {}; // Reset cache as indices changed
-            
+
             if (status.content_list && status.content_list.length > 0) {
               renderContentList(status.content_list);
             } else {
-              document.getElementById("contentListEmpty").style.display = "block";
+              document.getElementById("contentListEmpty").style.display =
+                "block";
               document.getElementById("contentCount").textContent = "(0)";
             }
-            
+
             showToast("Đã xóa nội dung!", "success");
           } else {
             showToast("Không thể xóa", "error");
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
       // Toast notification
@@ -2818,7 +3162,7 @@ Sửa chữa thang máy tải hàng"
       // Save configuration
       async function saveConfig() {
         const config = {
-          ai_provider: "gemini_web",  // Only Gemini Web Chat
+          ai_provider: "gemini_web", // Only Gemini Web Chat
           gemini_prompt: document.getElementById("geminiPrompt").value,
           wp_username: document.getElementById("wpUsername").value,
           wp_password: document.getElementById("wpPassword").value,
@@ -2827,7 +3171,8 @@ Sửa chữa thang máy tải hàng"
           posts_per_day:
             parseInt(document.getElementById("postsPerDay").value) || 2,
           delay_between_requests:
-            parseInt(document.getElementById("delayBetweenRequests").value) || 30,
+            parseInt(document.getElementById("delayBetweenRequests").value) ||
+            30,
           headless_mode: document.getElementById("headlessMode").checked,
         };
 
@@ -2853,12 +3198,13 @@ Sửa chữa thang máy tải hàng"
         const savedConfig = localStorage.getItem("wp_auto_config");
         if (savedConfig) {
           const config = JSON.parse(savedConfig);
-          
+
           // Gemini Prompt
           if (config.gemini_prompt) {
-            document.getElementById("geminiPrompt").value = config.gemini_prompt;
+            document.getElementById("geminiPrompt").value =
+              config.gemini_prompt;
           }
-          
+
           document.getElementById("wpUsername").value =
             config.wp_username || "";
           document.getElementById("wpPassword").value =
@@ -2886,7 +3232,7 @@ Sửa chữa thang máy tải hàng"
         } catch (e) {
           console.log("Could not load config from server");
         }
-        
+
         // Load topics from localStorage safely
         loadTopics();
       }
@@ -2951,8 +3297,12 @@ Sửa chữa thang máy tải hàng"
 
       // Add multiple titles with shared keyword
       function addBulkTitles() {
-        const sharedKeyword = document.getElementById("sharedKeyword").value.trim();
-        const sharedTags = document.getElementById("sharedTags") ? document.getElementById("sharedTags").value.trim() : "";
+        const sharedKeyword = document
+          .getElementById("sharedKeyword")
+          .value.trim();
+        const sharedTags = document.getElementById("sharedTags")
+          ? document.getElementById("sharedTags").value.trim()
+          : "";
         const titlesText = document.getElementById("bulkTitles").value.trim();
 
         if (!sharedKeyword) {
@@ -2970,8 +3320,8 @@ Sửa chữa thang máy tải hàng"
         // Split by newlines and filter empty lines
         const titles = titlesText
           .split("\n")
-          .map(t => t.trim())
-          .filter(t => t.length > 0);
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0);
 
         if (titles.length === 0) {
           showToast("Không tìm thấy tiêu đề hợp lệ!", "error");
@@ -2980,13 +3330,17 @@ Sửa chữa thang máy tải hàng"
 
         // Add each title with the shared keyword and tags
         let addedCount = 0;
-        titles.forEach(title => {
+        titles.forEach((title) => {
           // Check for duplicates
           const isDuplicate = topics.some(
-            t => t.title.toLowerCase() === title.toLowerCase()
+            (t) => t.title.toLowerCase() === title.toLowerCase(),
           );
           if (!isDuplicate) {
-            topics.push({ title: title, keyword: sharedKeyword, tags: sharedTags });
+            topics.push({
+              title: title,
+              keyword: sharedKeyword,
+              tags: sharedTags,
+            });
             addedCount++;
           }
         });
@@ -2996,8 +3350,11 @@ Sửa chữa thang máy tải hàng"
           saveTopics();
           updateStats();
           const tagsInfo = sharedTags ? ` + tags` : "";
-          showToast(`Đã thêm ${addedCount} tiêu đề với từ khóa "${sharedKeyword}"${tagsInfo}`, "success");
-          
+          showToast(
+            `Đã thêm ${addedCount} tiêu đề với từ khóa "${sharedKeyword}"${tagsInfo}`,
+            "success",
+          );
+
           // Clear the textarea but keep the keyword and tags
           document.getElementById("bulkTitles").value = "";
         } else {
@@ -3010,23 +3367,26 @@ Sửa chữa thang máy tải hàng"
       async function clearAllTopics() {
         // Prevent multiple calls
         if (isClearing) return;
-        
+
         // Check if there are topics to clear
         if (topics.length === 0) {
           showToast("Không có chủ đề nào để xóa", "warning");
           return;
         }
-        
+
         isClearing = true;
-        
+
         // Use async modal instead of native confirm
-        const confirmed = await showConfirmDialog(`Bạn có chắc muốn xóa tất cả ${topics.length} chủ đề?`, {
-          title: "Xóa tất cả chủ đề",
-          type: "danger",
-          confirmText: "Xóa tất cả",
-          cancelText: "Hủy"
-        });
-        
+        const confirmed = await showConfirmDialog(
+          `Bạn có chắc muốn xóa tất cả ${topics.length} chủ đề?`,
+          {
+            title: "Xóa tất cả chủ đề",
+            type: "danger",
+            confirmText: "Xóa tất cả",
+            cancelText: "Hủy",
+          },
+        );
+
         if (confirmed) {
           topics = [];
           renderTopics();
@@ -3034,7 +3394,7 @@ Sửa chữa thang máy tải hàng"
           updateStats();
           showToast("Đã xóa tất cả chủ đề", "success");
         }
-        
+
         isClearing = false;
       }
 
@@ -3092,20 +3452,20 @@ Sửa chữa thang máy tải hàng"
                     <div class="topic-content">
                         <div class="topic-title">${escapeHtml(topic.title)}</div>
                         <div class="topic-keyword"><i class="fas fa-key"></i> ${escapeHtml(topic.keyword)}</div>
-                        ${topic.tags ? `<div class="topic-tags" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;"><i class="fas fa-tags"></i> ${escapeHtml(topic.tags.substring(0, 60))}${topic.tags.length > 60 ? '...' : ''}</div>` : ''}
+                        ${topic.tags ? `<div class="topic-tags" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.2rem;"><i class="fas fa-tags"></i> ${escapeHtml(topic.tags.substring(0, 60))}${topic.tags.length > 60 ? "..." : ""}</div>` : ""}
                     </div>
                     <button class="topic-delete" onclick="deleteTopic(${index})">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
-            `
+            `,
           )
           .join("");
       }
 
       // Escape HTML to prevent XSS
       function escapeHtml(text) {
-        const div = document.createElement('div');
+        const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
       }
@@ -3134,21 +3494,104 @@ Sửa chữa thang máy tải hàng"
         }
       }
 
-      // Update stats
       function updateStats() {
         document.getElementById("totalTopics").textContent = topics.length;
+        toggleDateDistribution();
       }
 
-      // Start automation
+      function toggleDateDistribution() {
+        const hasTopics = topics.length > 0;
+        document.getElementById("dateDisabledOverlay").style.display = hasTopics ? "none" : "block";
+        document.getElementById("dateInputSection").style.display = hasTopics ? "block" : "none";
+        if (hasTopics) {
+          validateDateDistribution();
+        }
+      }
+
+      function validateDateDistribution() {
+        const startDateEl = document.getElementById("scheduleStartDate");
+        const endDateEl = document.getElementById("scheduleEndDate");
+        const msgEl = document.getElementById("dateValidationMsg");
+        const summaryEl = document.getElementById("dateSummary");
+
+        const startDate = startDateEl.value;
+        const endDate = endDateEl.value;
+
+        if (!startDate || !endDate) {
+          msgEl.style.display = "none";
+          summaryEl.style.display = "none";
+          return false;
+        }
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        if (end < start) {
+          msgEl.style.display = "block";
+          msgEl.style.background = "rgba(255,0,0,0.15)";
+          msgEl.style.color = "var(--error)";
+          msgEl.style.border = "1px solid rgba(255,0,0,0.3)";
+          msgEl.textContent = "Ngày kết thúc phải sau ngày bắt đầu";
+          summaryEl.style.display = "none";
+          return false;
+        }
+
+        const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+        const totalPosts = topics.length;
+
+        const isValid = (totalPosts === totalDays) || (totalPosts === totalDays * 2);
+        const postsPerDay = totalPosts / totalDays;
+
+        if (!isValid) {
+          msgEl.style.display = "block";
+          msgEl.style.background = "rgba(255,255,0,0.1)";
+          msgEl.style.color = "var(--warning)";
+          msgEl.style.border = "1px solid rgba(255,255,0,0.3)";
+          msgEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Không hợp lệ: ${totalPosts} bài / ${totalDays} ngày. ` +
+            `Yêu cầu: ${totalDays} bài (1 bài/ngày) hoặc ${totalDays * 2} bài (2 bài/ngày)`;
+          summaryEl.style.display = "none";
+          return false;
+        }
+
+        msgEl.style.display = "block";
+        msgEl.style.background = "rgba(0,255,0,0.1)";
+        msgEl.style.color = "var(--success)";
+        msgEl.style.border = "1px solid rgba(0,255,0,0.3)";
+        msgEl.innerHTML = `<i class="fas fa-check-circle"></i> Hợp lệ: ${totalPosts} bài trong ${totalDays} ngày (${postsPerDay} bài/ngày)`;
+
+        summaryEl.style.display = "block";
+        document.getElementById("summaryTotalPosts").textContent = totalPosts;
+        document.getElementById("summaryTotalDays").textContent = totalDays;
+        document.getElementById("summaryPostsPerDay").textContent = postsPerDay;
+
+        document.getElementById("postsPerDay").value = postsPerDay;
+
+        return true;
+      }
+
       async function startAutomation() {
-        // Save config and topics first
         await saveConfig();
         await saveTopics();
+
+        const startDateEl = document.getElementById("scheduleStartDate");
+        const endDateEl = document.getElementById("scheduleEndDate");
+
+        let body = {};
+
+        if (startDateEl.value && endDateEl.value) {
+          if (!validateDateDistribution()) {
+            showToast("Số bài viết không khớp với số ngày. Kiểm tra lại!", "error");
+            return;
+          }
+          body.schedule_start_date = startDateEl.value;
+          body.schedule_end_date = endDateEl.value;
+        }
 
         try {
           const response = await fetch("/api/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
           });
 
           const result = await response.json();
@@ -3209,12 +3652,13 @@ Sửa chữa thang máy tải hàng"
         try {
           const response = await fetch("/api/pause", { method: "POST" });
           const result = await response.json();
-          
+
           if (result.success) {
             document.getElementById("pauseBtn").style.display = "none";
             document.getElementById("resumeBtn").style.display = "block";
             document.getElementById("pauseBanner").style.display = "flex";
-            document.getElementById("pauseReason").textContent = "Đã tạm dừng bởi người dùng";
+            document.getElementById("pauseReason").textContent =
+              "Đã tạm dừng bởi người dùng";
             document.getElementById("statusText").textContent = "Paused";
             showToast("Đã tạm dừng", "warning");
           }
@@ -3228,7 +3672,7 @@ Sửa chữa thang máy tải hàng"
         try {
           const response = await fetch("/api/resume", { method: "POST" });
           const result = await response.json();
-          
+
           if (result.success) {
             document.getElementById("pauseBtn").style.display = "block";
             document.getElementById("resumeBtn").style.display = "none";
@@ -3277,7 +3721,8 @@ Sửa chữa thang máy tải hàng"
             document.getElementById("pauseBtn").style.display = "none";
             document.getElementById("resumeBtn").style.display = "block";
             document.getElementById("pauseBanner").style.display = "flex";
-            document.getElementById("pauseReason").textContent = status.pause_reason || "Đã tạm dừng";
+            document.getElementById("pauseReason").textContent =
+              status.pause_reason || "Đã tạm dừng";
             document.getElementById("statusText").textContent = "Paused";
           }
 

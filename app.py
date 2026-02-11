@@ -1831,11 +1831,18 @@ def run_automation():
     else:
         add_log("Gemini Web Chat: Content will be generated in browser...", "info")
     
-    # Phase 2: WordPress automation
     add_log("Phase 2: WordPress Automation...", "info")
     state.current_task = "Starting browser..."
     
-    start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    schedule_start = state.config.get("schedule_start_date", "")
+    if schedule_start:
+        try:
+            start_date = datetime.strptime(schedule_start, "%Y-%m-%d")
+            add_log(f"Schedule: {schedule_start} -> {state.config.get('schedule_end_date', '')}", "info")
+        except ValueError:
+            start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     with sync_playwright() as p:
         add_log("Starting Brave browser...", "info")
@@ -2113,27 +2120,26 @@ def start_automation():
     if not state.topics:
         return jsonify({"success": False, "message": "No topics configured"})
     
-    # Check AI provider
     provider = state.config.get("ai_provider", "ollama")
     
     if provider == "ollama":
         if not check_ollama():
             return jsonify({"success": False, "message": "Ollama is not running! Please start Ollama first (run: ollama serve)"})
     elif provider == "gemini":
-        # Only Gemini API needs API key, not Gemini Web
         if not state.config.get("gemini_api_key"):
             return jsonify({"success": False, "message": "Gemini API key not configured"})
-    # gemini_web doesn't need any configuration check
     
     if not state.config.get("wp_username"):
         return jsonify({"success": False, "message": "WordPress credentials not configured"})
     
-    # Clear previous content list and reset pause state
+    data = request.get_json() or {}
+    state.config["schedule_start_date"] = data.get("schedule_start_date", "")
+    state.config["schedule_end_date"] = data.get("schedule_end_date", "")
+    
     state.content_list = []
     state.is_paused = False
     state.pause_reason = ""
     
-    # Start in background thread
     thread = threading.Thread(target=run_automation)
     thread.daemon = True
     thread.start()
