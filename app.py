@@ -1675,45 +1675,65 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
     add_log(f"Đang tạo bài {index + 1}: {title}", "info")
     
     try:
-        # Calculate publish date based on posts_per_day
-        posts_per_day = state.config.get("posts_per_day", 2)
+        schedule_end = state.config.get("schedule_end_date", "")
+        total_topics = len(state.topics)
         
-        # Calculate which day and which slot in that day
-        days_offset = index // posts_per_day
-        slot_in_day = index % posts_per_day
-        
-        # Calculate hour based on slot (distribute evenly from 8:00 to 21:00)
-        # For 1 post/day: 9:00
-        # For 2 posts/day: 9:00, 15:00
-        # For 3 posts/day: 8:00, 13:00, 18:00
-        # For 4 posts/day: 8:00, 12:00, 16:00, 20:00
-        if posts_per_day == 1:
-            hour = 9
-        elif posts_per_day == 2:
-            hours = [9, 15]
-            hour = hours[slot_in_day]
-        elif posts_per_day == 3:
-            hours = [8, 13, 18]
-            hour = hours[slot_in_day]
-        elif posts_per_day == 4:
-            hours = [8, 12, 16, 20]
-            hour = hours[slot_in_day]
+        if schedule_end and total_topics > 0:
+            try:
+                end_date = datetime.strptime(schedule_end, "%Y-%m-%d")
+                total_days = (end_date - start_date).days + 1
+                if total_days < 1:
+                    total_days = 1
+            except ValueError:
+                total_days = max(1, (total_topics + 1) // 2)
+            
+            posts_per_day_base = total_topics // total_days
+            extra_posts = total_topics % total_days
+            
+            cumulative = 0
+            days_offset = 0
+            slot_in_day = 0
+            posts_today = posts_per_day_base + (1 if 0 < extra_posts else 0)
+            
+            for d in range(total_days):
+                ppd = posts_per_day_base + (1 if d < extra_posts else 0)
+                if cumulative + ppd > index:
+                    days_offset = d
+                    slot_in_day = index - cumulative
+                    posts_today = ppd
+                    break
+                cumulative += ppd
+            
+            posts_per_day = posts_today
         else:
-            # For more posts, distribute evenly from 8:00 to 21:00
-            start_hour = 8
-            end_hour = 21
-            interval = (end_hour - start_hour) / max(posts_per_day - 1, 1)
+            posts_per_day = state.config.get("posts_per_day", 2)
+            days_offset = index // posts_per_day
+            slot_in_day = index % posts_per_day
+            posts_today = posts_per_day
+        
+        start_hour = 8
+        end_hour = 21
+        if posts_today == 1:
+            hour = 9
+        elif posts_today == 2:
+            hour = [9, 15][slot_in_day]
+        elif posts_today == 3:
+            hour = [8, 13, 18][slot_in_day]
+        elif posts_today == 4:
+            hour = [8, 12, 16, 20][slot_in_day]
+        else:
+            interval = (end_hour - start_hour) / max(posts_today - 1, 1)
             hour = int(start_hour + (slot_in_day * interval))
         
         publish_date = start_date + timedelta(days=days_offset)
         publish_date = publish_date.replace(hour=hour, minute=0, second=0)
         
         now = datetime.now()
+        has_schedule = bool(state.config.get("schedule_start_date", ""))
         is_schedule = publish_date > now
         
-        add_log(f"Ngày đăng: {publish_date.strftime('%Y-%m-%d %H:%M')} (Ngày {days_offset + 1}, Slot {slot_in_day + 1}/{posts_per_day})", "info")
+        add_log(f"Ngày đăng: {publish_date.strftime('%Y-%m-%d %H:%M')} (Ngày {days_offset + 1}, Slot {slot_in_day + 1}/{posts_today})", "info")
         
-        # Check stop/pause
         if not state.is_running:
             return False
         if state.is_paused:
@@ -1726,52 +1746,43 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         if not set_post_title(page, title):
             return False
         
-        # Check stop/pause before content
         if not state.is_running:
             return False
         if state.is_paused:
             if not wait_if_paused():
                 return False
         
-        # Add content - this is critical
         if not set_post_content(page, content):
             add_log("Content may not have been added properly", "warning")
         
-        # Set Rank Math SEO keyword
         set_rank_math_keyword(page, keyword)
         
-        # Check stop/pause before images
         if not state.is_running:
             return False
         if state.is_paused:
             if not wait_if_paused():
                 return False
         
-        # Insert images after alternating H2 headings (1st, 3rd, 5th)
         insert_images_after_h2(page, keyword, max_images=3)
         
-        # Select category
         select_first_category(page)
         
-        # Add tags from topic (if available)
         tags = topic.get("tags", "")
         if tags:
             add_post_tags(page, tags)
         
-        # NOTE: Featured image disabled - WordPress media modal not compatible
-        # You can add featured image manually after post is published
-        # set_featured_image(page, keyword)
-        
-        # Check stop/pause before publish
         if not state.is_running:
             return False
         if state.is_paused:
             if not wait_if_paused():
                 return False
         
-        # Publish or schedule
-        if not publish_or_schedule_post(page, is_schedule, publish_date if is_schedule else None):
-            return False
+        if has_schedule:
+            if not publish_or_schedule_post(page, True, publish_date):
+                return False
+        else:
+            if not publish_or_schedule_post(page, is_schedule, publish_date if is_schedule else None):
+                return False
         
         return True
         

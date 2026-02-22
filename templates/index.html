@@ -3771,7 +3771,7 @@ Sửa chữa thang máy tải hàng"
           msgEl.style.background = "rgba(255,0,0,0.15)";
           msgEl.style.color = "var(--error)";
           msgEl.style.border = "1px solid rgba(255,0,0,0.3)";
-          msgEl.textContent = "Ngày kết thúc phải sau ngày bắt đầu";
+          msgEl.textContent = "❌ Ngày kết thúc phải sau ngày bắt đầu";
           summaryEl.style.display = "none";
           return false;
         }
@@ -3779,30 +3779,47 @@ Sửa chữa thang máy tải hàng"
         const totalDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
         const totalPosts = topics.length;
 
-        const isValid = (totalPosts === totalDays) || (totalPosts === totalDays * 2);
-        const postsPerDay = totalPosts / totalDays;
+        if (totalPosts < 1) {
+          msgEl.style.display = "block";
+          msgEl.style.background = "rgba(255,0,0,0.15)";
+          msgEl.style.color = "var(--error)";
+          msgEl.style.border = "1px solid rgba(255,0,0,0.3)";
+          msgEl.textContent = "❌ Cần ít nhất 1 bài viết";
+          summaryEl.style.display = "none";
+          return false;
+        }
 
-        if (!isValid) {
+        if (totalPosts < totalDays) {
           msgEl.style.display = "block";
           msgEl.style.background = "rgba(255,255,0,0.1)";
           msgEl.style.color = "var(--warning)";
           msgEl.style.border = "1px solid rgba(255,255,0,0.3)";
-          msgEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Không hợp lệ: ${totalPosts} bài / ${totalDays} ngày. ` +
-            `Yêu cầu: ${totalDays} bài (1 bài/ngày) hoặc ${totalDays * 2} bài (2 bài/ngày)`;
+          msgEl.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Số bài (${totalPosts}) ít hơn số ngày (${totalDays}). Sẽ có ngày không có bài. Hãy giảm ngày hoặc thêm bài.`;
           summaryEl.style.display = "none";
           return false;
+        }
+
+        const postsPerDay = Math.floor(totalPosts / totalDays);
+        const extraPosts = totalPosts % totalDays;
+
+        let distributionText = "";
+        if (extraPosts === 0) {
+          distributionText = `${postsPerDay} bài/ngày (đều)`;
+        } else {
+          distributionText = `${extraPosts} ngày: ${postsPerDay + 1} bài, ${totalDays - extraPosts} ngày: ${postsPerDay} bài`;
         }
 
         msgEl.style.display = "block";
         msgEl.style.background = "rgba(0,255,0,0.1)";
         msgEl.style.color = "var(--success)";
         msgEl.style.border = "1px solid rgba(0,255,0,0.3)";
-        msgEl.innerHTML = `<i class="fas fa-check-circle"></i> Hợp lệ: ${totalPosts} bài trong ${totalDays} ngày (${postsPerDay} bài/ngày)`;
+        msgEl.innerHTML = `<i class="fas fa-check-circle"></i> Hợp lệ: ${totalPosts} bài trong ${totalDays} ngày — ${distributionText}`;
 
         summaryEl.style.display = "block";
         document.getElementById("summaryTotalPosts").textContent = totalPosts;
         document.getElementById("summaryTotalDays").textContent = totalDays;
-        document.getElementById("summaryPostsPerDay").textContent = postsPerDay;
+        document.getElementById("summaryPostsPerDay").textContent = 
+          extraPosts === 0 ? postsPerDay : `${postsPerDay}-${postsPerDay + 1}`;
 
         document.getElementById("postsPerDay").value = postsPerDay;
 
