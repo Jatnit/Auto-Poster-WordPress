@@ -1967,14 +1967,34 @@ def run_automation():
                 
                 state.current_task = f"Creating post {i+1}/{total_topics}..."
                 
-                try:
-                    success = create_single_post(page, i, topic, content, start_date)
-                    if success:
-                        state.successful_posts += 1
-                    else:
-                        state.failed_posts += 1
-                except Exception as e:
-                    add_log(f"Error on post {i+1}: {e}", "error")
+                max_retries = 2
+                success = False
+                for attempt in range(max_retries + 1):
+                    try:
+                        if attempt > 0:
+                            add_log(f"Thử lại lần {attempt}/{max_retries} cho bài {i+1}...", "warning")
+                            time.sleep(10)
+                        
+                        if not state.is_running:
+                            break
+                        
+                        success = create_single_post(page, i, topic, content, start_date)
+                        if success:
+                            break
+                        
+                        if attempt < max_retries:
+                            add_log(f"Bài {i+1} thất bại, sẽ thử lại...", "warning")
+                        
+                    except Exception as e:
+                        add_log(f"Lỗi bài {i+1} (lần {attempt+1}/{max_retries+1}): {e}", "error")
+                        if attempt < max_retries:
+                            add_log(f"Sẽ thử lại sau 10 giây...", "warning")
+                            time.sleep(10)
+                
+                if success:
+                    state.successful_posts += 1
+                else:
+                    add_log(f"Bỏ qua bài {i+1} sau {max_retries + 1} lần thử", "error")
                     state.failed_posts += 1
                 
                 state.progress = ((total_topics + i + 1) / state.total_tasks) * 100
