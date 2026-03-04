@@ -742,6 +742,103 @@
         line-height: 1.6;
       }
 
+      .progress-live-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 1rem;
+        align-items: start;
+      }
+
+      @media (max-width: 1100px) {
+        .progress-live-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .task-checklist-panel {
+        background: rgba(0, 8, 0, 0.95);
+        border: 1px solid rgba(0, 255, 0, 0.25);
+        border-radius: var(--radius-sm);
+        height: 500px;
+        max-height: 70vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .task-checklist-header {
+        padding: 0.85rem 1rem;
+        border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        font-size: 0.8rem;
+        color: var(--accent-primary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+
+      .task-checklist-table-wrap {
+        overflow: auto;
+        flex: 1;
+      }
+
+      .task-checklist-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.76rem;
+      }
+
+      .task-checklist-table th,
+      .task-checklist-table td {
+        padding: 0.6rem 0.7rem;
+        border-bottom: 1px solid rgba(0, 255, 0, 0.08);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .task-checklist-table th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: rgba(0, 12, 0, 0.95);
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+      }
+
+      .task-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 0.15rem 0.45rem;
+        font-size: 0.68rem;
+        border: 1px solid transparent;
+      }
+
+      .task-status.pending {
+        color: #a3b3a3;
+        border-color: rgba(163, 179, 163, 0.25);
+      }
+
+      .task-status.running {
+        color: #fcd34d;
+        border-color: rgba(252, 211, 77, 0.35);
+      }
+
+      .task-status.success {
+        color: #4ade80;
+        border-color: rgba(74, 222, 128, 0.35);
+      }
+
+      .task-status.error {
+        color: #f87171;
+        border-color: rgba(248, 113, 113, 0.35);
+      }
+
+      .task-detail {
+        color: var(--text-secondary);
+      }
+
       .logs-container::-webkit-scrollbar {
         width: 6px;
       }
@@ -1685,6 +1782,20 @@
         background: var(--bg-input);
         border: 1px solid rgba(0, 0, 0, 0.06);
       }
+      body.light-theme .task-checklist-panel {
+        background: var(--bg-input);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      body.light-theme .task-checklist-header {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      }
+      body.light-theme .task-checklist-table th {
+        background: #eef2f7;
+      }
+      body.light-theme .task-checklist-table td,
+      body.light-theme .task-checklist-table th {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      }
 
       body.light-theme .toast {
         background: var(--bg-card);
@@ -2327,10 +2438,30 @@ Sửa chữa thang máy tải hàng"
             </div>
           </div>
 
-          <div class="logs-container" id="logsContainer">
-            <div class="log-entry">
-              <span class="log-time">--:--:--</span>
-              <span class="log-message">Đang chờ bắt đầu...</span>
+          <div class="progress-live-grid">
+            <div class="logs-container" id="logsContainer">
+              <div class="log-entry">
+                <span class="log-time">--:--:--</span>
+                <span class="log-message">Đang chờ bắt đầu...</span>
+              </div>
+            </div>
+            <div class="task-checklist-panel">
+              <div class="task-checklist-header">
+                <i class="fas fa-list-check"></i> Checklist thực hiện
+              </div>
+              <div class="task-checklist-table-wrap">
+                <table class="task-checklist-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 52px">#</th>
+                      <th style="width: 110px">Bài</th>
+                      <th>Checklist</th>
+                      <th style="width: 120px">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskChecklistBody"></tbody>
+                </table>
+              </div>
             </div>
           </div>
 
@@ -2581,6 +2712,11 @@ Sửa chữa thang máy tải hàng"
       let topics = [];
       let isRunning = false;
       let statusInterval = null;
+      let checklistRows = [];
+      let checklistProcessedLogCount = 0;
+      let activeContentPost = null;
+      let activeWpPost = null;
+      const postTitleToIndex = {};
 
       // Initialize
       function toggleTheme() {
@@ -2608,6 +2744,7 @@ Sửa chữa thang máy tải hàng"
         updateStats();
         loadPresetList();
         initTypingSound();
+        resetChecklistState();
       });
 
       // ============================================================================
@@ -2735,6 +2872,223 @@ Sửa chữa thang máy tải hàng"
       function resetLogTracking() {
         lastLogCount = 0;
         typedLogIndices.clear();
+      }
+
+      function resetChecklistState() {
+        checklistRows = [];
+        checklistProcessedLogCount = 0;
+        activeContentPost = null;
+        activeWpPost = null;
+        Object.keys(postTitleToIndex).forEach((k) => delete postTitleToIndex[k]);
+        renderTaskChecklist();
+      }
+
+      function getTaskStatusText(status) {
+        if (status === "success") return "Đã xong";
+        if (status === "error") return "Thất bại";
+        if (status === "running") return "Đang chạy";
+        return "Chờ";
+      }
+
+      function getTaskStatusIcon(status) {
+        if (status === "success") return "fas fa-check";
+        if (status === "error") return "fas fa-xmark";
+        if (status === "running") return "fas fa-spinner fa-spin";
+        return "far fa-circle";
+      }
+
+      function extractPostContext(message) {
+        const contentStart = message.match(/^\[CONTENT\]\[POST:(\d+)\]\s+Bắt đầu tạo nội dung:\s*(.+)$/i);
+        if (contentStart) {
+          const idx = parseInt(contentStart[1], 10);
+          const title = (contentStart[2] || "").trim();
+          if (title) postTitleToIndex[title.toLowerCase()] = idx;
+          activeContentPost = { index: idx, title };
+          return;
+        }
+
+        const contentRetry = message.match(/^\[CONTENT\]\[POST:(\d+)\]\s+Tạo lại nội dung thiếu:\s*(.+)$/i);
+        if (contentRetry) {
+          const idx = parseInt(contentRetry[1], 10);
+          const title = (contentRetry[2] || "").trim();
+          if (title) postTitleToIndex[title.toLowerCase()] = idx;
+          activeContentPost = { index: idx, title };
+          return;
+        }
+
+        const wpStart = message.match(/^Đang tạo bài\s+(\d+):\s*(.+)$/i);
+        if (wpStart) {
+          const idx = parseInt(wpStart[1], 10);
+          const title = (wpStart[2] || "").trim();
+          if (title) postTitleToIndex[title.toLowerCase()] = idx;
+          activeWpPost = { index: idx, title };
+        }
+      }
+
+      function resolvePostFromTitle(message) {
+        const titleMatch = message.match(/Đã tạo nội dung cho:\s*(.+)$/i) ||
+          message.match(/Đã tạo lại thành công cho tiêu đề:\s*(.+)$/i) ||
+          message.match(/Không thể tạo lại nội dung cho tiêu đề:\s*(.+)$/i);
+        if (!titleMatch) return null;
+        const title = (titleMatch[1] || "").trim().toLowerCase();
+        if (!title) return null;
+        const idx = postTitleToIndex[title];
+        if (!idx) return null;
+        return { index: idx, title: titleMatch[1].trim() };
+      }
+
+      function pushChecklistRow(postCtx, stepName, status, detail, time) {
+        const postLabel = postCtx && postCtx.index ? `Bài ${postCtx.index}` : "Hệ thống";
+        checklistRows.push({
+          postIndex: postCtx && postCtx.index ? postCtx.index : 0,
+          postLabel,
+          postTitle: postCtx && postCtx.title ? postCtx.title : "",
+          stepName,
+          status,
+          detail,
+          time,
+        });
+      }
+
+      function updateLastRunningRow(postIndex, stepName, status, detail, time) {
+        for (let i = checklistRows.length - 1; i >= 0; i -= 1) {
+          const row = checklistRows[i];
+          if (
+            row.status === "running" &&
+            row.stepName === stepName &&
+            row.postIndex === (postIndex || 0)
+          ) {
+            row.status = status;
+            row.detail = detail;
+            row.time = time;
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function processChecklistLogs(logs = []) {
+        if (!logs || logs.length === 0) return;
+        const newLogs = logs.slice(checklistProcessedLogCount);
+        if (newLogs.length === 0) return;
+
+        for (const log of newLogs) {
+          const message = log.message || "";
+          const time = log.time || "--:--:--";
+          extractPostContext(message);
+
+          const postFromTitle = resolvePostFromTitle(message);
+          const contentPost = postFromTitle || activeContentPost;
+          const wpPost = activeWpPost;
+
+          if (/Đang nhập prompt/i.test(message)) {
+            pushChecklistRow(contentPost, "Fill prompt Gemini", "running", message, time);
+            continue;
+          }
+          if (/Đã gửi prompt/i.test(message) || /Đã nhập prompt qua fill\(\)/i.test(message)) {
+            if (!updateLastRunningRow(contentPost?.index, "Fill prompt Gemini", "success", message, time)) {
+              pushChecklistRow(contentPost, "Fill prompt Gemini", "success", message, time);
+            }
+            continue;
+          }
+          if (/Không tìm thấy ô nhập Gemini/i.test(message)) {
+            if (!updateLastRunningRow(contentPost?.index, "Fill prompt Gemini", "error", message, time)) {
+              pushChecklistRow(contentPost, "Fill prompt Gemini", "error", message, time);
+            }
+            continue;
+          }
+
+          if (/Đang trích xuất phản hồi/i.test(message)) {
+            pushChecklistRow(contentPost, "Lưu content", "running", message, time);
+            continue;
+          }
+          if (/Đã tạo nội dung cho:/i.test(message) || /Đã tạo lại thành công cho tiêu đề:/i.test(message)) {
+            if (!updateLastRunningRow(contentPost?.index, "Lưu content", "success", message, time)) {
+              pushChecklistRow(contentPost, "Lưu content", "success", message, time);
+            }
+            continue;
+          }
+          if (
+            /Không thể trích xuất phản hồi Gemini/i.test(message) ||
+            /Không thể tạo nội dung/i.test(message) ||
+            /Không thể tạo lại nội dung cho tiêu đề:/i.test(message)
+          ) {
+            if (!updateLastRunningRow(contentPost?.index, "Lưu content", "error", message, time)) {
+              pushChecklistRow(contentPost, "Lưu content", "error", message, time);
+            }
+            continue;
+          }
+
+          if (/Tạo lại nội dung thiếu:/i.test(message)) {
+            pushChecklistRow(contentPost, "Tạo lại nội dung thiếu", "running", message, time);
+            continue;
+          }
+
+          if (/🔐 Logging into WordPress/i.test(message) || /Đang chờ đăng nhập/i.test(message)) {
+            pushChecklistRow(wpPost, "Đăng nhập WordPress", "running", message, time);
+            continue;
+          }
+          if (
+            /Successfully logged into WordPress/i.test(message) ||
+            /Already logged in!/i.test(message) ||
+            /Login appears successful/i.test(message)
+          ) {
+            if (!updateLastRunningRow(wpPost?.index, "Đăng nhập WordPress", "success", message, time)) {
+              pushChecklistRow(wpPost, "Đăng nhập WordPress", "success", message, time);
+            }
+            continue;
+          }
+          if (/Login failed/i.test(message) || /Missing login credentials/i.test(message) || /Failed to login\. Exiting/i.test(message)) {
+            if (!updateLastRunningRow(wpPost?.index, "Đăng nhập WordPress", "error", message, time)) {
+              pushChecklistRow(wpPost, "Đăng nhập WordPress", "error", message, time);
+            }
+            continue;
+          }
+
+          if (/Preparing to publish/i.test(message) || /Đang lưu bài viết/i.test(message)) {
+            pushChecklistRow(wpPost, "Đăng bài WordPress", "running", message, time);
+            continue;
+          }
+          if (/successfully!/i.test(message) || /Post saved/i.test(message)) {
+            if (!updateLastRunningRow(wpPost?.index, "Đăng bài WordPress", "success", message, time)) {
+              pushChecklistRow(wpPost, "Đăng bài WordPress", "success", message, time);
+            }
+            continue;
+          }
+          if (/Error creating post/i.test(message) || /Error publishing/i.test(message) || /Skipping post \d+ - no content/i.test(message) || /Bỏ qua bài \d+ sau/i.test(message)) {
+            if (!updateLastRunningRow(wpPost?.index, "Đăng bài WordPress", "error", message, time)) {
+              pushChecklistRow(wpPost, "Đăng bài WordPress", "error", message, time);
+            }
+          }
+        }
+
+        checklistProcessedLogCount = logs.length;
+      }
+
+      function renderTaskChecklist() {
+        const tbody = document.getElementById("taskChecklistBody");
+        if (!tbody) return;
+        tbody.innerHTML = checklistRows
+          .map((row, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>
+                <div>${escapeHtml(row.postLabel)}</div>
+                <div class="task-detail">${escapeHtml(row.postTitle || "")}</div>
+              </td>
+              <td>
+                <div>${escapeHtml(row.stepName)}</div>
+                <div class="task-detail">[${escapeHtml(row.time)}] ${escapeHtml(row.detail || "")}</div>
+              </td>
+              <td>
+                <span class="task-status ${row.status}">
+                  <i class="${getTaskStatusIcon(row.status)}"></i>
+                  ${getTaskStatusText(row.status)}
+                </span>
+              </td>
+            </tr>
+          `)
+          .join("");
       }
 
       // Toggle typing sound on/off
@@ -3866,6 +4220,7 @@ Sửa chữa thang máy tải hàng"
             // Reset log tracking and clear logs container
             resetLogTracking();
             document.getElementById("logsContainer").innerHTML = "";
+            resetChecklistState();
 
             // Clear content list
             clearContentList();
@@ -3967,6 +4322,8 @@ Sửa chữa thang máy tải hàng"
           if (status.logs && status.logs.length > 0) {
             renderLogsWithTypewriter(status.logs, logsContainer);
           }
+          processChecklistLogs(status.logs || []);
+          renderTaskChecklist();
 
           // Update content list
           if (status.content_list && status.content_list.length > 0) {

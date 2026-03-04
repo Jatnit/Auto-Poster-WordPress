@@ -454,6 +454,7 @@ def regenerate_missing_contents(topics: list, provider: str, page=None, max_retr
         state.current_task = (
             f"Regenerating missing content {retry_idx}/{len(missing_indices)}: {title[:60]}..."
         )
+        add_log(f"[CONTENT][POST:{topic_index+1}] Tạo lại nội dung thiếu: {title}", "warning")
         add_log(f"Thiếu nội dung cho tiêu đề: {title}", "warning")
 
         regenerated = None
@@ -1908,6 +1909,7 @@ def run_automation():
                 add_log("Stopped while paused", "warning")
                 return
             
+            add_log(f"[CONTENT][POST:{i+1}] Bắt đầu tạo nội dung: {topic['title']}", "info")
             state.current_task = f"Generating content {i+1}/{total_topics}..."
             content = generate_content(topic["title"], topic["keyword"])
             state.generated_contents.append(content)
@@ -1991,6 +1993,7 @@ def run_automation():
                         add_log("Stopped while paused", "warning")
                         break
                     
+                    add_log(f"[CONTENT][POST:{i+1}] Bắt đầu tạo nội dung: {topic['title']}", "info")
                     state.current_task = f"Generating content {i+1}/{total_topics} via Gemini Web..."
                     state.current_title = topic["title"]
                     state.current_keyword = topic["keyword"]
