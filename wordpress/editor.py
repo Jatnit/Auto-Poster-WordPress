@@ -236,7 +236,7 @@ def set_rank_math_keyword(page, keyword: str, log_func) -> bool:
 # ============================================================================
 
 def select_first_category(page, log_func) -> bool:
-    """Select first category (Classic Editor)."""
+    """Select 'Tin tức' category first, fallback to first unchecked (Classic Editor)."""
     try:
         # Find category checkboxes in the category meta box
         category_checkboxes = page.locator("#categorychecklist input[type='checkbox']").all()
@@ -244,13 +244,26 @@ def select_first_category(page, log_func) -> bool:
         if not category_checkboxes:
             log_func("No category checkboxes found", "warning")
             return False
+
+        # Prefer category named "Tin tức"
+        target_checkbox = page.locator(
+            "#categorychecklist li:has(label:has-text('Tin tức')) input[type='checkbox']"
+        ).first
+        try:
+            if target_checkbox.count() > 0:
+                if not target_checkbox.is_checked():
+                    target_checkbox.check()
+                log_func("Selected category: Tin tức", "info")
+                return True
+        except:
+            pass
         
         # Click the first unchecked checkbox
         for checkbox in category_checkboxes:
             try:
                 if checkbox.is_visible() and not checkbox.is_checked():
                     checkbox.check()
-                    log_func("Selected first category", "info")
+                    log_func("Selected fallback category (first unchecked)", "info")
                     return True
             except:
                 continue

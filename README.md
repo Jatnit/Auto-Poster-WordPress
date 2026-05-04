@@ -116,6 +116,7 @@ Mở trình duyệt và truy cập: **http://localhost:5000**
    - Nhập WordPress Username, Password
    - Nhập WordPress Login URL (`https://your-site.com/wp-login.php`)
    - Nhập WordPress Admin URL (`https://your-site.com/wp-admin`)
+   - Nhập Danh mục đăng bài (mặc định: `Tin tức`)
    - Lưu cấu hình
 
 2. **Thêm Topics** (2 chế độ)
@@ -167,6 +168,7 @@ Ctrl + C
 | WordPress Password  | Mật khẩu WordPress                | `your-password`                 |
 | WordPress Login URL | URL trang đăng nhập               | `https://site.com/wp-login.php` |
 | WordPress Admin URL | URL trang quản trị                | `https://site.com/wp-admin`     |
+| Danh mục đăng bài   | Tên category sẽ được tick         | `Tin tức`                       |
 | Số bài/ngày         | Số bài đăng mỗi ngày              | `2`                             |
 | Delay giữa các bài  | Thời gian chờ giữa các bài (giây) | `65`                            |
 | Headless Mode       | Ẩn/hiện browser khi chạy          | `off`                           |

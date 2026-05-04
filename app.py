@@ -6,6 +6,7 @@ import re
 import threading
 import time
 import requests
+import unicodedata
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -14,7 +15,7 @@ from flask_cors import CORS
 
 from config.settings import (
     state, add_log, wait_if_paused, pause_on_error,
-    load_site_presets, save_site_presets,
+    load_site_presets, save_site_presets, save_app_config,
     PRESETS_FILE, TIMEOUT_SHORT, TIMEOUT_MEDIUM, TIMEOUT_LONG,
     SLEEP_SHORT, SLEEP_MEDIUM, SLEEP_LONG, BROWSER_DATA_DIR
 )
@@ -396,93 +397,8 @@ def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
     else:
         return generate_content_gemini(title, keyword)
 
-
-def is_generated_content_valid(content: Optional[str]) -> bool:
-    return isinstance(content, str) and bool(content.strip())
-
-
-def append_content_preview(topic: dict, content: str):
-    cleaned_content = clean_gemini_content(content)
-    state.current_content = cleaned_content
-    text_only = re.sub(r'<[^>]*>', ' ', cleaned_content)
-    word_count = len(text_only.split())
-    state.content_list.append({
-        "title": topic["title"],
-        "keyword": topic["keyword"],
-        "content": cleaned_content,
-        "word_count": word_count
-    })
-
-
-def regenerate_missing_contents(topics: list, provider: str, page=None, max_retries_per_topic: int = 2):
-    if len(state.generated_contents) < len(topics):
-        state.generated_contents.extend([None] * (len(topics) - len(state.generated_contents)))
-
-    missing_indices = [
-        i for i, content in enumerate(state.generated_contents[:len(topics)])
-        if not is_generated_content_valid(content)
-    ]
-
-    if not missing_indices:
-        add_log("Đã tạo đủ nội dung cho tất cả tiêu đề.", "success")
-        return
-
-    add_log(
-        f"Phát hiện thiếu {len(missing_indices)} nội dung. Đang kiểm tra lại và tạo lại theo tiêu đề...",
-        "warning"
-    )
-
-    for retry_idx, topic_index in enumerate(missing_indices, 1):
-        if not state.is_running:
-            add_log("Stopped by user while regenerating missing content", "warning")
-            return
-
-        if not wait_if_paused():
-            add_log("Stopped while paused during missing-content regeneration", "warning")
-            return
-
-        topic = topics[topic_index]
-        title = topic.get("title", "")
-        keyword = topic.get("keyword", "")
-
-        if not title or not keyword:
-            add_log(f"Bỏ qua tiêu đề thiếu dữ liệu tại vị trí {topic_index + 1}", "warning")
-            continue
-
-        state.current_title = title
-        state.current_keyword = keyword
-        state.current_task = (
-            f"Regenerating missing content {retry_idx}/{len(missing_indices)}: {title[:60]}..."
-        )
-        add_log(f"[CONTENT][POST:{topic_index+1}] Tạo lại nội dung thiếu: {title}", "warning")
-        add_log(f"Thiếu nội dung cho tiêu đề: {title}", "warning")
-
-        regenerated = None
-        for attempt in range(max_retries_per_topic + 1):
-            if attempt > 0:
-                add_log(
-                    f"Tạo lại lần {attempt}/{max_retries_per_topic} cho tiêu đề thiếu: {title}",
-                    "warning"
-                )
-                time.sleep(3)
-
-            if provider == "gemini_web":
-                regenerated = generate_content_gemini_web(page, title, keyword)
-            else:
-                regenerated = generate_content(title, keyword)
-
-            if is_generated_content_valid(regenerated):
-                state.generated_contents[topic_index] = regenerated
-                if provider == "gemini_web":
-                    append_content_preview(topic, regenerated)
-                add_log(f"Đã tạo lại thành công cho tiêu đề: {title}", "success")
-                break
-
-        if not is_generated_content_valid(regenerated):
-            add_log(f"Không thể tạo lại nội dung cho tiêu đề: {title}", "error")
-
 # WORDPRESS AUTOMATION
-
+ 
 def wait_for_network_idle(page: Page, timeout: int = 10000):
     try:
         page.wait_for_load_state("networkidle", timeout=timeout)
@@ -1229,21 +1145,109 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
 
 def select_first_category(page: Page) -> bool:
     try:
-        # Get all category checkboxes directly
-        checkboxes = page.locator("#categorychecklist input[type='checkbox']").all()
-        
-        if checkboxes:
-            # Check the first one if not already checked
-            first_checkbox = checkboxes[0]
-            if not first_checkbox.is_checked():
-                first_checkbox.check()
-            add_log("Selected first category", "success")
-            return True
-        else:
+        def normalize_text(value: str) -> str:
+            value = (value or "").strip().lower()
+            value = "".join(
+                c for c in unicodedata.normalize("NFD", value)
+                if unicodedata.category(c) != "Mn"
+            )
+            return re.sub(r"\s+", " ", value)
+
+        configured_category = (state.config.get("category_name") or "Tin tức").strip()
+        preferred_names = [configured_category]
+        if normalize_text(configured_category) != normalize_text("Tin tức"):
+            preferred_names.append("Tin tức")
+
+        # Switch to "All categories" tab to avoid selecting from "Most Used".
+        try:
+            all_tab = page.locator("#category-tabs a[href='#category-all']").first
+            if all_tab.count():
+                all_tab.click()
+                time.sleep(0.3)
+        except:
+            pass
+
+        category_rows = []
+        for checklist_selector in ["#categorychecklist li", "#categorychecklist-pop li"]:
+            checklist = page.locator(checklist_selector)
+            count = checklist.count()
+            for i in range(count):
+                item = checklist.nth(i)
+                label = item.locator("label").first
+                checkbox = item.locator("input[type='checkbox']").first
+                if not label.count() or not checkbox.count():
+                    continue
+                label_text = (label.inner_text() or "").strip()
+                if label_text:
+                    category_rows.append(
+                        {
+                            "item": item,
+                            "label": label,
+                            "checkbox": checkbox,
+                            "label_text": label_text,
+                            "label_norm": normalize_text(label_text),
+                        }
+                    )
+
+        if not category_rows:
             add_log("No categories found", "warning")
-        
-        return False
-        
+            return False
+
+        # 1) Prefer exact normalized match, 2) then contains match.
+        target_row = None
+        for target_name in preferred_names:
+            target_norm = normalize_text(target_name)
+            target_row = next((r for r in category_rows if r["label_norm"] == target_norm), None)
+            if target_row:
+                break
+            target_row = next((r for r in category_rows if target_norm in r["label_norm"]), None)
+            if target_row:
+                break
+
+        if target_row:
+            try:
+                target_row["item"].scroll_into_view_if_needed()
+            except:
+                pass
+
+            try:
+                if not target_row["checkbox"].is_checked():
+                    target_row["checkbox"].check(force=True)
+            except:
+                try:
+                    target_row["label"].click(force=True)
+                except:
+                    pass
+
+            try:
+                if target_row["checkbox"].is_checked():
+                    # Keep only the matched category checked for consistent posting behavior.
+                    for row in category_rows:
+                        if row is target_row:
+                            continue
+                        try:
+                            if row["checkbox"].is_checked():
+                                row["checkbox"].uncheck(force=True)
+                        except:
+                            continue
+                    add_log(f"Selected category: {target_row['label_text']}", "success")
+                    return True
+            except:
+                pass
+
+        # Fallback: first unchecked category
+        for row in category_rows:
+            try:
+                if row["checkbox"].is_visible() and not row["checkbox"].is_checked():
+                    row["checkbox"].check(force=True)
+                    add_log(f"Selected fallback category: {row['label_text']}", "success")
+                    return True
+            except:
+                continue
+
+        add_log("Category already selected", "info")
+        return True
+
     except Exception as e:
         add_log(f"Error selecting category: {e}", "warning")
         return False
@@ -1839,8 +1843,17 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
         
         if not set_post_content(page, content):
             add_log("Content may not have been added properly", "warning")
-        
-        set_rank_math_keyword(page, keyword)
+
+        auto_set_seo_keyword = bool(state.config.get("auto_set_seo_keyword", True))
+        auto_insert_inline_images = bool(state.config.get("auto_insert_inline_images", True))
+        auto_set_featured_image_cfg = bool(state.config.get("auto_set_featured_image", False))
+        auto_select_category_cfg = bool(state.config.get("auto_select_category", True))
+        auto_add_tags_cfg = bool(state.config.get("auto_add_tags", True))
+
+        if auto_set_seo_keyword:
+            set_rank_math_keyword(page, keyword)
+        else:
+            add_log("Skip SEO keyword (auto_set_seo_keyword = OFF)", "info")
         
         if not state.is_running:
             return False
@@ -1848,13 +1861,26 @@ def create_single_post(page: Page, index: int, topic: dict, content: str, start_
             if not wait_if_paused():
                 return False
         
-        insert_images_after_h2(page, keyword, max_images=3)
-        
-        select_first_category(page)
-        
+        if auto_insert_inline_images:
+            insert_images_after_h2(page, keyword, max_images=3)
+        else:
+            add_log("Skip inline images (auto_insert_inline_images = OFF)", "info")
+
+        if auto_set_featured_image_cfg:
+            set_featured_image(page, keyword)
+        else:
+            add_log("Skip featured image (auto_set_featured_image = OFF)", "info")
+
+        if auto_select_category_cfg:
+            select_first_category(page)
+        else:
+            add_log("Skip category selection (auto_select_category = OFF)", "info")
+
         tags = topic.get("tags", "")
-        if tags:
+        if auto_add_tags_cfg and tags:
             add_post_tags(page, tags)
+        elif not auto_add_tags_cfg:
+            add_log("Skip tags (auto_add_tags = OFF)", "info")
         
         if not state.is_running:
             return False
@@ -1909,7 +1935,6 @@ def run_automation():
                 add_log("Stopped while paused", "warning")
                 return
             
-            add_log(f"[CONTENT][POST:{i+1}] Bắt đầu tạo nội dung: {topic['title']}", "info")
             state.current_task = f"Generating content {i+1}/{total_topics}..."
             content = generate_content(topic["title"], topic["keyword"])
             state.generated_contents.append(content)
@@ -1918,9 +1943,7 @@ def run_automation():
             if i < len(state.topics) - 1 and state.is_running:
                 time.sleep(state.config["delay_between_requests"])
         
-        regenerate_missing_contents(state.topics, provider)
-
-        successful_gen = sum(1 for c in state.generated_contents if is_generated_content_valid(c))
+        successful_gen = sum(1 for c in state.generated_contents if c is not None)
         add_log(f"Generated {successful_gen}/{total_topics} articles", "success")
         
         if successful_gen == 0:
@@ -1993,7 +2016,6 @@ def run_automation():
                         add_log("Stopped while paused", "warning")
                         break
                     
-                    add_log(f"[CONTENT][POST:{i+1}] Bắt đầu tạo nội dung: {topic['title']}", "info")
                     state.current_task = f"Generating content {i+1}/{total_topics} via Gemini Web..."
                     state.current_title = topic["title"]
                     state.current_keyword = topic["keyword"]
@@ -2001,17 +2023,29 @@ def run_automation():
                     content = generate_content_gemini_web(page, topic["title"], topic["keyword"])
                     state.generated_contents.append(content)
                     
-                    if is_generated_content_valid(content):
-                        append_content_preview(topic, content)
+                    # Store cleaned content for preview
+                    if content:
+                        # Clean the content before storing
+                        cleaned_content = clean_gemini_content(content)
+                        state.current_content = cleaned_content
+                        # Count words
+                        import re
+                        text_only = re.sub(r'<[^>]*>', ' ', cleaned_content)
+                        word_count = len(text_only.split())
+                        # Add to content list
+                        state.content_list.append({
+                            "title": topic["title"],
+                            "keyword": topic["keyword"],
+                            "content": cleaned_content,
+                            "word_count": word_count
+                        })
                     
                     state.progress = ((i + 1) / state.total_tasks) * 100
                     
                     if i < len(state.topics) - 1 and state.is_running:
                         time.sleep(3)  # Short delay between Gemini requests
                 
-                regenerate_missing_contents(state.topics, provider, page=page)
-
-                successful_gen = sum(1 for c in state.generated_contents if is_generated_content_valid(c))
+                successful_gen = sum(1 for c in state.generated_contents if c is not None)
                 add_log(f"Generated {successful_gen}/{total_topics} articles via Gemini Web", "success")
                 
                 if successful_gen == 0:
@@ -2037,7 +2071,7 @@ def run_automation():
                     add_log("Stopped while paused", "warning")
                     break
                 
-                if not is_generated_content_valid(content):
+                if content is None:
                     add_log(f"Skipping post {i+1} - no content", "warning")
                     state.failed_posts += 1
                     continue
@@ -2127,7 +2161,9 @@ def handle_config():
     if request.method == 'POST':
         data = request.json
         state.config.update(data)
-        return jsonify({"success": True})
+        if save_app_config(state.config):
+            return jsonify({"success": True})
+        return jsonify({"success": False, "message": "Could not save config"}), 500
     return jsonify(state.config)
 
 @app.route('/api/topics', methods=['GET', 'POST'])
@@ -2158,7 +2194,13 @@ def manage_preset(name):
             "wp_password": data.get("wp_password", ""),
             "wp_login_url": data.get("wp_login_url", ""),
             "wp_admin_url": data.get("wp_admin_url", ""),
-            "gemini_prompt": data.get("gemini_prompt", "")
+            "category_name": data.get("category_name", "Tin tức"),
+            "gemini_prompt": data.get("gemini_prompt", ""),
+            "auto_set_seo_keyword": data.get("auto_set_seo_keyword", True),
+            "auto_insert_inline_images": data.get("auto_insert_inline_images", True),
+            "auto_set_featured_image": data.get("auto_set_featured_image", False),
+            "auto_select_category": data.get("auto_select_category", True),
+            "auto_add_tags": data.get("auto_add_tags", True),
         }
         if save_site_presets(presets):
             return jsonify({"success": True, "message": f"Preset '{name}' saved"})
