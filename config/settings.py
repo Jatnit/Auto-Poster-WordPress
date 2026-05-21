@@ -3,20 +3,8 @@ import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-TIMEOUT_SHORT = 1000
-TIMEOUT_MEDIUM = 3000
-TIMEOUT_LONG = 5000
-TIMEOUT_NETWORK = 10000
-TIMEOUT_LOGIN = 60000
-
-SLEEP_SHORT = 0.5
-SLEEP_MEDIUM = 1
-SLEEP_LONG = 2
-SLEEP_EXTRA_LONG = 5
-
 PRESETS_FILE = "wp_site_presets.json"
 CONFIG_FILE = "app_config.json"
-BROWSER_DATA_DIR = os.path.expanduser("~/.wp_autoposter_browser")
 
 DEFAULT_CONFIG = {
     "wp_username": "",
@@ -35,6 +23,12 @@ DEFAULT_CONFIG = {
     "auto_set_featured_image": False,
     "auto_select_category": True,
     "auto_add_tags": True,
+    # Số từ tối thiểu cho 1 response Gemini Web — nếu ngắn hơn sẽ tự động retry
+    "gemini_min_words_full": 600,   # prompt tùy chỉnh (bài hoàn chỉnh)
+    "gemini_min_words_part": 300,   # mỗi phần của 2-part generation
+    "gemini_max_prompt_retries": 2, # số lần thử lại cho mỗi prompt
+    # ChatGPT Web — share min_words_full/part với Gemini cho đơn giản
+    "chatgpt_max_prompt_retries": 2,
 }
 
 
@@ -59,7 +53,7 @@ class AppState:
         self.used_featured_images: set = set()
         self.current_phase: str = ""
         self.retry_queue: List[Dict[str, Any]] = []
-    
+
     def reset(self):
         self.is_running = True
         self.is_paused = False
@@ -120,13 +114,6 @@ def wait_if_paused() -> bool:
     while state.is_paused and state.is_running:
         time.sleep(0.5)
     return state.is_running
-
-
-def pause_on_error(error_msg: str):
-    state.is_paused = True
-    state.pause_reason = error_msg
-    add_log(f"PAUSED: {error_msg}", "warning")
-    add_log("Fix the issue and click 'Resume' to continue", "info")
 
 
 def load_site_presets() -> Dict[str, Any]:

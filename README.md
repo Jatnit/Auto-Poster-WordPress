@@ -108,7 +108,7 @@ source .venv/bin/activate  # macOS/Linux
 python app.py
 ```
 
-Mở trình duyệt và truy cập: **http://localhost:5000**
+Mở trình duyệt và truy cập: **http://localhost:5001**
 
 ### 📝 Quy trình sử dụng
 
@@ -206,17 +206,13 @@ Auto-Poster-WordPress/
 │   ├── __init__.py
 │   ├── ollama.py            # Ollama integration
 │   └── gemini_api.py        # Gemini API integration
-├── wordpress/                # WordPress automation modules
+├── config/                   # Configuration & prompts
 │   ├── __init__.py
-│   ├── auth.py              # Login handling
-│   ├── editor.py            # Title, content, SEO
-│   ├── media.py             # Image handling
-│   └── publish.py           # Publish/schedule
+│   ├── settings.py          # State, config loader, logging
+│   └── prompts.py           # Prompt templates + content cleaner
 ├── templates/
 │   └── index.html           # Web interface (Matrix theme)
-├── app.py                   # Flask web server + main automation
-├── config.py                # Configuration & state management
-├── prompts.py               # Prompt templates
+├── app.py                   # Flask web server + automation logic
 ├── requirements.txt         # Python dependencies
 └── README.md                # Documentation
 ```
@@ -229,7 +225,7 @@ Auto-Poster-WordPress/
 1. Khởi động app
    └── python app.py
 
-2. Mở browser → http://localhost:5000
+2. Mở browser → http://localhost:5001
 
 3. Cấu hình
    ├── WordPress credentials
@@ -288,17 +284,17 @@ Auto-Poster-WordPress/
 git pull origin main
 ```
 
-### Lỗi: Port 5000 đang được sử dụng
+### Lỗi: Port 5001 đang được sử dụng
 
 **Giải pháp:**
 
 ```bash
 # macOS/Linux - Tìm và kill process
-lsof -i :5000
+lsof -i :5001
 kill -9 <PID>
 
 # Windows
-netstat -ano | findstr :5000
+netstat -ano | findstr :5001
 taskkill /PID <PID> /F
 ```
 
@@ -337,9 +333,9 @@ python3 app.py
 
 ### Thêm WordPress function mới
 
-1. Tạo hoặc edit file trong `wordpress/`
-2. Implement function với parameters `(page, config, log_func)`
-3. Import trong `app.py` hoặc gọi trực tiếp
+1. Thêm function vào `app.py`
+2. Implement với parameter `page: Page` và gọi `add_log(...)` để log
+3. Gọi từ `create_single_post()` hoặc `run_automation()` tùy vị trí phù hợp
 
 ---
 

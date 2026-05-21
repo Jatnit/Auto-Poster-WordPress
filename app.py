@@ -5,7 +5,6 @@ import random
 import re
 import threading
 import time
-import requests
 import unicodedata
 from datetime import datetime, timedelta
 from typing import Optional
@@ -14,10 +13,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
 from config.settings import (
-    state, add_log, wait_if_paused, pause_on_error,
+    state, add_log, wait_if_paused,
     load_site_presets, save_site_presets, save_app_config,
-    PRESETS_FILE, TIMEOUT_SHORT, TIMEOUT_MEDIUM, TIMEOUT_LONG,
-    SLEEP_SHORT, SLEEP_MEDIUM, SLEEP_LONG, BROWSER_DATA_DIR
 )
 from config.prompts import PROMPT_PART1, PROMPT_PART2, CONTACT_SECTION, clean_gemini_content
 from ai_providers.ollama import (
@@ -52,96 +49,572 @@ def generate_content_gemini(title: str, keyword: str) -> Optional[str]:
 
 # GEMINI WEB CONTENT GENERATION (Browser-based, free, no API key)
 
-def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
-    try:
-        # Wait for page to fully load
-        add_log("Đang chờ trang Gemini tải...", "info")
-        time.sleep(5)
-        
-        # Reload page to ensure fresh state
-        page.reload(wait_until="domcontentloaded")
-        time.sleep(5)
-        
-        # Look for the input area with multiple selectors
-        input_selectors = [
-            "p[contenteditable='true']",
-            "div[contenteditable='true']",
-            "rich-textarea p[contenteditable='true']",
-            "rich-textarea div[contenteditable='true']",
-            ".ql-editor p",
-            "textarea[placeholder*='prompt']",
-            "textarea[placeholder*='Prompt']",
-            "[data-placeholder*='Enter']",
-            "[aria-label*='Enter a prompt']",
-            "[aria-label*='prompt']"
-        ]
-        
-        input_area = None
-        for selector in input_selectors:
+# Các cụm báo lỗi của Gemini — nếu response chứa 1 trong các cụm này thì coi như lỗi, phải retry
+_GEMINI_ERROR_PHRASES = [
+    "something went wrong",
+    "xin vui lòng thử lại",
+    "đã xảy ra lỗi",
+    "please try again",
+    "i can't help",
+    "i'm not able to help",
+    "tôi không thể",
+    "unable to generate",
+    "try again later",
+]
+
+# Số lần retry tối đa khi phát hiện Gemini chuyển sang Canvas mode (tách
+# khỏi gemini_max_prompt_retries hiện có để dễ tune).
+GEMINI_CANVAS_MAX_RETRIES = 2
+
+# Cụm phrase điển hình xuất hiện khi inline response chỉ là mô tả Canvas.
+# So sánh case-insensitive với text đã strip HTML.
+#
+# IMPORTANT: chỉ giữ phrase đặc trưng cho Canvas / file attachment / PDF — KHÔNG
+# liệt kê các cụm SEO chung (ví dụ "seo meta description", "từ khóa chính:",
+# "cấu trúc nội dung:") vì bài blog inline thực tế hoàn toàn có thể chứa các
+# cụm này. False-positive ở phần này sẽ chặn nhầm bài hợp lệ.
+_GEMINI_CANVAS_PHRASES = [
+    # Vietnamese — Canvas / Document panel markers
+    "định dạng: pdf",
+    "đã tạo tài liệu",
+    "tài liệu đính kèm",
+    "tài liệu này có thể tải",
+    "có thể tải tệp pdf",
+    "bạn có thể tải tệp pdf",
+    "bài viết blog chuẩn seo của bạn đã được khởi tạo",
+    "pdf chuyên nghiệp",
+    # English fallback
+    "format: pdf",
+    "document attached",
+    "i've created a document",
+    "i have created a document",
+    "the document is ready",
+]
+
+# DOM selector best-effort cho Canvas / Document panel + file attachment chip.
+# OR-combine: chỉ cần 1 selector visible là tín hiệu Canvas.
+_GEMINI_CANVAS_DOM_SELECTORS = [
+    "immersive-panel",
+    "[data-test-id*='canvas']",
+    ".canvas-panel",
+    "[aria-label*='Canvas']",
+    "[aria-label*='canvas']",
+    "[aria-label*='Document']",
+    "[aria-label*='tài liệu']",
+    "[role='complementary'] [class*='document']",
+    "[role='complementary'] [class*='attachment']",
+    # File attachment chip xuất hiện trong inline response
+    ".model-response-text a[href*='document']",
+    ".model-response-text [class*='attachment-chip']",
+    ".model-response-text [class*='file-attachment']",
+    ".model-response-text [aria-label*='PDF']",
+]
+
+# Ngưỡng heuristic structural
+_GEMINI_CANVAS_MIN_HEADINGS = 2     # < 2 H2/H3 + có phrase Canvas → suspect
+_GEMINI_CANVAS_SUSPECT_WORDS = 100  # text >= 100 từ mới áp dụng structural fail
+
+
+def _gemini_response_text(html_or_text: str) -> str:
+    """Strip HTML tags để đếm từ thật (không tính thẻ)."""
+    if not html_or_text:
+        return ""
+    text = re.sub(r"<[^>]*>", " ", html_or_text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _anti_canvas_suffix() -> str:
+    """
+    Trả về đoạn chỉ thị Anti-Canvas bằng tiếng Việt + English fallback.
+    Append vào cuối prompt TẠI RUNTIME trước khi gửi tới Gemini Web.
+    KHÔNG sửa template gốc trong config/prompts.py.
+    """
+    return (
+        "\n\n"
+        "QUAN TRỌNG (BẮT BUỘC):\n"
+        "- Trả lời TRỰC TIẾP trong khung chat dưới dạng HTML thuần.\n"
+        "- KHÔNG tạo Canvas, KHÔNG tạo Document, KHÔNG tạo file PDF, "
+        "KHÔNG tạo file đính kèm dưới bất kỳ hình thức nào.\n"
+        "- KHÔNG gọi tool Canvas/Document/Immersive.\n"
+        "- KHÔNG mô tả tài liệu, KHÔNG nói 'đã tạo tài liệu', "
+        "KHÔNG nói 'Định dạng: PDF', KHÔNG kèm icon file.\n"
+        "- Toàn bộ nội dung bài viết PHẢI xuất hiện inline ngay trong tin "
+        "nhắn chat, đầy đủ các thẻ <h2>, <h3>, <p>, <ul>, <li>, <strong>.\n"
+        "\n"
+        "IMPORTANT (MANDATORY):\n"
+        "- Reply DIRECTLY in the chat as plain HTML.\n"
+        "- DO NOT create a Canvas, Document, PDF, or any attached file.\n"
+        "- DO NOT invoke any Canvas/Document/Immersive tool.\n"
+        "- The full article must appear inline in this chat message.\n"
+    )
+
+
+def _markdown_to_html_minimal(md: str) -> str:
+    """
+    Convert markdown rất tối thiểu sang HTML cho rescue Canvas.
+
+    Rules:
+        - '## X'  → <h2>X</h2>
+        - '### X' → <h3>X</h3>
+        - Các dòng liên tiếp bắt đầu '- ' → 1 <ul> chứa nhiều <li>X</li>
+        - Block ngăn cách bằng dòng trống (không phải heading/list) → <p>...</p>
+        - Inline '**X**' → <strong>X</strong>
+
+    Idempotent: dòng đã là HTML block-level (<h2>/<h3>/<p>/<ul>/<li>...)
+    được pass through nguyên trạng để không double-wrap.
+
+    Không xử lý code block / link / image phức tạp — đủ cho rescue Canvas.
+    """
+    if not md:
+        return ""
+
+    # Inline transforms (chỉ áp dụng lên text đã extract, không lên HTML pass-through).
+    def _inline(s: str) -> str:
+        return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
+
+    # Dòng đã là HTML block-level → giữ nguyên (idempotency).
+    html_block_re = re.compile(
+        r"^\s*</?(?:h[1-6]|p|ul|ol|li|div|section|article|header|footer|"
+        r"blockquote|pre|table|thead|tbody|tr|td|th|figure|figcaption)\b",
+        re.IGNORECASE,
+    )
+
+    lines = md.splitlines()
+    out: list = []
+    paragraph_buf: list = []
+
+    def flush_paragraph():
+        if paragraph_buf:
+            joined = " ".join(s.strip() for s in paragraph_buf if s.strip())
+            if joined:
+                out.append(f"<p>{_inline(joined)}</p>")
+            paragraph_buf.clear()
+
+    i = 0
+    n = len(lines)
+    while i < n:
+        raw = lines[i]
+        stripped = raw.strip()
+
+        # Dòng trống → kết thúc paragraph hiện tại.
+        if not stripped:
+            flush_paragraph()
+            i += 1
+            continue
+
+        # Heading ### (kiểm tra trước ## để '###' không khớp '## ').
+        if stripped.startswith("### "):
+            flush_paragraph()
+            out.append(f"<h3>{_inline(stripped[4:].strip())}</h3>")
+            i += 1
+            continue
+
+        # Heading ##
+        if stripped.startswith("## "):
+            flush_paragraph()
+            out.append(f"<h2>{_inline(stripped[3:].strip())}</h2>")
+            i += 1
+            continue
+
+        # List: gom các dòng '- X' liên tiếp thành 1 <ul>.
+        if stripped.startswith("- "):
+            flush_paragraph()
+            items: list = []
+            while i < n and lines[i].strip().startswith("- "):
+                item_text = lines[i].strip()[2:].strip()
+                items.append(f"<li>{_inline(item_text)}</li>")
+                i += 1
+            out.append("<ul>" + "".join(items) + "</ul>")
+            continue
+
+        # Đã là HTML block → pass through để idempotent.
+        if html_block_re.match(stripped):
+            flush_paragraph()
+            out.append(raw)
+            i += 1
+            continue
+
+        # Mặc định: text thường → tích vào paragraph buffer.
+        paragraph_buf.append(stripped)
+        i += 1
+
+    flush_paragraph()
+    return "\n".join(out)
+
+
+def _is_canvas_response(page, html_content: Optional[str]) -> tuple:
+    """
+    Phát hiện response của Gemini có phải đang ở Canvas / Document mode hay
+    chỉ là mô tả meta về tài liệu hay không.
+
+    Returns:
+        (is_canvas: bool, reason: str)
+        - (True, reason) nếu nghi ngờ Canvas.
+        - (False, "")    nếu không.
+
+    Heuristic:
+      H1. DOM check  : tìm Canvas panel / file attachment chip qua selector.
+                       Đây là tín hiệu **deterministic** từ DOM thực tế của
+                       Gemini Web, không có false positive.
+
+    Lưu ý: phiên bản trước có thêm phrase + structural fallback, nhưng nó
+    sinh quá nhiều false positive trên bài blog SEO bình thường (ví dụ bài
+    có "<!-- SEO Meta Description -->", "Định dạng: ...", "Từ khóa chính:"
+    trong nội dung) khi `.model-response-text` trả markdown / text thuần.
+    Layer 1 (anti-canvas suffix trong prompt) + Layer 3 (rescue khi DOM
+    panel xuất hiện) đã đủ để chặn Canvas thực sự. Nhánh phrase+structural
+    được bỏ để nhường ưu tiên cho preservation (clauses 3.1, 3.3).
+
+    Edge cases:
+      - page=None              → bỏ qua H1 → (False, "").
+      - html_content rỗng/None → vẫn chạy H1 trên page; H1 âm → (False, "").
+      - Mọi page.locator call đều bọc try/except → hàm không bao giờ raise.
+    """
+    # --- H1: DOM check (best-effort, không raise) ---
+    if page is not None:
+        for selector in _GEMINI_CANVAS_DOM_SELECTORS:
             try:
                 el = page.locator(selector).first
-                if el.is_visible(timeout=3000):
-                    input_area = el
-                    add_log(f"Tìm thấy ô nhập: {selector}", "info")
-                    break
-            except:
+                if el.is_visible(timeout=500):
+                    return (
+                        True,
+                        f"phát hiện Canvas/Document panel qua DOM ({selector})",
+                    )
+            except Exception:
                 continue
-        
-        if not input_area:
-            # Try to find any editable element
-            add_log("Đang thử các selector khác...", "warning")
+
+    # Phrase + structural fallback đã bị disable (xem docstring). Chỉ DOM
+    # check là tín hiệu Canvas; nếu không match → response được coi là
+    # inline hợp lệ, để các layer phía sau (validate word count / error
+    # phrase) xử lý tiếp.
+    return False, ""
+
+
+def _try_extract_canvas_content(page) -> Optional[str]:
+    """
+    Best-effort: đọc nội dung HTML/Markdown thực từ Canvas / Document panel
+    của Gemini Web. Trả về HTML khả dụng (đủ heading + paragraph) hoặc None
+    nếu không trích được nội dung dùng được.
+
+    Chiến lược:
+      1. Iterate `canvas_containers` selector list.
+      2. Với mỗi selector visible, đọc inner_html() và inner_text() (try/except).
+      3. Nếu inner_html đã là HTML có ≥ 2 <h2>/<h3> và ≥ 200 từ → return luôn.
+      4. Else thử convert inner_text qua `_markdown_to_html_minimal`; nếu kết
+         quả có ≥ 2 heading và ≥ 200 từ → return.
+      5. Hết list → return None.
+
+    Mọi page.locator / inner_html / inner_text call đều bọc try/except nên
+    hàm không bao giờ raise.
+    """
+    canvas_containers = [
+        "immersive-panel",
+        "[data-test-id*='canvas'] [class*='content']",
+        ".canvas-panel",
+        "[role='complementary']",
+    ]
+
+    for sel in canvas_containers:
+        # Step 1+2: locate + read raw content (best-effort, không raise)
+        html = ""
+        txt = ""
+        try:
+            el = page.locator(sel).first
+            if not el.is_visible(timeout=500):
+                continue
             try:
-                input_area = page.locator("[contenteditable='true']").first
-                if input_area.is_visible(timeout=5000):
-                    add_log("Tìm thấy phần tử contenteditable", "info")
-            except:
-                pass
-        
+                html = el.inner_html() or ""
+            except Exception:
+                html = ""
+            try:
+                txt = el.inner_text() or ""
+            except Exception:
+                txt = ""
+        except Exception:
+            continue
+
+        if not html and not txt:
+            continue
+
+        # Step 3: nếu inner_html đã có structure → dùng luôn
+        if html:
+            heading_count = len(
+                re.findall(r"<h[23][^>]*>", html, flags=re.IGNORECASE)
+            )
+            if heading_count >= 2 and len(_gemini_response_text(html).split()) >= 200:
+                add_log(
+                    f"Rescue Canvas: đọc được {heading_count} heading từ '{sel}'",
+                    "success",
+                )
+                return html
+
+        # Step 4: fallback convert markdown → HTML tối thiểu
+        if txt:
+            try:
+                converted = _markdown_to_html_minimal(txt)
+            except Exception:
+                converted = ""
+            if converted:
+                heading_count = len(
+                    re.findall(r"<h[23][^>]*>", converted, flags=re.IGNORECASE)
+                )
+                if (
+                    heading_count >= 2
+                    and len(_gemini_response_text(converted).split()) >= 200
+                ):
+                    add_log(
+                        f"Rescue Canvas: convert markdown từ '{sel}' "
+                        f"({heading_count} heading)",
+                        "success",
+                    )
+                    return converted
+
+    # Step 5: hết list → fail
+    return None
+
+
+def _validate_gemini_response(content: Optional[str], min_words: int, page=None) -> tuple:
+    """
+    Kiểm tra response của Gemini có hợp lệ không.
+    Returns: (is_valid: bool, reason: str, word_count: int)
+
+    Thứ tự check (đảm bảo preservation khi page=None):
+      0. content rỗng                     -> invalid (như cũ)
+      1. NEW: Canvas check (chỉ khi page) -> invalid với reason Canvas
+      2. error phrase                     -> invalid (như cũ)
+      3. word count < min_words           -> invalid (như cũ)
+      4. -> valid
+    """
+    if not content:
+        return False, "response rỗng hoặc không extract được", 0
+
+    # NEW: Layer 2 detection — chỉ chạy khi có page (backward-compatible
+    # với caller cũ truyền 2 arg / page=None).
+    if page is not None:
+        is_canvas, canvas_reason = _is_canvas_response(page, content)
+        if is_canvas:
+            word_count = len(_gemini_response_text(content).split())
+            return False, f"Canvas mode: {canvas_reason}", word_count
+
+    text = _gemini_response_text(content)
+    word_count = len(text.split())
+
+    # Check 1: Gemini trả về câu báo lỗi
+    lower = text.lower()
+    for phrase in _GEMINI_ERROR_PHRASES:
+        if phrase in lower:
+            return False, f"Gemini trả thông báo lỗi ('{phrase}')", word_count
+
+    # Check 2: Quá ngắn
+    if word_count < min_words:
+        return False, f"chỉ có {word_count}/{min_words} từ", word_count
+
+    return True, "OK", word_count
+
+
+def _find_input_area(page):
+    """Tìm ô nhập prompt của Gemini, thử nhiều selector."""
+    input_selectors = [
+        "p[contenteditable='true']",
+        "div[contenteditable='true']",
+        "rich-textarea p[contenteditable='true']",
+        "rich-textarea div[contenteditable='true']",
+        ".ql-editor p",
+        "textarea[placeholder*='prompt']",
+        "textarea[placeholder*='Prompt']",
+        "[data-placeholder*='Enter']",
+        "[aria-label*='Enter a prompt']",
+        "[aria-label*='prompt']",
+    ]
+    for selector in input_selectors:
+        try:
+            el = page.locator(selector).first
+            if el.is_visible(timeout=3000):
+                add_log(f"Tìm thấy ô nhập: {selector}", "info")
+                return el
+        except:
+            continue
+    # Fallback: bất kỳ contenteditable nào
+    try:
+        el = page.locator("[contenteditable='true']").first
+        if el.is_visible(timeout=5000):
+            add_log("Tìm thấy phần tử contenteditable (fallback)", "info")
+            return el
+    except:
+        pass
+    return None
+
+
+def _is_gemini_chat_ready(page) -> bool:
+    """True khi đang ở Gemini chat và ô nhập prompt khả dụng."""
+    try:
+        current_url = page.url or ""
+    except Exception:
+        return False
+
+    if "gemini.google.com" not in current_url or "accounts.google" in current_url:
+        return False
+
+    return _find_input_area(page) is not None
+
+
+def _extract_gemini_response(page) -> str:
+    """Trích xuất nội dung response cuối cùng, thử nhiều selector."""
+    response_selectors = [
+        ".model-response-text",
+        ".response-content",
+        ".markdown-content",
+        "[data-message-author-role='model']",
+        ".message-content",
+    ]
+    for selector in response_selectors:
+        try:
+            responses = page.locator(selector).all()
+            if responses:
+                last_response = responses[-1]
+                html = last_response.inner_html()
+                if html and len(html) > 100:
+                    return html
+        except:
+            continue
+    return ""
+
+
+def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
+    """
+    Chờ Gemini trả lời xong theo chiến thuật:
+    - Mỗi 3s extract response hiện tại và đếm từ
+    - Nếu word count không tăng trong 15s liên tiếp -> coi như đã xong
+    - Hoặc khi không còn loading indicator cũng dừng
+    - Timeout tối đa max_wait giây
+
+    Returns HTML của response (có thể rỗng nếu timeout).
+    """
+    add_log("Đang chờ Gemini trả lời...", "info")
+    time.sleep(3)  # Chờ response bắt đầu streaming
+
+    last_word_count = 0
+    stable_since = 0  # giây đã qua mà word count không tăng
+    waited = 0
+    last_html = ""
+
+    while waited < max_wait:
+        if not state.is_running:
+            add_log("Stopped while waiting for Gemini", "warning")
+            return last_html
+        if state.is_paused:
+            add_log("Paused - waiting...", "info")
+            if not wait_if_paused():
+                return last_html
+            add_log("Resuming Gemini wait...", "info")
+
+        current_html = _extract_gemini_response(page)
+        if current_html:
+            last_html = current_html
+            current_words = len(_gemini_response_text(current_html).split())
+        else:
+            current_words = 0
+
+        # Check loading indicator
+        any_loading = False
+        try:
+            loading_indicators = page.locator(
+                ".loading, .thinking, [aria-busy='true'], .response-streaming"
+            ).all()
+            for indicator in loading_indicators:
+                try:
+                    if indicator.is_visible(timeout=300):
+                        any_loading = True
+                        break
+                except:
+                    continue
+        except:
+            pass
+
+        # Điều kiện kết thúc: không còn loading VÀ word count không tăng trong 6s
+        if current_words > last_word_count:
+            last_word_count = current_words
+            stable_since = 0
+        else:
+            stable_since += 3
+
+        if not any_loading and current_words > 0 and stable_since >= 6:
+            add_log(
+                f"Gemini đã hoàn tất: {current_words} từ (ổn định {stable_since}s)",
+                "info",
+            )
+            break
+
+        # Stable lâu nhưng có text -> cũng coi là xong (phòng khi loading indicator bị stuck)
+        if current_words > 0 and stable_since >= 18:
+            add_log(
+                f"Response đã ổn định {stable_since}s -> coi như hoàn tất ({current_words} từ)",
+                "info",
+            )
+            break
+
+        time.sleep(3)
+        waited += 3
+        if waited % 15 == 0:
+            add_log(
+                f"Vẫn đang chờ... ({waited}s, đã có {current_words} từ)", "info"
+            )
+
+    if waited >= max_wait:
+        add_log(f"Timeout {max_wait}s khi chờ Gemini", "warning")
+
+    time.sleep(2)  # buffer cho render cuối
+    return _extract_gemini_response(page) or last_html
+
+
+def _send_prompt_once(page, prompt: str, fresh_page: bool = True) -> Optional[str]:
+    """Gửi prompt 1 lần (không retry). Trả về HTML response hoặc None nếu lỗi."""
+    try:
+        if fresh_page:
+            add_log("Reload Gemini để đảm bảo state sạch...", "info")
+            page.reload(wait_until="domcontentloaded")
+            time.sleep(5)
+
+        input_area = _find_input_area(page)
         if not input_area:
             add_log("Không tìm thấy ô nhập Gemini", "error")
-            # Take screenshot for debugging
-            page.screenshot(path="/tmp/gemini_error.png")
-            add_log("Đã lưu screenshot tại /tmp/gemini_error.png", "info")
+            try:
+                page.screenshot(path="/tmp/gemini_error.png")
+                add_log("Đã lưu screenshot tại /tmp/gemini_error.png", "info")
+            except:
+                pass
             return None
-        
-        # Click on the input area to focus
+
         input_area.click()
         time.sleep(1)
-        
-        # Clean prompt - replace newlines with spaces to avoid multiple sends
-        clean_prompt = prompt.replace('\n', ' ').replace('\r', ' ')
-        # Remove multiple spaces
-        while '  ' in clean_prompt:
-            clean_prompt = clean_prompt.replace('  ', ' ')
-        
+
+        # Clean prompt - thay newline bằng space để tránh gửi sớm
+        clean_prompt = prompt.replace("\n", " ").replace("\r", " ")
+        while "  " in clean_prompt:
+            clean_prompt = clean_prompt.replace("  ", " ")
+
         add_log("Đang nhập prompt...", "info")
-        
-        # Method 1: Try using fill() - most reliable
         try:
             input_area.fill(clean_prompt)
             add_log("Đã nhập prompt qua fill()", "info")
         except:
-            # Method 2: Use keyboard typing for the entire prompt
             add_log("Đang gõ bằng bàn phím...", "info")
-            # Clear first
-            page.keyboard.press("Meta+A")  # Cmd+A on Mac
+            page.keyboard.press("Meta+A")
             page.keyboard.press("Backspace")
             time.sleep(0.3)
-            
-            # Type without delay to avoid interruptions
             page.keyboard.type(clean_prompt, delay=0)
-        
-        time.sleep(2)  # Wait for input to settle
-        
-        # Click send button or press Enter
+
+        time.sleep(2)
+
+        # Gửi prompt
         send_selectors = [
             "button[aria-label*='Send']",
             "button[aria-label*='Gửi']",
             "button.send-button",
             "[data-test-id='send-button']",
-            "button:has-text('Send')"
+            "button:has-text('Send')",
         ]
-        
         sent = False
         for selector in send_selectors:
             try:
@@ -153,153 +626,193 @@ def send_prompt_to_gemini_web(page, prompt: str) -> Optional[str]:
                     break
             except:
                 continue
-        
+
         if not sent:
-            # Try pressing Enter as fallback
             page.keyboard.press("Enter")
             add_log("Đã gửi prompt qua phím Enter", "info")
-        
-        # Wait for response
-        add_log("Đang chờ Gemini trả lời (có thể mất 1-2 phút)...", "info")
-        time.sleep(5)  # Initial wait
-        
-        # Wait until response is complete
-        max_wait = 180  # 3 minutes max
-        waited = 0
-        while waited < max_wait:
-            # Check for stop/pause
-            if not state.is_running:
-                add_log("Stopped while waiting for Gemini", "warning")
-                return None
-            
-            # Check if paused
-            if state.is_paused:
-                add_log("Paused - waiting...", "info")
-                if not wait_if_paused():
-                    return None
-                add_log("Resuming Gemini wait...", "info")
-            
-            # Check for loading indicators
-            loading_indicators = page.locator(".loading, .thinking, [aria-busy='true'], .response-streaming").all()
-            if not loading_indicators or len(loading_indicators) == 0:
-                # No loading indicator, might be done
-                time.sleep(3)
-                break
-            
-            # Check if any loading indicator is visible
-            any_loading = False
-            for indicator in loading_indicators:
-                try:
-                    if indicator.is_visible(timeout=500):
-                        any_loading = True
-                        break
-                except:
-                    continue
-            
-            if not any_loading:
-                break
-                
-            time.sleep(2)
-            waited += 2
-            if waited % 15 == 0:
-                add_log(f"Vẫn đang chờ... ({waited}s)", "info")
-        
-        time.sleep(5)  # Extra wait for rendering
-        
-        # Extract the response - try multiple selectors
-        add_log("Đang trích xuất phản hồi...", "info")
-        
-        response_text = ""
-        
-        # Try different response selectors
-        response_selectors = [
-            ".model-response-text",
-            ".response-content", 
-            ".markdown-content",
-            "[data-message-author-role='model']",
-            ".message-content"
-        ]
-        
-        for selector in response_selectors:
-            try:
-                responses = page.locator(selector).all()
-                if responses and len(responses) > 0:
-                    # Get the last response
-                    last_response = responses[-1]
-                    response_text = last_response.inner_html()
-                    if response_text and len(response_text) > 100:
-                        add_log(f"Tìm thấy phản hồi với selector: {selector}", "info")
-                        break
-            except:
-                continue
-        
-        if response_text:
-            word_count = len(response_text.split())
-            add_log(f"Nhận được {word_count} từ từ Gemini", "success")
-            return response_text
-        else:
+
+        # Chờ & trích response (logic tăng cường)
+        response_html = _wait_for_gemini_response(page, max_wait=240)
+        if not response_html:
             add_log("Không thể trích xuất phản hồi Gemini", "error")
             return None
-            
+
+        # Layer 3 — nếu phát hiện Canvas, thử rescue trước khi giao về validate
+        is_canvas, reason = _is_canvas_response(page, response_html)
+        if is_canvas:
+            add_log(
+                f"Phát hiện Canvas mode ({reason}) — đang thử rescue...",
+                "warning",
+            )
+            rescued = _try_extract_canvas_content(page)
+            if rescued:
+                words = len(_gemini_response_text(rescued).split())
+                add_log(f"Rescue Canvas thành công: {words} từ", "success")
+                return rescued
+            add_log(
+                "Rescue Canvas thất bại — sẽ retry với prompt nhấn mạnh",
+                "warning",
+            )
+            # Trả response_html nguyên gốc; validate sẽ invalidate vì Canvas
+            # → caller retry với prompt nhấn mạnh hơn.
+            return response_html
+
+        words = len(_gemini_response_text(response_html).split())
+        add_log(f"Nhận được {words} từ từ Gemini", "success")
+        return response_html
+
     except Exception as e:
-        add_log(f"Lỗi Gemini Chat: {e}", "error")
+        add_log(f"Lỗi khi gửi prompt: {e}", "error")
         return None
+
+
+def send_prompt_to_gemini_web(
+    page,
+    prompt: str,
+    min_words: int = 300,
+    max_retries: Optional[int] = None,
+) -> Optional[str]:
+    """
+    Gửi prompt tới Gemini Web với auto-retry.
+
+    Retry trong các trường hợp:
+    - Không extract được response (rỗng / mất ô nhập)
+    - Gemini trả thông báo lỗi
+    - Số từ < min_words (response bị cắt hoặc quá ngắn)
+
+    Args:
+        page: Playwright page
+        prompt: nội dung prompt
+        min_words: ngưỡng số từ tối thiểu chấp nhận
+        max_retries: số lần thử lại (None = đọc từ config)
+
+    Returns HTML của response hợp lệ, hoặc None nếu đã hết retry.
+    """
+    if max_retries is None:
+        max_retries = int(state.config.get("gemini_max_prompt_retries", 2))
+
+    canvas_failures = 0  # Đếm riêng số lần fail vì Canvas mode
+    current_prompt = prompt  # Sẽ bị escalate khi gặp Canvas, giữ nguyên prompt gốc cho non-Canvas
+    total_attempts = max_retries + 1
+    for attempt in range(1, total_attempts + 1):
+        # Check stop/pause trước mỗi attempt
+        if not state.is_running:
+            return None
+        if state.is_paused and not wait_if_paused():
+            return None
+
+        if attempt > 1:
+            add_log(
+                f"Thử lại prompt lần {attempt}/{total_attempts}...", "warning"
+            )
+            time.sleep(3)
+
+        # Lần đầu không cần reload (đã navigate), từ lần 2 trở đi reload để reset state
+        response = _send_prompt_once(page, current_prompt, fresh_page=(attempt > 1))
+
+        is_valid, reason, word_count = _validate_gemini_response(
+            response, min_words, page=page
+        )
+        if is_valid:
+            add_log(
+                f"Response hợp lệ ({word_count} từ) sau {attempt} lần thử",
+                "success",
+            )
+            return response
+
+        # Canvas mode: đếm + escalate prompt; non-Canvas branches giữ nguyên flow cũ
+        if reason.startswith("Canvas mode"):
+            canvas_failures += 1
+            if canvas_failures > GEMINI_CANVAS_MAX_RETRIES:
+                add_log(
+                    f"Gemini chuyển Canvas {canvas_failures} lần liên tiếp, "
+                    f"bỏ qua bài này",
+                    "error",
+                )
+                return None
+            current_prompt = (
+                "**LẦN TRƯỚC BẠN ĐÃ DÙNG CANVAS / TẠO FILE PDF — ĐIỀU NÀY SAI.** "
+                "Lần này TUYỆT ĐỐI không được dùng Canvas, Document, hay tạo "
+                "file PDF/đính kèm. Trả lời inline trong chat.\n\n"
+                + prompt
+                + _anti_canvas_suffix()
+            )
+
+        add_log(
+            f"Response không hợp lệ ({reason}). "
+            f"{'Sẽ thử lại...' if attempt < total_attempts else 'Đã hết lượt retry.'}",
+            "warning",
+        )
+
+    add_log(f"Thất bại sau {total_attempts} lần thử prompt", "error")
+    return None
 
 
 def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]:
     try:
-        add_log("Đang mở Gemini Chat...", "info")
-        
-        # Navigate to Gemini Chat
-        page.goto("https://gemini.google.com/app", wait_until="domcontentloaded", timeout=60000)
-        time.sleep(5)  # Wait for page to fully load
-        
-        # Check if need to login
-        needs_login = False
-        try:
-            if "accounts.google.com" in page.url:
-                needs_login = True
-            elif page.locator("a[href*='accounts.google'], button:has-text('Sign in'), button:has-text('Đăng nhập')").first.is_visible(timeout=3000):
-                needs_login = True
-        except:
-            pass
-        
-        if needs_login:
-            add_log("Vui lòng đăng nhập Google trong cửa sổ browser!", "warning")
-            add_log("Đang chờ đăng nhập (10 phút)...", "info")
-            
-            # Wait up to 10 minutes for login
-            login_wait = 0
-            max_login_wait = 600  # 10 minutes
-            while login_wait < max_login_wait and state.is_running:
-                # Check if paused
-                if state.is_paused:
-                    if not wait_if_paused():
-                        add_log("Stopped while waiting for login", "warning")
+        if _is_gemini_chat_ready(page):
+            add_log("Tiếp tục dùng cùng session Gemini hiện tại...", "info")
+        else:
+            add_log("Đang mở Gemini Chat...", "info")
+
+            # Chỉ navigate khi chưa có session sẵn sàng
+            page.goto("https://gemini.google.com/app", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(5)  # Wait for page to fully load
+
+            # Check if need to login
+            needs_login = False
+            try:
+                if "accounts.google.com" in page.url:
+                    needs_login = True
+                elif page.locator("a[href*='accounts.google'], button:has-text('Sign in'), button:has-text('Đăng nhập')").first.is_visible(timeout=3000):
+                    needs_login = True
+            except:
+                pass
+
+            if needs_login:
+                add_log("Vui lòng đăng nhập Google trong cửa sổ browser!", "warning")
+                add_log("Đang chờ đăng nhập (10 phút)...", "info")
+
+                # Wait up to 10 minutes for login
+                login_wait = 0
+                max_login_wait = 600  # 10 minutes
+                while login_wait < max_login_wait and state.is_running:
+                    # Check if paused
+                    if state.is_paused:
+                        if not wait_if_paused():
+                            add_log("Stopped while waiting for login", "warning")
+                            return None
+
+                    time.sleep(5)
+                    login_wait += 5
+
+                    # Check if stopped
+                    if not state.is_running:
+                        add_log("Stopped by user", "warning")
                         return None
-                
-                time.sleep(5)
-                login_wait += 5
-                
-                # Check if stopped 
-                if not state.is_running:
-                    add_log("Stopped by user", "warning")
-                    return None
-                
-                # Check if we're now on Gemini app page
-                current_url = page.url
-                if "gemini.google.com" in current_url and "accounts.google" not in current_url:
-                    add_log("Đăng nhập thành công!", "success")
-                    time.sleep(3)  # Extra wait for page load
-                    break
-                    
-                remaining = max_login_wait - login_wait
-                if login_wait % 60 == 0:
-                    add_log(f"Còn {remaining // 60} phút...", "info")
+
+                    # Check if we're now on Gemini app page
+                    current_url = page.url
+                    if "gemini.google.com" in current_url and "accounts.google" not in current_url:
+                        add_log("Đăng nhập thành công!", "success")
+                        time.sleep(3)  # Extra wait for page load
+                        break
+
+                    remaining = max_login_wait - login_wait
+                    if login_wait % 60 == 0:
+                        add_log(f"Còn {remaining // 60} phút...", "info")
+
+        if not _find_input_area(page):
+            add_log("Gemini chưa sẵn sàng ô nhập prompt", "error")
+            return None
         
         # Get custom prompt from config, or use default
         custom_prompt = state.config.get("gemini_prompt", "")
-        
+
+        # Ngưỡng số từ tối thiểu (đọc từ config)
+        min_words_full = int(state.config.get("gemini_min_words_full", 600))
+        min_words_part = int(state.config.get("gemini_min_words_part", 300))
+
         if custom_prompt and "{title}" in custom_prompt and "{keyword}" in custom_prompt:
             # Check stop/pause before generating
             if not state.is_running:
@@ -307,19 +820,19 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
             if state.is_paused:
                 if not wait_if_paused():
                     return None
-            
+
             # Use custom single prompt
             add_log("Đang tạo nội dung với prompt tùy chỉnh...", "info")
-            prompt = custom_prompt.format(title=title, keyword=keyword)
-            content = send_prompt_to_gemini_web(page, prompt)
-            
+            prompt = custom_prompt.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            content = send_prompt_to_gemini_web(page, prompt, min_words=min_words_full)
+
             if not content:
-                add_log("Không thể tạo nội dung", "error")
+                add_log("Không thể tạo nội dung (đã hết retry)", "error")
                 return None
-            
-            word_count = len(content.split())
+
+            word_count = len(_gemini_response_text(content).split())
             add_log(f"Đã tạo {word_count} từ", "info")
-            
+
         else:
             # Fall back to two-part generation
             # Check stop/pause
@@ -328,55 +841,493 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
             if state.is_paused:
                 if not wait_if_paused():
                     return None
-            
+
             add_log("Đang tạo Phần 1/2 với Gemini Chat...", "info")
-            prompt1 = PROMPT_PART1.format(title=title, keyword=keyword)
-            part1 = send_prompt_to_gemini_web(page, prompt1)
-            
+            prompt1 = PROMPT_PART1.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            part1 = send_prompt_to_gemini_web(page, prompt1, min_words=min_words_part)
+
             if not part1:
-                add_log("Không thể tạo Phần 1", "error")
+                add_log("Không thể tạo Phần 1 (đã hết retry)", "error")
                 return None
-            
-            word_count_1 = len(part1.split())
+
+            word_count_1 = len(_gemini_response_text(part1).split())
             add_log(f"Phần 1: {word_count_1} từ", "info")
-            
+
             # Check stop/pause before part 2
             if not state.is_running:
                 return None
             if state.is_paused:
                 if not wait_if_paused():
                     return None
-            
+
             time.sleep(3)
-            
+
             add_log("Đang tạo Phần 2/2 với Gemini Chat...", "info")
-            prompt2 = PROMPT_PART2.format(title=title, keyword=keyword)
-            part2 = send_prompt_to_gemini_web(page, prompt2)
-            
+            prompt2 = PROMPT_PART2.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            part2 = send_prompt_to_gemini_web(page, prompt2, min_words=min_words_part)
+
             if not part2:
-                add_log("Không thể tạo Phần 2", "error")
+                add_log("Không thể tạo Phần 2 (đã hết retry)", "error")
                 return None
-            
-            word_count_2 = len(part2.split())
+
+            word_count_2 = len(_gemini_response_text(part2).split())
             add_log(f"Phần 2: {word_count_2} từ", "info")
-            
+
             # Combine parts
             contact = CONTACT_SECTION.format(keyword=keyword)
             content = part1 + "\n\n" + part2 + "\n\n" + contact
-        
+
         # Clean content - remove intro and outro text from Gemini
         content = clean_gemini_content(content)
-        
-        total_words = len(content.split())
-        add_log(f"Tổng cộng: {total_words} từ", "success")
+
+        # Validate lần cuối sau khi clean (phòng khi clean cắt nhiều quá)
+        final_words = len(_gemini_response_text(content).split())
+        if final_words < min_words_part:
+            add_log(
+                f"Sau khi clean chỉ còn {final_words} từ (quá ngắn) - bỏ qua bài này",
+                "error",
+            )
+            return None
+
+        add_log(f"Tổng cộng: {final_words} từ", "success")
         add_log(f"Đã tạo nội dung cho: {title}", "success")
-        
+
         return content
-        
+
     except Exception as e:
         add_log(f"Lỗi Gemini Chat: {e}", "error")
         return None
 
+
+# ===== CHATGPT WEB (Browser-based, no API key) =====
+
+# Selectors / phrases tương đương cho ChatGPT. ChatGPT không có "Canvas mode"
+# kiểu Gemini nhưng có "Canvas" panel khi dùng GPT-4o canvas. Tạm thời chỉ
+# bắt error phrase và validate word count — đủ cho use-case sinh bài blog.
+_CHATGPT_ERROR_PHRASES = [
+    "something went wrong",
+    "an error occurred",
+    "please try again",
+    "i can't help",
+    "i'm not able to help",
+    "tôi không thể",
+    "đã xảy ra lỗi",
+    "rate limit",
+    "too many requests",
+]
+
+
+def _chatgpt_find_input(page) -> Optional[object]:
+    """Tìm ô nhập prompt ChatGPT (ProseMirror contenteditable)."""
+    selectors = [
+        "#prompt-textarea",
+        "div#prompt-textarea[contenteditable='true']",
+        "div.ProseMirror[contenteditable='true']",
+        "textarea[data-id='root']",
+        "textarea[placeholder*='Message']",
+        "textarea[placeholder*='Send a message']",
+        "div[contenteditable='true'][role='textbox']",
+    ]
+    for sel in selectors:
+        try:
+            el = page.locator(sel).first
+            if el.is_visible(timeout=2500):
+                return el
+        except Exception:
+            continue
+    # Fallback: bất kỳ contenteditable nào
+    try:
+        el = page.locator("[contenteditable='true']").first
+        if el.is_visible(timeout=3000):
+            return el
+    except Exception:
+        pass
+    return None
+
+
+def _chatgpt_extract_response(page) -> str:
+    """Lấy HTML của message cuối từ assistant."""
+    selectors = [
+        "[data-message-author-role='assistant'] .markdown",
+        "[data-message-author-role='assistant'] [data-message-id]",
+        "[data-message-author-role='assistant']",
+        "div.markdown.prose",
+        "div.agent-turn .markdown",
+    ]
+    for sel in selectors:
+        try:
+            nodes = page.locator(sel).all()
+            if nodes:
+                last = nodes[-1]
+                html = last.inner_html() or ""
+                if html and len(html) > 100:
+                    return html
+        except Exception:
+            continue
+    return ""
+
+
+def _chatgpt_is_streaming(page) -> bool:
+    """ChatGPT đang stream nếu có nút Stop hoặc data-streaming attr."""
+    indicators = [
+        "button[data-testid='stop-button']",
+        "button[aria-label*='Stop']",
+        "button[aria-label*='stop']",
+        "[data-streaming='true']",
+        "div.result-streaming",
+    ]
+    for sel in indicators:
+        try:
+            el = page.locator(sel).first
+            if el.is_visible(timeout=300):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _wait_for_chatgpt_response(page, max_wait: int = 240) -> str:
+    """Chờ ChatGPT hoàn tất stream tương tự Gemini.
+
+    - Mỗi 3s extract response, đếm từ.
+    - Khi hết indicator streaming và word count ổn định ≥ 6s → coi xong.
+    - Timeout cứng `max_wait`.
+    """
+    add_log("Đang chờ ChatGPT trả lời...", "info")
+    time.sleep(3)
+
+    last_word_count = 0
+    stable_since = 0
+    waited = 0
+    last_html = ""
+
+    while waited < max_wait:
+        if not state.is_running:
+            return last_html
+        if state.is_paused:
+            if not wait_if_paused():
+                return last_html
+
+        current_html = _chatgpt_extract_response(page)
+        if current_html:
+            last_html = current_html
+            current_words = len(_gemini_response_text(current_html).split())
+        else:
+            current_words = 0
+
+        streaming = _chatgpt_is_streaming(page)
+
+        if current_words > last_word_count:
+            last_word_count = current_words
+            stable_since = 0
+        else:
+            stable_since += 3
+
+        if not streaming and current_words > 0 and stable_since >= 6:
+            add_log(
+                f"ChatGPT đã hoàn tất: {current_words} từ", "info"
+            )
+            break
+
+        if current_words > 0 and stable_since >= 18:
+            add_log(
+                f"Response ổn định {stable_since}s — coi như hoàn tất "
+                f"({current_words} từ)",
+                "info",
+            )
+            break
+
+        time.sleep(3)
+        waited += 3
+        if waited % 15 == 0:
+            add_log(
+                f"Vẫn đang chờ ChatGPT... ({waited}s, {current_words} từ)",
+                "info",
+            )
+
+    if waited >= max_wait:
+        add_log(f"Timeout {max_wait}s khi chờ ChatGPT", "warning")
+
+    time.sleep(2)
+    return _chatgpt_extract_response(page) or last_html
+
+
+def _validate_chatgpt_response(content: Optional[str], min_words: int) -> tuple:
+    """(is_valid, reason, word_count). Logic tương tự Gemini, không có Canvas."""
+    if not content:
+        return False, "response rỗng hoặc không extract được", 0
+
+    text = _gemini_response_text(content)
+    word_count = len(text.split())
+    lower = text.lower()
+    for phrase in _CHATGPT_ERROR_PHRASES:
+        if phrase in lower:
+            return False, f"ChatGPT báo lỗi ('{phrase}')", word_count
+
+    if word_count < min_words:
+        return False, f"chỉ có {word_count}/{min_words} từ", word_count
+
+    return True, "OK", word_count
+
+
+def _send_prompt_to_chatgpt_once(page, prompt: str, fresh_page: bool = False) -> Optional[str]:
+    """Gửi 1 prompt tới ChatGPT, không retry."""
+    try:
+        if fresh_page:
+            add_log("Reload ChatGPT để reset state (giữ cùng conversation)...", "info")
+            page.reload(wait_until="domcontentloaded", timeout=60000)
+            time.sleep(4)
+
+        input_area = _chatgpt_find_input(page)
+        if not input_area:
+            add_log("Không tìm thấy ô nhập ChatGPT", "error")
+            try:
+                page.screenshot(path="/tmp/chatgpt_error.png")
+            except Exception:
+                pass
+            return None
+
+        input_area.click()
+        time.sleep(0.7)
+
+        clean_prompt = prompt.replace("\r", " ")
+        # ChatGPT ProseMirror chấp nhận newline nhưng để an toàn dùng fill()
+        try:
+            input_area.fill(clean_prompt)
+        except Exception:
+            page.keyboard.press("Meta+A")
+            page.keyboard.press("Backspace")
+            time.sleep(0.3)
+            page.keyboard.type(clean_prompt, delay=0)
+
+        time.sleep(1.5)
+
+        # Click send button hoặc Enter
+        send_selectors = [
+            "button[data-testid='send-button']",
+            "button[aria-label*='Send prompt']",
+            "button[aria-label*='Send']",
+            "button[aria-label*='Gửi']",
+        ]
+        sent = False
+        for sel in send_selectors:
+            try:
+                btn = page.locator(sel).last
+                if btn.is_visible(timeout=2000) and btn.is_enabled():
+                    btn.click()
+                    sent = True
+                    add_log("Đã gửi prompt tới ChatGPT", "info")
+                    break
+            except Exception:
+                continue
+
+        if not sent:
+            page.keyboard.press("Enter")
+            add_log("Đã gửi prompt qua Enter", "info")
+
+        response_html = _wait_for_chatgpt_response(page, max_wait=240)
+        if not response_html:
+            add_log("Không trích xuất được phản hồi ChatGPT", "error")
+            return None
+
+        words = len(_gemini_response_text(response_html).split())
+        add_log(f"Nhận {words} từ từ ChatGPT", "success")
+        return response_html
+
+    except Exception as e:
+        add_log(f"Lỗi khi gửi prompt ChatGPT: {e}", "error")
+        return None
+
+
+def send_prompt_to_chatgpt_web(
+    page,
+    prompt: str,
+    min_words: int = 300,
+    max_retries: Optional[int] = None,
+) -> Optional[str]:
+    """Gửi prompt đến ChatGPT với auto-retry (mirror Gemini Web)."""
+    if max_retries is None:
+        max_retries = int(state.config.get("chatgpt_max_prompt_retries", 2))
+
+    total_attempts = max_retries + 1
+    for attempt in range(1, total_attempts + 1):
+        if not state.is_running:
+            return None
+        if state.is_paused and not wait_if_paused():
+            return None
+
+        if attempt > 1:
+            add_log(f"Thử lại prompt ChatGPT lần {attempt}/{total_attempts}...", "warning")
+            time.sleep(3)
+
+        response = _send_prompt_to_chatgpt_once(
+            page, prompt, fresh_page=(attempt > 1)
+        )
+        is_valid, reason, word_count = _validate_chatgpt_response(response, min_words)
+        if is_valid:
+            add_log(
+                f"Response ChatGPT hợp lệ ({word_count} từ) sau {attempt} lần thử",
+                "success",
+            )
+            return response
+
+        add_log(
+            f"Response ChatGPT không hợp lệ ({reason}). "
+            f"{'Sẽ thử lại...' if attempt < total_attempts else 'Đã hết retry.'}",
+            "warning",
+        )
+
+    add_log(f"Thất bại sau {total_attempts} lần thử ChatGPT", "error")
+    return None
+
+
+def _is_chatgpt_chat_ready(page) -> bool:
+    """True khi đang ở ChatGPT chat và ô nhập prompt khả dụng."""
+    try:
+        current_url = page.url or ""
+    except Exception:
+        return False
+
+    if "chatgpt.com" not in current_url:
+        return False
+    if "/auth/" in current_url or "auth0" in current_url:
+        return False
+
+    return _chatgpt_find_input(page) is not None
+
+
+def generate_content_chatgpt_web(page, title: str, keyword: str) -> Optional[str]:
+    """Sinh bài viết bằng ChatGPT Web (chat.openai.com / chatgpt.com).
+
+    Login: nếu chưa đăng nhập, chờ user thao tác trong browser tối đa 10 phút,
+    giống flow của Gemini Web. Cookie được persistent context lưu lại nên các
+    lần sau không cần login lại.
+    """
+    try:
+        if _is_chatgpt_chat_ready(page):
+            add_log("Tiếp tục dùng cùng session ChatGPT hiện tại...", "info")
+        else:
+            add_log("Đang mở ChatGPT...", "info")
+            page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=60000)
+            time.sleep(5)
+
+            # Detect login: ChatGPT redirect /auth/login khi chưa đăng nhập
+            needs_login = False
+            try:
+                cur = page.url
+                if "/auth/login" in cur or "auth0" in cur or "login" in cur:
+                    needs_login = True
+                else:
+                    # Có nút "Log in" / "Sign up" trên landing → cần login
+                    login_btn = page.locator(
+                        "a[href*='login'], button:has-text('Log in'), "
+                        "button:has-text('Đăng nhập')"
+                    ).first
+                    if login_btn.is_visible(timeout=2000):
+                        # Vẫn còn input area thì có thể là guest mode → check thêm
+                        if not _chatgpt_find_input(page):
+                            needs_login = True
+            except Exception:
+                pass
+
+            if needs_login:
+                add_log("Vui lòng đăng nhập ChatGPT trong cửa sổ browser!", "warning")
+                add_log("Đang chờ đăng nhập (10 phút)...", "info")
+
+                login_wait = 0
+                max_login_wait = 600
+                while login_wait < max_login_wait and state.is_running:
+                    if state.is_paused and not wait_if_paused():
+                        return None
+
+                    time.sleep(5)
+                    login_wait += 5
+
+                    if not state.is_running:
+                        return None
+
+                    cur = page.url
+                    if (
+                        "chatgpt.com" in cur
+                        and "/auth/" not in cur
+                        and "login" not in cur
+                    ):
+                        if _chatgpt_find_input(page):
+                            add_log("Đăng nhập ChatGPT thành công!", "success")
+                            time.sleep(3)
+                            break
+
+                    if login_wait % 60 == 0:
+                        remaining = (max_login_wait - login_wait) // 60
+                        add_log(f"Còn {remaining} phút...", "info")
+
+        if not _chatgpt_find_input(page):
+            add_log("ChatGPT chưa sẵn sàng ô nhập prompt", "error")
+            return None
+
+        custom_prompt = state.config.get("gemini_prompt", "")
+        min_words_full = int(state.config.get("gemini_min_words_full", 600))
+        min_words_part = int(state.config.get("gemini_min_words_part", 300))
+
+        if custom_prompt and "{title}" in custom_prompt and "{keyword}" in custom_prompt:
+            if not state.is_running or (state.is_paused and not wait_if_paused()):
+                return None
+
+            add_log("Đang tạo nội dung với prompt tùy chỉnh (ChatGPT)...", "info")
+            prompt = custom_prompt.format(title=title, keyword=keyword)
+            content = send_prompt_to_chatgpt_web(page, prompt, min_words=min_words_full)
+
+            if not content:
+                add_log("Không thể tạo nội dung với ChatGPT", "error")
+                return None
+
+            word_count = len(_gemini_response_text(content).split())
+            add_log(f"ChatGPT tạo {word_count} từ", "info")
+        else:
+            if not state.is_running or (state.is_paused and not wait_if_paused()):
+                return None
+
+            add_log("Đang tạo Phần 1/2 với ChatGPT...", "info")
+            prompt1 = PROMPT_PART1.format(title=title, keyword=keyword)
+            part1 = send_prompt_to_chatgpt_web(page, prompt1, min_words=min_words_part)
+            if not part1:
+                add_log("Không thể tạo Phần 1 (ChatGPT)", "error")
+                return None
+            add_log(f"Phần 1: {len(_gemini_response_text(part1).split())} từ", "info")
+
+            if not state.is_running or (state.is_paused and not wait_if_paused()):
+                return None
+
+            time.sleep(3)
+            add_log("Đang tạo Phần 2/2 với ChatGPT...", "info")
+            prompt2 = PROMPT_PART2.format(title=title, keyword=keyword)
+            part2 = send_prompt_to_chatgpt_web(page, prompt2, min_words=min_words_part)
+            if not part2:
+                add_log("Không thể tạo Phần 2 (ChatGPT)", "error")
+                return None
+            add_log(f"Phần 2: {len(_gemini_response_text(part2).split())} từ", "info")
+
+            contact = CONTACT_SECTION.format(keyword=keyword)
+            content = part1 + "\n\n" + part2 + "\n\n" + contact
+
+        # Tận dụng cleaner sẵn có — cùng heuristic cắt intro/outro hoạt động OK
+        # với output ChatGPT vì cũng là HTML/markdown.
+        content = clean_gemini_content(content)
+
+        final_words = len(_gemini_response_text(content).split())
+        if final_words < min_words_part:
+            add_log(
+                f"Sau clean còn {final_words} từ — bỏ qua bài này", "error"
+            )
+            return None
+
+        add_log(f"Tổng cộng (ChatGPT): {final_words} từ", "success")
+        add_log(f"Đã tạo nội dung cho: {title}", "success")
+        return content
+
+    except Exception as e:
+        add_log(f"Lỗi ChatGPT Web: {e}", "error")
+        return None
 
 
 def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
@@ -394,6 +1345,11 @@ def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
             add_log("Gemini Web requires browser page", "error")
             return None
         return generate_content_gemini_web(page, title, keyword)
+    elif provider == "chatgpt_web":
+        if page is None:
+            add_log("ChatGPT Web requires browser page", "error")
+            return None
+        return generate_content_chatgpt_web(page, title, keyword)
     else:
         return generate_content_gemini(title, keyword)
 
@@ -404,6 +1360,132 @@ def wait_for_network_idle(page: Page, timeout: int = 10000):
         page.wait_for_load_state("networkidle", timeout=timeout)
     except:
         pass
+
+def _join_url(base: str, path: str) -> str:
+    """Nối base URL và path, xử lý trailing slash dư."""
+    return base.rstrip("/") + "/" + path.lstrip("/")
+
+
+def _sync_config_domain_from_url(current_url: str) -> None:
+    """
+    Sau khi login, server WordPress có thể redirect từ www → non-www
+    (hoặc ngược lại). Cập nhật wp_admin_url / wp_login_url trong state.config
+    (chỉ trong bộ nhớ) để các navigate sau dùng đúng domain có cookie.
+    """
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(current_url)
+        if not parsed.scheme or not parsed.netloc:
+            return
+        real_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        for key in ("wp_admin_url", "wp_login_url"):
+            old = state.config.get(key, "")
+            if not old:
+                continue
+            old_parsed = urlparse(old)
+            if not old_parsed.netloc:
+                continue
+            if old_parsed.netloc != parsed.netloc:
+                # Giữ nguyên path, chỉ đổi scheme+host
+                new_url = real_origin + old_parsed.path
+                state.config[key] = new_url
+                add_log(
+                    f"Cập nhật {key}: {old_parsed.netloc} → {parsed.netloc}",
+                    "info",
+                )
+    except Exception as e:
+        add_log(f"Không sync được domain sau login: {e}", "warning")
+
+
+def _safe_navigate(page: Page, url: str, timeout: int = 30000, max_retries: int = 3) -> bool:
+    """
+    Navigate đến URL với khả năng xử lý:
+    - Dialog "Bạn có chắc muốn rời trang" (beforeunload của trang cũ như Gemini)
+    - ERR_ABORTED do navigation trước chưa xong
+    - Retry với nhiều chiến thuật wait_until khác nhau
+
+    Returns True nếu điều hướng thành công, False nếu đã hết retry.
+    """
+    # Auto-accept bất kỳ dialog nào xuất hiện (confirm/alert/prompt/beforeunload)
+    # Handler này sẽ tự gỡ sau khi navigate xong.
+    def _auto_dismiss(dialog):
+        try:
+            dialog.accept()
+        except Exception:
+            try:
+                dialog.dismiss()
+            except Exception:
+                pass
+
+    page.on("dialog", _auto_dismiss)
+
+    # Các chiến thuật wait_until theo thứ tự — nếu 1 cái fail thì thử cái tiếp
+    strategies = ["domcontentloaded", "load", "commit"]
+
+    last_err: Optional[Exception] = None
+    try:
+        for attempt in range(1, max_retries + 1):
+            wait_until = strategies[min(attempt - 1, len(strategies) - 1)]
+            try:
+                # Trước khi goto, cố gắng "hạ cánh" trang cũ xuống about:blank
+                # để cắt hoàn toàn beforeunload và XHR còn dở của trang trước.
+                if attempt > 1:
+                    try:
+                        page.goto("about:blank", wait_until="load", timeout=5000)
+                        time.sleep(0.5)
+                    except Exception:
+                        pass
+
+                add_log(
+                    f"Điều hướng tới {url} (lần {attempt}/{max_retries}, wait_until={wait_until})...",
+                    "info",
+                )
+                page.goto(url, wait_until=wait_until, timeout=timeout)
+                time.sleep(0.8)
+                return True
+
+            except Exception as e:
+                last_err = e
+                msg = str(e)
+                if "ERR_ABORTED" in msg or "TimeoutError" in type(e).__name__:
+                    add_log(
+                        f"Navigate bị abort/timeout ({attempt}/{max_retries}): {msg[:120]}",
+                        "warning",
+                    )
+                    time.sleep(2)
+                    continue
+                # Lỗi khác — không retry vô nghĩa
+                add_log(f"Lỗi navigate: {msg[:180]}", "error")
+                return False
+
+        # Fallback cuối: nạp URL qua window.location (tránh beforeunload của trang cũ)
+        try:
+            add_log("Thử fallback: set window.location qua JS...", "info")
+            page.evaluate(f"() => {{ window.location.replace({url!r}); }}")
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=timeout)
+            except Exception:
+                pass
+            time.sleep(1.5)
+            if url.split("://", 1)[-1].split("/", 1)[0] in (page.url or ""):
+                add_log("Fallback thành công!", "info")
+                return True
+        except Exception as e:
+            add_log(f"Fallback cũng thất bại: {e}", "warning")
+
+        add_log(
+            f"Không thể điều hướng tới {url} sau {max_retries} lần thử",
+            "error",
+        )
+        return False
+
+    finally:
+        try:
+            page.remove_listener("dialog", _auto_dismiss)
+        except Exception:
+            pass
+
 
 def login_to_wordpress(page: Page) -> bool:
     try:
@@ -419,9 +1501,11 @@ def login_to_wordpress(page: Page) -> bool:
         if not login_url or not username or not password:
             add_log("Missing login credentials!", "error")
             return False
-        
-        # Navigate to login page
-        page.goto(login_url, wait_until="domcontentloaded", timeout=30000)
+
+        # Navigate to login page — với retry & dialog handling để chống
+        # ERR_ABORTED khi chuyển từ gemini.google.com sang WordPress
+        if not _safe_navigate(page, login_url, timeout=30000, max_retries=3):
+            return False
         time.sleep(1)
         
         current_url = page.url
@@ -515,6 +1599,7 @@ def login_to_wordpress(page: Page) -> bool:
         # Success indicators
         if "wp-admin" in current_url and "wp-login" not in current_url:
             add_log("Successfully logged into WordPress!", "success")
+            _sync_config_domain_from_url(current_url)
             wait_for_network_idle(page)
             return True
         
@@ -551,7 +1636,9 @@ def login_to_wordpress(page: Page) -> bool:
 
 def navigate_to_new_post(page: Page) -> bool:
     try:
-        page.goto(f"{state.config['wp_admin_url']}/post-new.php", wait_until="domcontentloaded")
+        target_url = _join_url(state.config['wp_admin_url'], 'post-new.php')
+        if not _safe_navigate(page, target_url, timeout=30000, max_retries=3):
+            return False
         wait_for_network_idle(page, timeout=15000)
         time.sleep(2)
         
@@ -599,80 +1686,136 @@ def set_post_title(page: Page, title: str) -> bool:
         return False
 
 def set_post_content(page: Page, content: str) -> bool:
+    """Đẩy HTML content vào WordPress Classic Editor.
+
+    Root cause của bug "bài save rỗng": Classic Editor khi submit form luôn gọi
+    ``tinymce.triggerSave()`` để đồng bộ iframe → textarea trước khi POST. Nếu
+    TinyMCE iframe đang trống (vì mới fill textarea xong, chưa switch Visual,
+    hoặc switch Visual mà ``wpautop`` parse fail trên HTML "biên"), thì
+    ``triggerSave`` ghi rỗng đè textarea → DB lưu content rỗng.
+
+    Fix: ưu tiên set content thẳng vào TinyMCE qua API
+    (``tinymce.get('content').setContent(html)`` + ``.save()``). Thao tác này
+    bypass wpautop, đồng thời ``save()`` đẩy HTML xuống textarea ngay → cả
+    Text lẫn Visual mode đều có content đúng. Nếu TinyMCE chưa init kịp, fall
+    back về textarea + sync ngược lên iframe để đảm bảo bất biến: cả textarea
+    và iframe phải có cùng nội dung trước khi publish.
+    """
     try:
         add_log("Đang thêm nội dung...", "info")
         time.sleep(0.5)
-        
+
         content_added = False
-        
-        # Method 1: Switch to Text/HTML mode and fill textarea directly
+
+        # Method 1 (primary): TinyMCE API → setContent + save (sync vào textarea)
         try:
-            # Click on "Văn bản" / "Text" tab
-            text_tab = page.locator("#content-html").first
-            if text_tab.is_visible(timeout=3000):
-                text_tab.click()
-                time.sleep(0.5)
-                add_log("Đã chuyển sang chế độ Text/HTML", "info")
-                
-                # Fill the content textarea
+            # Đợi TinyMCE init xong (best-effort, ~5s). Nếu trang chưa load
+            # editor thì wait_for_function sẽ raise → bắt và fallback Method 2.
+            page.wait_for_function(
+                """() => window.tinymce
+                    && tinymce.get('content')
+                    && !tinymce.get('content').initializing""",
+                timeout=5000,
+            )
+
+            ok = page.evaluate(
+                """(html) => {
+                    const ed = window.tinymce && tinymce.get('content');
+                    if (!ed) return false;
+                    try {
+                        ed.setContent(html);
+                        ed.save();  // ghi xuống <textarea#content>
+                        const ta = document.getElementById('content');
+                        if (ta) {
+                            // Belt-and-suspenders: đảm bảo textarea có nguyên
+                            // bản HTML (ed.save() đôi khi chạy serializer).
+                            ta.value = html;
+                            ta.dispatchEvent(new Event('input', { bubbles: true }));
+                            ta.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        return ed.getContent({ format: 'raw' }).length > 0;
+                    } catch (e) {
+                        return false;
+                    }
+                }""",
+                content,
+            )
+            if ok:
+                content_added = True
+                add_log("📄 Content set via TinyMCE API", "success")
+        except Exception as e:
+            add_log(f"TinyMCE API method skipped: {e}", "warning")
+
+        # Method 2 (fallback): switch Text mode → fill textarea → push lên TinyMCE
+        if not content_added:
+            try:
+                text_tab = page.locator("#content-html").first
+                if text_tab.is_visible(timeout=3000):
+                    text_tab.click()
+                    time.sleep(0.5)
+                    add_log("Đã chuyển sang chế độ Text/HTML", "info")
+
                 content_textarea = page.locator("#content").first
                 if content_textarea.is_visible(timeout=3000):
                     content_textarea.click()
-                    content_textarea.fill("")  # Clear first
+                    content_textarea.fill("")
                     content_textarea.fill(content)
+
+                    # Quan trọng: push content lên TinyMCE iframe để
+                    # triggerSave() lúc publish không ghi rỗng đè textarea.
+                    page.evaluate(
+                        """(html) => {
+                            const ed = window.tinymce && tinymce.get('content');
+                            if (ed) {
+                                try { ed.setContent(html); ed.save(); } catch (e) {}
+                            }
+                            const ta = document.getElementById('content');
+                            if (ta) {
+                                ta.value = html;
+                                ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                ta.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }""",
+                        content,
+                    )
                     content_added = True
-                    add_log("📄 Content added via textarea", "success")
-        except Exception as e:
-            add_log(f"Textarea method failed: {e}", "warning")
-        
-        # Method 2: JavaScript injection to textarea
+                    add_log("📄 Content set via textarea + TinyMCE sync", "success")
+            except Exception as e:
+                add_log(f"Textarea method failed: {e}", "warning")
+
+        # Method 3 (last resort): pure JS injection cho cả textarea và TinyMCE
         if not content_added:
             try:
-                page.evaluate("""
-                    (content) => {
-                        // Switch to Text mode
-                        var htmlBtn = document.getElementById('content-html');
+                ok = page.evaluate(
+                    """(html) => {
+                        const htmlBtn = document.getElementById('content-html');
                         if (htmlBtn) htmlBtn.click();
-                        
-                        // Set content
-                        var textarea = document.getElementById('content');
-                        if (textarea) {
-                            textarea.value = content;
-                            // Trigger change event
-                            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                            textarea.dispatchEvent(new Event('change', { bubbles: true }));
-                            return true;
+                        const ta = document.getElementById('content');
+                        if (ta) {
+                            ta.value = html;
+                            ta.dispatchEvent(new Event('input', { bubbles: true }));
+                            ta.dispatchEvent(new Event('change', { bubbles: true }));
                         }
-                        return false;
-                    }
-                """, content)
-                content_added = True
-                add_log("📄 Content added via JavaScript", "success")
+                        const ed = window.tinymce && tinymce.get('content');
+                        if (ed) {
+                            try { ed.setContent(html); ed.save(); } catch (e) {}
+                        }
+                        return !!ta;
+                    }""",
+                    content,
+                )
+                if ok:
+                    content_added = True
+                    add_log("📄 Content set via JavaScript injection", "success")
             except Exception as e:
                 add_log(f"JavaScript method failed: {e}", "warning")
-        
-        # Method 3: TinyMCE iframe (Visual mode)
-        if not content_added:
-            try:
-                # Try to access TinyMCE iframe
-                tinymce_frame = page.frame_locator("#content_ifr")
-                tinymce_body = tinymce_frame.locator("body#tinymce, body.mce-content-body")
-                
-                if tinymce_body:
-                    tinymce_body.click()
-                    page.keyboard.press("Control+a")
-                    page.keyboard.type(content[:100])  # Just add some content
-                    content_added = True
-                    add_log("📄 Content added via TinyMCE iframe", "success")
-            except Exception as e:
-                add_log(f"TinyMCE method failed: {e}", "warning")
-        
+
         if content_added:
             return True
         else:
             add_log("Failed to add content - all methods failed", "error")
             return False
-        
+
     except Exception as e:
         add_log(f"Failed to set content: {e}", "error")
         return False
@@ -739,291 +1882,709 @@ def set_rank_math_keyword(page: Page, keyword: str) -> bool:
         add_log(f"Error setting Rank Math keyword: {e}", "warning")
         return False
 
-def select_random_image(page: Page, alt_text: str) -> bool:
-    try:
-        # Wait for media modal to appear
-        try:
-            page.wait_for_selector(".media-modal", timeout=5000)
-        except:
-            add_log("Không tìm thấy modal chọn ảnh", "warning")
-            return False
-        
-        # Wait for images to load (reduced from 8s to 3s)
-        add_log("Waiting for media library to load...", "info")
-        time.sleep(3)
-        
-        # Click on "Thư viện Media" tab if available to ensure we see images
-        try:
-            media_lib_tab = page.locator(".media-menu-item:has-text('Thư viện Media'), .media-menu-item:has-text('Media Library')").first
-            if media_lib_tab.is_visible(timeout=1000):
-                media_lib_tab.click()
-                time.sleep(1)
-        except:
-            pass
-        
-        # Find images
-        images = page.locator(".attachments .attachment, li.attachment").all()
-        
-        if not images:
-            add_log("No images found in media library", "warning")
-            force_close_all_modals(page)
-            return False
-        
-        add_log(f"Tìm thấy {len(images)} hình ảnh", "info")
-        
-        # Select first visible image (more reliable than random)
-        for i, img in enumerate(images[:5]):  # Try first 5 images
-            try:
-                if img.is_visible(timeout=500):
-                    img.click()
-                    add_log(f"Clicked image {i+1}", "info")
-                    time.sleep(1)
-                    break
-            except:
-                continue
-        
-        # Set alt text with keyword
-        time.sleep(0.5)  # Wait for details panel
-        alt_selectors = [
-            "input[data-setting='alt']",
-            "#attachment-details-alt-text",
-            ".attachment-details input[type='text']",
-            "input[name='alt']"
-        ]
-        
-        for alt_sel in alt_selectors:
-            try:
-                alt_input = page.locator(alt_sel).first
-                if alt_input.is_visible(timeout=800):
-                    alt_input.click()
-                    alt_input.fill("")  # Clear first
-                    time.sleep(0.1)
-                    alt_input.fill(alt_text)
-                    add_log(f"Featured image alt: {alt_text}", "info")
-                    time.sleep(0.2)
-                    break
-            except:
-                continue
-        
-        # Click "Đặt ảnh đại diện" / "Set featured image" button
-        set_featured_selectors = [
-            "button.media-button-select",
-            "button:has-text('Đặt ảnh đại diện')",
-            "button:has-text('Set featured image')",
-            ".media-button-select",
-            "button.button-primary"
-        ]
-        
-        clicked = False
-        for selector in set_featured_selectors:
-            try:
-                btn = page.locator(selector).first
-                if btn.is_visible(timeout=1000):
-                    btn.click()
-                    add_log(f"Clicked: {selector}", "success")
-                    clicked = True
-                    time.sleep(1)
-                    break
-            except:
-                continue
-        
-        if not clicked:
-            add_log("Could not find set featured image button", "warning")
-            force_close_all_modals(page)
-            return False
-        
-        # Close modal after setting
-        time.sleep(1)
-        force_close_all_modals(page)
-        
-        return True
-        
-    except Exception as e:
-        add_log(f"Error in image selection: {e}", "warning")
-        force_close_all_modals(page)
-        return False
+# ===== Image Insertion Reliability Constants (bugfix: image-insertion-reliability-fix) =====
+MAX_RETRY_ROUNDS = 2           # Phase 2 outer retry rounds
+MAX_SLOT_RETRIES = 2           # Per-slot internal retries for flaky sub-steps
+MEDIA_LIB_POLL_TIMEOUT = 5000  # ms total polling attachments
+MEDIA_LIB_POLL_INTERVAL = 500  # ms per check
+MEDIA_MODAL_TIMEOUT = 5000     # ms (giữ nguyên giá trị cũ)
+ADD_MEDIA_BTN_TIMEOUT = 3000   # ms (tăng nhẹ từ 2000ms cũ)
 
-def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
-    """Insert images after H2 headings using Visual Editor.
-    
-    Inserts images after H2 at positions 1, 3, 5 (indices 0, 2, 4).
-    Re-fetches H2 elements after each insert to avoid stale references.
+
+def _count_imgs_in_iframe(page: Page) -> int:
+    """Đếm số <img> hiện hữu trong TinyMCE iframe (#content_ifr).
+
+    Dùng JS evaluate để tránh stale locator giữa các iteration —
+    1 round-trip duy nhất, nhanh hơn locator.count().
+
+    Returns 0 nếu iframe chưa sẵn sàng (best-effort, không raise).
     """
     try:
-        add_log("Đang chèn hình vào bài viết...", "info")
-        close_all_modals(page)
-        
-        # Switch to Visual mode first
+        return int(
+            page.frame_locator("#content_ifr").locator("body").evaluate(
+                "() => document.querySelectorAll('img').length"
+            )
+        )
+    except Exception:
+        return 0
+
+
+def _get_h2_elements_in_iframe(page: Page) -> list:
+    """Re-fetch H2 elements an toàn từ TinyMCE iframe.
+
+    Sleep 0.3s để DOM settle, tránh stale locator sau modal close.
+
+    Returns: list of Playwright locators (có thể rỗng nếu iframe chưa sẵn sàng).
+    """
+    try:
+        time.sleep(0.3)
+        return page.frame_locator("#content_ifr").locator("h2").all()
+    except Exception:
+        return []
+
+
+def _img_is_after_h2(page: Page, h2_index: int) -> bool:
+    """Verify ảnh nằm dưới H2 thứ h2_index thông qua DOM sibling check.
+
+    Duyệt tối đa 2 sibling kế tiếp của H2 (TinyMCE thường wrap <img> trong <p>),
+    trả True nếu thấy <img> trực tiếp hoặc descendant trong sibling đó.
+
+    Returns False nếu h2_index out of range hoặc lỗi evaluate.
+    """
+    try:
+        return page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(_, idx) => {
+                const h2s = document.querySelectorAll('h2');
+                if (idx >= h2s.length) return false;
+                const h2 = h2s[idx];
+                let cur = h2.nextElementSibling;
+                for (let i = 0; i < 2 && cur; i++) {
+                    if (cur.tagName === 'IMG') return true;
+                    if (cur.querySelector && cur.querySelector('img')) return true;
+                    cur = cur.nextElementSibling;
+                }
+                return false;
+            }""",
+            h2_index,
+        )
+    except Exception:
+        return False
+
+
+def _switch_to_visual_mode(page: Page) -> None:
+    """Click `#content-tmce` để chuyển TinyMCE sang Visual mode.
+
+    Best-effort: nếu tab không visible hoặc click fail thì chỉ log warning,
+    không raise. Behavior giữ nguyên từ logic gốc trong insert_images_after_h2
+    để đảm bảo preservation (Clause 3.4).
+    """
+    try:
+        visual_tab = page.locator("#content-tmce").first
+        if visual_tab.is_visible(timeout=2000):
+            visual_tab.click()
+            time.sleep(1)
+            add_log("Switched to Visual mode", "info")
+    except Exception as e:
+        add_log(f"Could not switch to Visual mode: {e}", "warning")
+
+
+def _finalize(page: Page, max_images: int, reason: str) -> bool:
+    """Đóng modal, log final count theo DOM, return bool dựa trên DOM count.
+
+    Gọi `close_all_modals(page)` trước khi đếm để đảm bảo Clause 3.7.
+    Return True nếu DOM có ít nhất 1 ảnh; ngược lại False.
+    `reason` chỉ dùng cho log diagnostic ("done", "no_h2", "stopped", ...).
+    """
+    close_all_modals(page)
+    final = _count_imgs_in_iframe(page)
+    if final >= max_images:
+        add_log(f"Total images inserted: {final}/{max_images}", "success")
+    else:
+        add_log(
+            f"Total images inserted: {final}/{max_images} "
+            f"(reason={reason}) — proceeding without blocking post",
+            "warning",
+        )
+    return final > 0
+
+
+def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
+    """Atomic insert một ảnh tại vị trí H2 thứ h2_index (0-based).
+
+    Thực hiện sub-flow Add Media → select → alt → link → Insert
+    với internal retry MAX_SLOT_RETRIES cho các sub-step yếu (Add Media btn,
+    media modal, attachments load) và DOM-based verification ở bước cuối.
+
+    Returns:
+        True nếu DOM count <img> tăng đúng 1 sau khi click Insert
+        (verify qua _count_imgs_in_iframe). False ngược lại — caller có thể
+        retry vị trí này ở vòng outer retry kế tiếp.
+
+    Respect stop/pause flags trước mỗi sub-step nặng. Không raise — bất kỳ
+    exception nào trong sub-step đều được bắt và log warning.
+    """
+    for attempt in range(MAX_SLOT_RETRIES + 1):
+        # Stop/Pause check trước mỗi attempt
+        if not state.is_running:
+            return False
+        if state.is_paused and not wait_if_paused():
+            return False
+
         try:
-            visual_tab = page.locator("#content-tmce").first
-            if visual_tab.is_visible(timeout=2000):
-                visual_tab.click()
-                time.sleep(1)
-                add_log("Switched to Visual mode", "info")
-        except Exception as e:
-            add_log(f"Could not switch to Visual mode: {e}", "warning")
-        
-        # H2 positions to insert images after (1st, 3rd, 5th = index 0, 2, 4)
-        target_h2_indices = [0, 2, 4]
-        images_inserted = 0
-        
-        for target_index in target_h2_indices:
-            if images_inserted >= max_images:
-                break
-            
-            # Check stop/pause
-            if not state.is_running:
-                add_log("Stopped while inserting images", "warning")
+            if attempt > 0:
+                add_log(
+                    f"Slot retry {attempt}/{MAX_SLOT_RETRIES} cho H2 #{h2_index + 1}",
+                    "info",
+                )
+                close_all_modals(page)
+                _switch_to_visual_mode(page)
+
+            # === Step 1: Position cursor at end of H2 ===
+            h2_elements = _get_h2_elements_in_iframe(page)
+            if h2_index >= len(h2_elements):
+                add_log(
+                    f"H2 #{h2_index + 1} không tồn tại (chỉ có {len(h2_elements)} H2)",
+                    "warning",
+                )
                 return False
-            if state.is_paused:
-                if not wait_if_paused():
-                    return False
-            
+            h2_element = h2_elements[h2_index]
             try:
-                add_log(f"Attempting to insert image after H2 #{target_index + 1}...", "info")
-                
-                # IMPORTANT: Re-fetch H2 elements each iteration (DOM changes after insert)
-                page.wait_for_timeout(500)  # Wait for DOM to settle
-                h2_elements = page.frame_locator("#content_ifr").locator("h2").all()
-                
-                if not h2_elements:
-                    add_log("No H2 elements found in iframe", "warning")
-                    return False
-                
-                if target_index >= len(h2_elements):
-                    add_log(f"H2 #{target_index + 1} not found (only {len(h2_elements)} H2s)", "info")
-                    continue
-                
-                # Click on the H2 to position cursor
-                h2_element = h2_elements[target_index]
                 h2_element.scroll_into_view_if_needed()
                 time.sleep(0.3)
                 h2_element.click()
                 time.sleep(0.2)
-                
-                # Move to end of H2 and create new line
                 page.keyboard.press("End")
                 page.keyboard.press("Enter")
                 time.sleep(0.3)
-                
-                # Click Add Media button
-                add_btn = page.locator("#insert-media-button, .add_media").first
-                if not add_btn.is_visible(timeout=2000):
-                    add_log(f"Add Media button not visible for H2 #{target_index + 1}", "warning")
-                    continue
-                
+            except Exception as e:
+                add_log(f"Position cursor fail at H2 #{h2_index + 1}: {e}", "warning")
+                continue  # retry attempt
+
+            # === Step 2: Click Add Media với polling ===
+            add_btn = page.locator("#insert-media-button, .add_media").first
+            btn_visible = False
+            poll_start = time.time()
+            while (time.time() - poll_start) * 1000 < ADD_MEDIA_BTN_TIMEOUT:
+                try:
+                    if add_btn.is_visible(timeout=500):
+                        btn_visible = True
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.3)
+            if not btn_visible:
+                add_log(
+                    f"Add Media button not visible cho H2 #{h2_index + 1} "
+                    f"(attempt {attempt + 1})",
+                    "warning",
+                )
+                continue
+            try:
                 add_btn.click()
                 add_log("Clicked Add Media button", "info")
-                
-                # Wait for media modal to appear
-                try:
-                    page.wait_for_selector(".media-modal", timeout=5000)
-                    time.sleep(1.5)  # Wait for images to load
-                except:
-                    add_log("Media modal did not appear", "warning")
-                    close_all_modals(page)
-                    continue
-                
-                # Click Media Library tab if available
-                try:
-                    lib_tab = page.locator(".media-menu-item:has-text('Thư viện Media'), .media-menu-item:has-text('Media Library')").first
-                    if lib_tab.is_visible(timeout=1000):
-                        lib_tab.click()
-                        time.sleep(1)
-                except:
-                    pass
-                
-                # Select a random image
-                images = page.locator(".attachments .attachment, li.attachment").all()
-                if not images:
-                    add_log("No images in media library", "warning")
-                    close_all_modals(page)
-                    continue
-                
-                # Pick a random image from first 10
-                img_index = random.randint(0, min(len(images) - 1, 9))
-                images[img_index].click()
-                time.sleep(0.8)
-                add_log(f"Selected image {img_index + 1}", "info")
-                
-                # Set alt text with keyword
-                try:
-                    alt_selectors = [
-                        "input[data-setting='alt']",
-                        "#attachment-details-alt-text",
-                        ".attachment-details input[type='text']",
-                        "input.attachment-alt-text"
-                    ]
-                    for alt_sel in alt_selectors:
-                        try:
-                            alt = page.locator(alt_sel).first
-                            if alt.is_visible(timeout=800):
-                                alt.click()
-                                alt.fill("")
-                                time.sleep(0.1)
-                                alt.fill(keyword)
-                                add_log(f"Alt text set: {keyword}", "info")
-                                break
-                        except:
-                            continue
-                except:
-                    pass
-                
-                # Set link to attachment page (optional)
-                try:
-                    link = page.locator("select[data-setting='link']").first
-                    if link.is_visible(timeout=500):
-                        link.select_option("post")
-                except:
-                    pass
-                
-                # Click Insert into post button
-                inserted = False
-                insert_selectors = [
-                    "button.media-button-insert",
-                    "button:has-text('Chèn vào bài viết')",
-                    "button:has-text('Insert into post')",
-                    ".media-button-insert"
-                ]
-                
-                for sel in insert_selectors:
-                    try:
-                        btn = page.locator(sel).first
-                        if btn.is_visible(timeout=1000):
-                            btn.click()
-                            inserted = True
-                            images_inserted += 1
-                            add_log(f"Inserted image {images_inserted} after H2 #{target_index + 1}", "success")
-                            time.sleep(1)  # Wait for insert to complete
-                            break
-                    except:
-                        continue
-                
-                if not inserted:
-                    add_log(f"Failed to insert image after H2 #{target_index + 1}", "warning")
-                
-                # Close modal and wait before next iteration
-                close_all_modals(page)
-                time.sleep(0.5)
-                
-                # Switch back to Visual mode for next iteration
-                try:
-                    visual_tab = page.locator("#content-tmce").first
-                    if visual_tab.is_visible(timeout=1000):
-                        visual_tab.click()
-                        time.sleep(0.5)
-                except:
-                    pass
-                
             except Exception as e:
-                add_log(f"Error inserting image after H2 #{target_index + 1}: {e}", "warning")
+                add_log(f"Click Add Media fail: {e}", "warning")
+                continue
+
+            # === Step 3: Wait media modal ===
+            try:
+                page.wait_for_selector(".media-modal", timeout=MEDIA_MODAL_TIMEOUT)
+                time.sleep(1.0)
+            except Exception:
+                add_log(
+                    f"Media modal không xuất hiện cho H2 #{h2_index + 1} "
+                    f"(attempt {attempt + 1})",
+                    "warning",
+                )
                 close_all_modals(page)
                 continue
-        
+
+            # === Step 3b: Switch to Media Library tab if available ===
+            try:
+                lib_tab = page.locator(
+                    ".media-menu-item:has-text('Thư viện Media'), "
+                    ".media-menu-item:has-text('Media Library')"
+                ).first
+                if lib_tab.is_visible(timeout=1000):
+                    lib_tab.click()
+                    time.sleep(0.5)
+            except Exception:
+                pass
+
+            # === Step 4: Poll attachments load ===
+            images = []
+            poll_start = time.time()
+            while (time.time() - poll_start) * 1000 < MEDIA_LIB_POLL_TIMEOUT:
+                try:
+                    images = page.locator(
+                        ".attachments .attachment, li.attachment"
+                    ).all()
+                    if images:
+                        break
+                except Exception:
+                    images = []
+                time.sleep(MEDIA_LIB_POLL_INTERVAL / 1000)
+            if not images:
+                add_log(
+                    f"No images in media library cho H2 #{h2_index + 1} "
+                    f"(attempt {attempt + 1}) sau khi poll {MEDIA_LIB_POLL_TIMEOUT}ms",
+                    "warning",
+                )
+                close_all_modals(page)
+                continue
+
+            # === Step 4b: Pick random image trong top 10 ===
+            try:
+                img_idx = random.randint(0, min(len(images) - 1, 9))
+                images[img_idx].click()
+                time.sleep(0.8)
+                add_log(f"Selected image {img_idx + 1}", "info")
+            except Exception as e:
+                add_log(f"Select image fail: {e}", "warning")
+                close_all_modals(page)
+                continue
+
+            # === Step 5: Set alt text = keyword ===
+            try:
+                alt_selectors = [
+                    "input[data-setting='alt']",
+                    "#attachment-details-alt-text",
+                    ".attachment-details input[type='text']",
+                    "input.attachment-alt-text",
+                ]
+                for alt_sel in alt_selectors:
+                    try:
+                        alt = page.locator(alt_sel).first
+                        if alt.is_visible(timeout=800):
+                            alt.click()
+                            alt.fill("")
+                            time.sleep(0.1)
+                            alt.fill(keyword)
+                            add_log(f"Alt text set: {keyword}", "info")
+                            break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+
+            # === Step 5b: Set link to attachment page ===
+            try:
+                link = page.locator("select[data-setting='link']").first
+                if link.is_visible(timeout=500):
+                    link.select_option("post")
+            except Exception:
+                pass
+
+            # === Step 6: Click Insert + DOM verify ===
+            count_before = _count_imgs_in_iframe(page)
+            insert_selectors = [
+                "button.media-button-insert",
+                "button:has-text('Chèn vào bài viết')",
+                "button:has-text('Insert into post')",
+                ".media-button-insert",
+            ]
+            clicked = False
+            for sel in insert_selectors:
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible(timeout=1000):
+                        btn.click()
+                        clicked = True
+                        break
+                except Exception:
+                    continue
+            if not clicked:
+                add_log(
+                    f"Insert button không click được cho H2 #{h2_index + 1}",
+                    "warning",
+                )
+                close_all_modals(page)
+                continue
+
+            time.sleep(1.0)
+            count_after = _count_imgs_in_iframe(page)
+
+            if count_after != count_before + 1:
+                add_log(
+                    f"DOM count mismatch sau Insert (before={count_before}, "
+                    f"after={count_after}) — H2 #{h2_index + 1} "
+                    f"(attempt {attempt + 1})",
+                    "warning",
+                )
+                close_all_modals(page)
+                continue
+
+            # === Step 7: Position verify (best-effort, không undo) ===
+            if not _img_is_after_h2(page, h2_index):
+                add_log(
+                    f"Image inserted but not directly under H2 #{h2_index + 1} "
+                    f"— outer retry sẽ thử slot khác nếu cần",
+                    "warning",
+                )
+                # Vẫn return True vì DOM count đã tăng (ảnh có trong bài).
+                # Outer retry sẽ tự nhiên thử slot khác nếu chưa đủ max_images
+                # vì _find_unfilled_target_h2 sẽ thấy H2 này vẫn unfilled.
+            else:
+                add_log(
+                    f"Inserted image under H2 #{h2_index + 1} (verified)",
+                    "success",
+                )
+
+            # === Cleanup: close modal + switch back Visual mode ===
+            close_all_modals(page)
+            time.sleep(0.5)
+            _switch_to_visual_mode(page)
+            return True
+
+        except Exception as e:
+            add_log(
+                f"Unexpected error trong _try_insert_image_at_h2 "
+                f"H2 #{h2_index + 1} (attempt {attempt + 1}): {e}",
+                "warning",
+            )
+            close_all_modals(page)
+            continue
+
+    return False
+
+
+def _find_unfilled_target_h2(page: Page, target_indices: list) -> list:
+    """Trả về subset của target_indices chưa có ảnh sibling phía sau.
+
+    Filter các index thoả: idx < len(h2_elements) AND not _img_is_after_h2(page, idx).
+    Giữ thứ tự gốc của target_indices.
+
+    Args:
+        page: Playwright page
+        target_indices: list 0-based H2 index muốn check (vd [0, 2, 4])
+
+    Returns:
+        list[int] các index unfilled, theo thứ tự gốc.
+    """
+    h2_elements = _get_h2_elements_in_iframe(page)
+    n = len(h2_elements)
+    unfilled = []
+    for idx in target_indices:
+        if idx >= n:
+            continue
+        if not _img_is_after_h2(page, idx):
+            unfilled.append(idx)
+    return unfilled
+
+
+def _find_other_unfilled_h2(page: Page, exclude_indices: set) -> list:
+    """Trả về list H2 index khác (ngoài exclude_indices) chưa có <img> kế tiếp.
+
+    Sắp xếp ascending (range tăng dần — ưu tiên 1, 3 trước index lớn hơn).
+    Dùng cho phase outer retry khi target H2 đã đầy hoặc out of range.
+
+    Args:
+        page: Playwright page
+        exclude_indices: set các H2 index cần loại trừ (thường là target_h2_indices)
+
+    Returns:
+        list[int] các index H2 còn trống ngoài exclude_indices, ascending.
+    """
+    h2_elements = _get_h2_elements_in_iframe(page)
+    n = len(h2_elements)
+    result = []
+    for idx in range(n):
+        if idx in exclude_indices:
+            continue
+        if not _img_is_after_h2(page, idx):
+            result.append(idx)
+    return result
+
+
+def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bool:
+    """Chèn 1 ảnh khi bài KHÔNG có H2. Position cursor vào paragraph theo slot_hint.
+
+    Args:
+        page: Playwright page
+        keyword: alt text cho ảnh
+        slot_hint: 'top' (paragraph đầu), 'middle' (paragraph giữa), 'bottom' (paragraph cuối)
+
+    Returns:
+        True nếu DOM count <img> tăng đúng 1 sau click Insert; False ngược lại.
+        KHÔNG verify position (không có H2 anchor).
+    """
+    if not state.is_running:
+        return False
+    if state.is_paused and not wait_if_paused():
+        return False
+
+    try:
+        # === Step 1: Position cursor vào paragraph theo slot_hint ===
+        try:
+            paragraphs = page.frame_locator("#content_ifr").locator("p").all()
+        except Exception:
+            paragraphs = []
+
+        if not paragraphs:
+            add_log(
+                f"Fallback ({slot_hint}): no paragraph in iframe — skip",
+                "warning",
+            )
+            return False
+
+        if slot_hint == "top":
+            target = paragraphs[0]
+        elif slot_hint == "middle":
+            target = paragraphs[len(paragraphs) // 2]
+        elif slot_hint == "bottom":
+            target = paragraphs[-1]
+        else:
+            add_log(f"Invalid slot_hint: {slot_hint}", "warning")
+            return False
+
+        try:
+            target.scroll_into_view_if_needed()
+            time.sleep(0.3)
+            target.click()
+            time.sleep(0.2)
+            page.keyboard.press("End")
+            page.keyboard.press("Enter")
+            time.sleep(0.3)
+        except Exception as e:
+            add_log(f"Fallback ({slot_hint}) position cursor fail: {e}", "warning")
+            return False
+
+        # === Step 2: Click Add Media với polling ===
+        add_btn = page.locator("#insert-media-button, .add_media").first
+        btn_visible = False
+        poll_start = time.time()
+        while (time.time() - poll_start) * 1000 < ADD_MEDIA_BTN_TIMEOUT:
+            try:
+                if add_btn.is_visible(timeout=500):
+                    btn_visible = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.3)
+        if not btn_visible:
+            add_log(f"Fallback ({slot_hint}): Add Media btn not visible", "warning")
+            return False
+        try:
+            add_btn.click()
+            add_log(f"Fallback ({slot_hint}): Clicked Add Media button", "info")
+        except Exception as e:
+            add_log(f"Fallback ({slot_hint}) click Add Media fail: {e}", "warning")
+            return False
+
+        # === Step 3: Wait media modal ===
+        try:
+            page.wait_for_selector(".media-modal", timeout=MEDIA_MODAL_TIMEOUT)
+            time.sleep(1.0)
+        except Exception:
+            add_log(f"Fallback ({slot_hint}): media modal không xuất hiện", "warning")
+            close_all_modals(page)
+            return False
+
+        # === Step 3b: Switch to Media Library tab ===
+        try:
+            lib_tab = page.locator(
+                ".media-menu-item:has-text('Thư viện Media'), "
+                ".media-menu-item:has-text('Media Library')"
+            ).first
+            if lib_tab.is_visible(timeout=1000):
+                lib_tab.click()
+                time.sleep(0.5)
+        except Exception:
+            pass
+
+        # === Step 4: Poll attachments ===
+        images = []
+        poll_start = time.time()
+        while (time.time() - poll_start) * 1000 < MEDIA_LIB_POLL_TIMEOUT:
+            try:
+                images = page.locator(
+                    ".attachments .attachment, li.attachment"
+                ).all()
+                if images:
+                    break
+            except Exception:
+                images = []
+            time.sleep(MEDIA_LIB_POLL_INTERVAL / 1000)
+        if not images:
+            add_log(f"Fallback ({slot_hint}): no images in media library", "warning")
+            close_all_modals(page)
+            return False
+
+        # === Step 4b: Pick random image trong top 10 ===
+        try:
+            img_idx = random.randint(0, min(len(images) - 1, 9))
+            images[img_idx].click()
+            time.sleep(0.8)
+            add_log(f"Fallback ({slot_hint}): selected image {img_idx + 1}", "info")
+        except Exception as e:
+            add_log(f"Fallback ({slot_hint}) select image fail: {e}", "warning")
+            close_all_modals(page)
+            return False
+
+        # === Step 5: Set alt text ===
+        try:
+            alt_selectors = [
+                "input[data-setting='alt']",
+                "#attachment-details-alt-text",
+                ".attachment-details input[type='text']",
+                "input.attachment-alt-text",
+            ]
+            for alt_sel in alt_selectors:
+                try:
+                    alt = page.locator(alt_sel).first
+                    if alt.is_visible(timeout=800):
+                        alt.click()
+                        alt.fill("")
+                        time.sleep(0.1)
+                        alt.fill(keyword)
+                        add_log(f"Alt text set: {keyword}", "info")
+                        break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # === Step 5b: Set link to attachment page ===
+        try:
+            link = page.locator("select[data-setting='link']").first
+            if link.is_visible(timeout=500):
+                link.select_option("post")
+        except Exception:
+            pass
+
+        # === Step 6: Click Insert + DOM verify ===
+        count_before = _count_imgs_in_iframe(page)
+        insert_selectors = [
+            "button.media-button-insert",
+            "button:has-text('Chèn vào bài viết')",
+            "button:has-text('Insert into post')",
+            ".media-button-insert",
+        ]
+        clicked = False
+        for sel in insert_selectors:
+            try:
+                btn = page.locator(sel).first
+                if btn.is_visible(timeout=1000):
+                    btn.click()
+                    clicked = True
+                    break
+            except Exception:
+                continue
+        if not clicked:
+            add_log(f"Fallback ({slot_hint}): insert button không click được", "warning")
+            close_all_modals(page)
+            return False
+
+        time.sleep(1.0)
+        count_after = _count_imgs_in_iframe(page)
+
+        if count_after != count_before + 1:
+            add_log(
+                f"Fallback ({slot_hint}): DOM count mismatch "
+                f"(before={count_before}, after={count_after})",
+                "warning",
+            )
+            close_all_modals(page)
+            return False
+
+        add_log(f"Fallback ({slot_hint}): inserted image successfully", "success")
         close_all_modals(page)
-        add_log(f"Total images inserted: {images_inserted}/{max_images}", "success")
-        return images_inserted > 0
-        
+        time.sleep(0.5)
+        _switch_to_visual_mode(page)
+        return True
+
+    except Exception as e:
+        add_log(f"Fallback ({slot_hint}) unexpected error: {e}", "warning")
+        close_all_modals(page)
+        return False
+
+
+def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
+    """Insert images after H2 headings using Visual Editor.
+
+    Inserts up to `max_images` images after H2 at positions 1, 3, 5
+    (indices 0, 2, 4). Sử dụng DOM-based verification (`_count_imgs_in_iframe`)
+    và per-slot retry (`_try_insert_image_at_h2`). Khi bài không có H2,
+    fallback chèn vào sau paragraph top/middle/bottom (`_fallback_insert_image_no_h2`).
+
+    Phase 2 outer retry rounds (cover library/modal flakiness, thiếu H2)
+    chạy tối đa MAX_RETRY_ROUNDS lần sau Phase 1 nếu DOM count < max_images.
+
+    Returns True nếu DOM iframe có >= 1 ảnh sau khi xử lý; False ngược lại.
+    """
+    try:
+        add_log("Đang chèn hình vào bài viết...", "info")
+        close_all_modals(page)
+        _switch_to_visual_mode(page)
+
+        target_h2_indices = [0, 2, 4]
+        attempted_indices: set = set()
+
+        # ----- PHASE 1: Initial pass over target H2 indices -----
+        h2_elements = _get_h2_elements_in_iframe(page)
+
+        # Early branch: bài không có H2 → fallback paragraph
+        if not h2_elements:
+            add_log("No H2 elements found — using paragraph fallback", "warning")
+            for slot_hint in ("top", "middle", "bottom"):
+                if not state.is_running:
+                    return _finalize(page, max_images, "stopped")
+                if state.is_paused and not wait_if_paused():
+                    return _finalize(page, max_images, "stopped")
+                if _count_imgs_in_iframe(page) >= max_images:
+                    break
+                _fallback_insert_image_no_h2(page, keyword, slot_hint)
+            return _finalize(page, max_images, "no_h2")
+
+        # Phase 1 main loop: chèn vào target H2 indices
+        for target_index in target_h2_indices:
+            if _count_imgs_in_iframe(page) >= max_images:
+                break
+            if not state.is_running:
+                add_log("Stopped while inserting images", "warning")
+                return _finalize(page, max_images, "stopped")
+            if state.is_paused and not wait_if_paused():
+                return _finalize(page, max_images, "stopped")
+
+            if target_index >= len(h2_elements):
+                add_log(
+                    f"H2 #{target_index + 1} not found "
+                    f"(only {len(h2_elements)} H2s) — will fallback later",
+                    "info",
+                )
+                continue
+
+            ok = _try_insert_image_at_h2(page, target_index, keyword)
+            if ok:
+                attempted_indices.add(target_index)
+
+        # ----- PHASE 2: Outer retry rounds với fallback (Clause 2.8) -----
+        for round_idx in range(MAX_RETRY_ROUNDS):
+            current_count = _count_imgs_in_iframe(page)
+            if current_count >= max_images:
+                break
+            if not state.is_running:
+                return _finalize(page, max_images, "stopped")
+            if state.is_paused and not wait_if_paused():
+                return _finalize(page, max_images, "stopped")
+
+            add_log(
+                f"Retry round {round_idx + 1}/{MAX_RETRY_ROUNDS}: "
+                f"have {current_count}/{max_images} — scanning for unfilled slots",
+                "info",
+            )
+
+            # 2a) Re-attempt target H2 indices that are still unfilled
+            unfilled_targets = _find_unfilled_target_h2(page, target_h2_indices)
+
+            # 2b) Then other H2 indices (1, 3, then ascending)
+            other_indices = _find_other_unfilled_h2(
+                page, exclude_indices=set(target_h2_indices)
+            )
+
+            candidate_order = unfilled_targets + other_indices
+            for h2_idx in candidate_order:
+                if _count_imgs_in_iframe(page) >= max_images:
+                    break
+                if not state.is_running:
+                    return _finalize(page, max_images, "stopped")
+                if state.is_paused and not wait_if_paused():
+                    return _finalize(page, max_images, "stopped")
+                _try_insert_image_at_h2(page, h2_idx, keyword)
+
+            # 2c) If still short and H2 list exhausted, paragraph fallback
+            if _count_imgs_in_iframe(page) < max_images:
+                remaining = max_images - _count_imgs_in_iframe(page)
+                slot_hints = ("bottom", "middle", "top")[:remaining]
+                for slot_hint in slot_hints:
+                    if not state.is_running:
+                        break
+                    if state.is_paused and not wait_if_paused():
+                        break
+                    _fallback_insert_image_no_h2(page, keyword, slot_hint)
+
+        return _finalize(page, max_images, "done")
+
     except Exception as e:
         add_log(f"Error in insert_images_after_h2: {e}", "error")
         close_all_modals(page)
@@ -1059,7 +2620,6 @@ def close_all_modals(page: Page, max_attempts: int = 2):
 
 # Alias for compatibility
 force_close_all_modals = close_all_modals
-close_any_media_modal = close_all_modals
 
 def select_random_image_for_content(page: Page, alt_text: str) -> bool:
     try:
@@ -1144,6 +2704,14 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         return False
 
 def select_first_category(page: Page) -> bool:
+    """Tick category cấu hình (hoặc fallback) trong Classic Editor.
+
+    Bulletproof timeout: mọi locator action đều bound timeout (≤ 1.5s) để
+    không hang khi DOM checklist có nhiều cấp con / element bị overlap.
+    """
+    add_log("Đang chọn danh mục...", "info")
+    deadline = time.time() + 15  # tổng deadline 15s — quá thì bỏ qua
+
     try:
         def normalize_text(value: str) -> str:
             value = (value or "").strip().lower()
@@ -1161,91 +2729,167 @@ def select_first_category(page: Page) -> bool:
         # Switch to "All categories" tab to avoid selecting from "Most Used".
         try:
             all_tab = page.locator("#category-tabs a[href='#category-all']").first
-            if all_tab.count():
-                all_tab.click()
+            if all_tab.count() > 0:
+                all_tab.click(timeout=1500)
                 time.sleep(0.3)
-        except:
+        except Exception:
             pass
 
-        category_rows = []
-        for checklist_selector in ["#categorychecklist li", "#categorychecklist-pop li"]:
-            checklist = page.locator(checklist_selector)
-            count = checklist.count()
-            for i in range(count):
-                item = checklist.nth(i)
-                label = item.locator("label").first
-                checkbox = item.locator("input[type='checkbox']").first
-                if not label.count() or not checkbox.count():
-                    continue
-                label_text = (label.inner_text() or "").strip()
-                if label_text:
-                    category_rows.append(
-                        {
-                            "item": item,
-                            "label": label,
-                            "checkbox": checkbox,
-                            "label_text": label_text,
-                            "label_norm": normalize_text(label_text),
-                        }
-                    )
+        # Đọc 1 lần qua JS — nhanh, không bị multiple round-trip locator,
+        # không bao giờ hang vì JS chạy synchronously trong page context.
+        try:
+            rows_data = page.evaluate(
+                """() => {
+                    const out = [];
+                    const lists = ['#categorychecklist', '#categorychecklist-pop'];
+                    for (const sel of lists) {
+                        const root = document.querySelector(sel);
+                        if (!root) continue;
+                        const items = root.querySelectorAll('li');
+                        items.forEach((li, idx) => {
+                            const cb = li.querySelector("input[type='checkbox']");
+                            const lb = li.querySelector('label');
+                            if (!cb || !lb) return;
+                            out.push({
+                                listSel: sel,
+                                index: idx,
+                                cbId: cb.id || '',
+                                cbValue: cb.value || '',
+                                checked: !!cb.checked,
+                                label: (lb.textContent || '').trim(),
+                            });
+                        });
+                    }
+                    return out;
+                }"""
+            ) or []
+        except Exception as e:
+            add_log(f"Không đọc được danh sách category: {e}", "warning")
+            return False
 
-        if not category_rows:
+        if not rows_data:
             add_log("No categories found", "warning")
             return False
 
-        # 1) Prefer exact normalized match, 2) then contains match.
-        target_row = None
+        add_log(f"Tìm thấy {len(rows_data)} danh mục", "info")
+
+        # Match: ưu tiên exact normalize → contains
+        target = None
         for target_name in preferred_names:
             target_norm = normalize_text(target_name)
-            target_row = next((r for r in category_rows if r["label_norm"] == target_norm), None)
-            if target_row:
+            target = next(
+                (r for r in rows_data if normalize_text(r["label"]) == target_norm),
+                None,
+            )
+            if target:
                 break
-            target_row = next((r for r in category_rows if target_norm in r["label_norm"]), None)
-            if target_row:
+            target = next(
+                (r for r in rows_data if target_norm in normalize_text(r["label"])),
+                None,
+            )
+            if target:
                 break
 
-        if target_row:
-            try:
-                target_row["item"].scroll_into_view_if_needed()
-            except:
-                pass
+        if time.time() > deadline:
+            add_log("Category selection vượt deadline — bỏ qua", "warning")
+            return False
 
+        if target:
+            # Tick + uncheck others bằng JS 1 round-trip — tránh nhiều
+            # locator.check() mỗi cái 30s timeout default.
             try:
-                if not target_row["checkbox"].is_checked():
-                    target_row["checkbox"].check(force=True)
-            except:
-                try:
-                    target_row["label"].click(force=True)
-                except:
-                    pass
-
-            try:
-                if target_row["checkbox"].is_checked():
-                    # Keep only the matched category checked for consistent posting behavior.
-                    for row in category_rows:
-                        if row is target_row:
-                            continue
-                        try:
-                            if row["checkbox"].is_checked():
-                                row["checkbox"].uncheck(force=True)
-                        except:
-                            continue
-                    add_log(f"Selected category: {target_row['label_text']}", "success")
+                ok = page.evaluate(
+                    """({ cbId, cbValue }) => {
+                        const lists = ['#categorychecklist', '#categorychecklist-pop'];
+                        let target = null;
+                        const allCbs = [];
+                        for (const sel of lists) {
+                            const root = document.querySelector(sel);
+                            if (!root) continue;
+                            root.querySelectorAll("input[type='checkbox']").forEach(cb => {
+                                allCbs.push(cb);
+                                if ((cbId && cb.id === cbId) ||
+                                    (cbValue && cb.value === cbValue)) {
+                                    target = cb;
+                                }
+                            });
+                        }
+                        if (!target) return { ok: false, reason: 'target not found' };
+                        // Uncheck all others, check target
+                        for (const cb of allCbs) {
+                            const want = (cb === target);
+                            if (cb.checked !== want) {
+                                cb.checked = want;
+                                cb.dispatchEvent(new Event('change', { bubbles: true }));
+                                cb.dispatchEvent(new Event('click', { bubbles: true }));
+                            }
+                        }
+                        // Scroll target into view nhẹ nhàng
+                        try { target.scrollIntoView({ block: 'center' }); } catch (e) {}
+                        return { ok: target.checked, reason: 'set' };
+                    }""",
+                    {"cbId": target["cbId"], "cbValue": target["cbValue"]},
+                )
+                if ok and ok.get("ok"):
+                    add_log(f"Selected category: {target['label']}", "success")
                     return True
-            except:
-                pass
+                add_log(
+                    f"JS check fail ({ok.get('reason') if ok else 'no result'}), "
+                    f"thử fallback locator",
+                    "warning",
+                )
+            except Exception as e:
+                add_log(f"JS category set error: {e} — thử fallback", "warning")
 
-        # Fallback: first unchecked category
-        for row in category_rows:
+            # Fallback locator-based với timeout chặt
+            if time.time() > deadline:
+                add_log("Vượt deadline trước fallback — bỏ qua", "warning")
+                return False
             try:
-                if row["checkbox"].is_visible() and not row["checkbox"].is_checked():
-                    row["checkbox"].check(force=True)
-                    add_log(f"Selected fallback category: {row['label_text']}", "success")
-                    return True
-            except:
-                continue
+                cb_sel = (
+                    f"#{target['cbId']}" if target["cbId"]
+                    else f"input[type='checkbox'][value='{target['cbValue']}']"
+                )
+                cb = page.locator(cb_sel).first
+                cb.scroll_into_view_if_needed(timeout=1500)
+                cb.check(force=True, timeout=2000)
+                add_log(f"Selected (locator): {target['label']}", "success")
+                return True
+            except Exception as e:
+                add_log(f"Locator check fail: {e}", "warning")
 
-        add_log("Category already selected", "info")
+        # Fallback: tick first unchecked — cũng qua JS để tránh hang
+        if time.time() > deadline:
+            return False
+        try:
+            picked_label = page.evaluate(
+                """() => {
+                    const lists = ['#categorychecklist', '#categorychecklist-pop'];
+                    for (const sel of lists) {
+                        const root = document.querySelector(sel);
+                        if (!root) continue;
+                        const cbs = root.querySelectorAll("input[type='checkbox']");
+                        for (const cb of cbs) {
+                            if (!cb.checked) {
+                                cb.checked = true;
+                                cb.dispatchEvent(new Event('change', { bubbles: true }));
+                                cb.dispatchEvent(new Event('click', { bubbles: true }));
+                                const li = cb.closest('li');
+                                const lb = li ? li.querySelector('label') : null;
+                                return (lb && lb.textContent || '').trim();
+                            }
+                        }
+                    }
+                    return null;
+                }"""
+            )
+            if picked_label:
+                add_log(f"Selected fallback category: {picked_label}", "success")
+                return True
+        except Exception:
+            pass
+
+        add_log("Category already selected hoặc không có lựa chọn khác", "info")
         return True
 
     except Exception as e:
@@ -1623,10 +3267,44 @@ def set_featured_image(page: Page, keyword: str) -> bool:
 
 def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: datetime = None) -> bool:
     try:
+        # Pre-publish sync: ép TinyMCE flush nội dung iframe → textarea trước
+        # khi submit form. Classic Editor tự gọi triggerSave() lúc submit, nhưng
+        # nếu iframe đang Visual mode mà chưa fully init, hoặc user vừa edit
+        # qua DOM (insert ảnh, ...), bước này đảm bảo textarea có HTML mới nhất.
+        try:
+            page.evaluate(
+                """() => {
+                    if (window.tinymce) {
+                        try { tinymce.triggerSave(); } catch (e) {}
+                        const ed = tinymce.get('content');
+                        if (ed) {
+                            try { ed.save(); } catch (e) {}
+                        }
+                    }
+                }"""
+            )
+        except Exception:
+            pass
+
+        # Cuộn lên đầu trang — nút Publish của Classic Editor nằm ở sidebar
+        # góc trên phải; cuộn về đầu đảm bảo cả khu Publish meta box đều visible.
+        try:
+            page.evaluate("window.scrollTo({ top: 0, behavior: 'instant' })")
+        except Exception:
+            try:
+                page.evaluate("window.scrollTo(0, 0)")
+            except Exception:
+                pass
+        time.sleep(0.4)
+
         # For scheduling in Classic Editor
         if is_schedule and publish_date:
             # Click "Chỉnh sửa" next to "Xuất bản ngay lập tức" to open date picker
             edit_date_link = page.locator(".edit-timestamp, a.edit-timestamp, #timestamp a").first
+            try:
+                edit_date_link.scroll_into_view_if_needed(timeout=2000)
+            except Exception:
+                pass
             
             if edit_date_link.is_visible(timeout=2000):
                 edit_date_link.click()
@@ -1666,27 +3344,60 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
         
         # Click Publish/Schedule button - in Classic Editor it's just #publish
         add_log("Preparing to publish...", "info")
-        
-        # Wait a moment for any overlays to disappear
-        time.sleep(1)
-        
-        # Scroll to publish button area
+
+        # Đảm bảo đã ở đầu trang (phòng trường hợp date picker kéo scroll xuống)
         try:
-            page.evaluate("document.getElementById('publish').scrollIntoView({block: 'center'})")
-        except:
+            page.evaluate("window.scrollTo(0, 0)")
+        except Exception:
             pass
-        time.sleep(0.5)
-        
-        # Try to click using JavaScript to bypass any overlay
+        time.sleep(0.4)
+
+        publish_btn = page.locator("#publish, input#publish, #publishing-action input[type='submit']").first
+
+        # Cuộn nút Publish vào viewport — đây là điểm bạn hay phải thao tác tay.
+        # scroll_into_view_if_needed hoạt động kể cả với element ngoài viewport.
         try:
-            page.evaluate("document.getElementById('publish').click()")
+            publish_btn.scroll_into_view_if_needed(timeout=3000)
+            add_log("Đã cuộn tới nút Publish", "info")
+            time.sleep(0.3)
+        except Exception as scroll_err:
+            add_log(f"Không scroll được tới nút Publish: {scroll_err}", "warning")
+
+        # Thử 3 cách click theo thứ tự ưu tiên
+        clicked = False
+
+        # 1) Playwright click (respect visibility/position)
+        try:
+            publish_btn.click(timeout=3000)
+            clicked = True
             add_log("Clicked publish button", "info")
-        except Exception as js_err:
-            add_log(f"JS click failed: {js_err}, trying regular click", "warning")
-            # Fallback to regular click
-            publish_btn = page.locator("#publish, input#publish").first
-            if publish_btn.is_visible(timeout=3000):
-                publish_btn.click(force=True)
+        except Exception as click_err:
+            add_log(f"Click trực tiếp fail: {click_err}", "warning")
+
+        # 2) Force click (bỏ qua overlay)
+        if not clicked:
+            try:
+                publish_btn.click(force=True, timeout=2000)
+                clicked = True
+                add_log("Force-clicked publish button", "info")
+            except Exception as force_err:
+                add_log(f"Force click fail: {force_err}", "warning")
+
+        # 3) JS click — fallback cuối
+        if not clicked:
+            try:
+                page.evaluate(
+                    "document.getElementById('publish')?.click() "
+                    "|| document.querySelector('#publishing-action input[type=submit]')?.click()"
+                )
+                clicked = True
+                add_log("JS-clicked publish button", "info")
+            except Exception as js_err:
+                add_log(f"JS click fail: {js_err}", "error")
+
+        if not clicked:
+            add_log("Không thể click nút Publish", "error")
+            return False
         
         # Wait for page to reload - this is critical
         add_log("Đang lưu bài viết...", "info")
@@ -1920,8 +3631,9 @@ def run_automation():
     state.total_tasks = total_topics * 2
     state.generated_contents = []
     
-    # For non-gemini_web providers, generate content first
-    if provider != "gemini_web":
+    # For non-browser providers (ollama, gemini API), generate content first
+    is_browser_provider = provider in ("gemini_web", "chatgpt_web")
+    if not is_browser_provider:
         add_log(f"Phase 1: Generating content with {provider.upper()}...", "info")
         state.current_task = "Generating content..."
         
@@ -1951,7 +3663,8 @@ def run_automation():
             state.is_running = False
             return
     else:
-        add_log("Gemini Web Chat: Content will be generated in browser...", "info")
+        provider_label = "Gemini Web Chat" if provider == "gemini_web" else "ChatGPT Web"
+        add_log(f"{provider_label}: Content will be generated in browser...", "info")
     
     add_log("Phase 2: WordPress Automation...", "info")
     state.current_task = "Starting browser..."
@@ -1984,10 +3697,13 @@ def run_automation():
             viewport={"width": 1920, "height": 1080},
             locale="vi-VN",
             slow_mo=100,
+            ignore_https_errors=True,  # Một số WP site dùng cert self-signed / expired
             args=[
                 "--no-first-run",
                 "--no-default-browser-check",
-                "--disable-blink-features=AutomationControlled"
+                "--disable-blink-features=AutomationControlled",
+                "--ignore-certificate-errors",
+                "--allow-insecure-localhost",
             ]
         )
         
@@ -2002,9 +3718,16 @@ def run_automation():
         page.set_default_timeout(60000)
         
         try:
-            # For Gemini Web, generate content first using browser
-            if provider == "gemini_web":
-                add_log("Phase 1: Generating content with Gemini Web Chat...", "info")
+            # For browser-based providers (Gemini Web / ChatGPT Web),
+            # generate content using the same context.
+            if provider in ("gemini_web", "chatgpt_web"):
+                provider_label = (
+                    "Gemini Web Chat" if provider == "gemini_web" else "ChatGPT Web"
+                )
+                add_log(
+                    f"Phase 1: Generating content with {provider_label}...",
+                    "info",
+                )
                 
                 for i, topic in enumerate(state.topics):
                     if not state.is_running:
@@ -2016,11 +3739,20 @@ def run_automation():
                         add_log("Stopped while paused", "warning")
                         break
                     
-                    state.current_task = f"Generating content {i+1}/{total_topics} via Gemini Web..."
+                    state.current_task = (
+                        f"Generating content {i+1}/{total_topics} via {provider_label}..."
+                    )
                     state.current_title = topic["title"]
                     state.current_keyword = topic["keyword"]
                     
-                    content = generate_content_gemini_web(page, topic["title"], topic["keyword"])
+                    if provider == "gemini_web":
+                        content = generate_content_gemini_web(
+                            page, topic["title"], topic["keyword"]
+                        )
+                    else:
+                        content = generate_content_chatgpt_web(
+                            page, topic["title"], topic["keyword"]
+                        )
                     state.generated_contents.append(content)
                     
                     # Store cleaned content for preview
@@ -2029,7 +3761,6 @@ def run_automation():
                         cleaned_content = clean_gemini_content(content)
                         state.current_content = cleaned_content
                         # Count words
-                        import re
                         text_only = re.sub(r'<[^>]*>', ' ', cleaned_content)
                         word_count = len(text_only.split())
                         # Add to content list
@@ -2043,17 +3774,36 @@ def run_automation():
                     state.progress = ((i + 1) / state.total_tasks) * 100
                     
                     if i < len(state.topics) - 1 and state.is_running:
-                        time.sleep(3)  # Short delay between Gemini requests
+                        time.sleep(3)  # Short delay between requests
                 
                 successful_gen = sum(1 for c in state.generated_contents if c is not None)
-                add_log(f"Generated {successful_gen}/{total_topics} articles via Gemini Web", "success")
+                add_log(
+                    f"Generated {successful_gen}/{total_topics} articles via {provider_label}",
+                    "success",
+                )
                 
                 if successful_gen == 0:
                     add_log("No content generated. Stopping.", "error")
                     state.is_running = False
                     context.close()
                     return
-            
+
+                # Tách tab: đóng tab AI đang chạy, mở tab mới sạch cho WordPress.
+                # Service worker + beforeunload handler trên Gemini/ChatGPT có
+                # thể gây ERR_ABORTED khi navigate sang domain khác.
+                try:
+                    add_log("Mở tab mới sạch cho WordPress...", "info")
+                    new_page = context.new_page()
+                    new_page.set_default_timeout(60000)
+                    old_page = page
+                    page = new_page
+                    try:
+                        old_page.close()
+                    except Exception:
+                        pass
+                except Exception as e:
+                    add_log(f"Không tạo được tab mới: {e} — tiếp tục với tab cũ", "warning")
+
             # Now login to WordPress
             if not login_to_wordpress(page):
                 add_log("Failed to login. Exiting...", "error")
@@ -2229,7 +3979,6 @@ def update_content(index):
         if 'content' in data:
             new_content = data['content']
             # Recalculate word count
-            import re
             text_only = re.sub(r'<[^>]*>', ' ', new_content)
             word_count = len(text_only.split())
             
@@ -2381,7 +4130,6 @@ def ollama_status():
 if __name__ == '__main__':
     # Create templates folder if not exists
     os.makedirs('templates', exist_ok=True)
-    os.makedirs('static', exist_ok=True)
     
     print("""
     ╔══════════════════════════════════════════════════════════╗

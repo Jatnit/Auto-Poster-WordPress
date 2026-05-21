@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WP_AUTOPOSTER // Matrix Terminal</title>
+    <title>WP Auto Poster</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <link
@@ -13,101 +13,140 @@
       rel="stylesheet"
     />
     <style>
+      /* =========================================================
+         DARK PRO THEME — inspired by Linear / Vercel / Raycast
+         Accent: emerald (giữ linh hồn "Matrix" nhưng dịu mắt)
+         ========================================================= */
       :root {
-        --bg-primary: #000000;
-        --bg-secondary: #0a0a0a;
-        --bg-card: rgba(0, 15, 0, 0.85);
-        --bg-input: rgba(0, 20, 0, 0.7);
-        --accent-primary: #00ff00;
-        --accent-secondary: #00cc00;
-        --accent-tertiary: #33ff33;
-        --accent-gradient: linear-gradient(
-          135deg,
-          #00ff00 0%,
-          #00cc00 50%,
-          #009900 100%
-        );
-        --accent-gradient-hover: linear-gradient(
-          135deg,
-          #33ff33 0%,
-          #00ff00 50%,
-          #00cc00 100%
-        );
-        --text-primary: #00ff00;
-        --text-secondary: #00cc00;
-        --text-muted: #008800;
-        --success: #00ff00;
-        --warning: #ffff00;
-        --error: #ff0000;
-        --info: #00ffff;
-        --border-color: rgba(0, 255, 0, 0.2);
-        --glass-bg: rgba(0, 255, 0, 0.03);
-        --shadow: 0 0 30px rgba(0, 255, 0, 0.2);
-        --shadow-glow: 0 0 50px rgba(0, 255, 0, 0.3);
-        --radius: 8px;
-        --radius-sm: 4px;
+        /* Background layers (dark) */
+        --bg-0: #0a0b0e;          /* page base */
+        --bg-1: #111318;          /* card base */
+        --bg-2: #1a1d24;          /* input / hover */
+        --bg-3: #242832;          /* elevated */
+
+        /* Borders */
+        --border: rgba(255, 255, 255, 0.08);
+        --border-strong: rgba(255, 255, 255, 0.14);
+        --border-accent: rgba(16, 185, 129, 0.35);
+
+        /* Text */
+        --text-primary: #e8eaed;
+        --text-secondary: #a0a4ad;
+        --text-muted: #6b7280;
+        --text-inverse: #0a0b0e;
+
+        /* Accent — emerald (giữ chất xanh Matrix) */
+        --accent: #10b981;
+        --accent-hover: #34d399;
+        --accent-dim: rgba(16, 185, 129, 0.12);
+        --accent-ring: rgba(16, 185, 129, 0.28);
+        --accent-primary: #10b981;    /* alias cho JS cũ */
+        --accent-secondary: #34d399;
+
+        /* Semantic */
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+        --info: #3b82f6;
+
+        /* Input shortcuts để giữ tương thích với JS cũ */
+        --bg-primary: var(--bg-0);
+        --bg-secondary: var(--bg-1);
+        --bg-card: var(--bg-1);
+        --bg-input: var(--bg-2);
+        --border-color: var(--border);
+
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+        --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+        --radius: 10px;
+        --radius-sm: 6px;
+        --radius-lg: 14px;
       }
 
-      * {
+      /* Light theme override — giữ toggle cũ chạy */
+      body.light-theme {
+        --bg-0: #f6f7f9;
+        --bg-1: #ffffff;
+        --bg-2: #f0f2f5;
+        --bg-3: #e6e9ee;
+        --border: rgba(0, 0, 0, 0.08);
+        --border-strong: rgba(0, 0, 0, 0.14);
+        --text-primary: #0f172a;
+        --text-secondary: #475569;
+        --text-muted: #94a3b8;
+        --text-inverse: #ffffff;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+      }
+
+      *, *::before, *::after {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
 
+      html {
+        font-size: 15px;
+        scroll-behavior: smooth;
+      }
+
       body {
-        font-family: "JetBrains Mono", "Share Tech Mono", monospace;
-        background: var(--bg-primary);
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, sans-serif;
+        background: var(--bg-0);
         color: var(--text-primary);
         min-height: 100vh;
-        overflow-x: hidden;
+        line-height: 1.55;
+        -webkit-font-smoothing: antialiased;
       }
 
-      /* Matrix rain background */
-      .matrix-rain {
+      /* Subtle radial glow thay cho matrix rain */
+      body::before {
+        content: "";
         position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        inset: 0;
         z-index: -1;
-        background: #000000;
-      }
-
-      .matrix-rain canvas {
-        display: block;
-        width: 100%;
-        height: 100%;
-      }
-
-      /* Scanline overlay */
-      .scanline-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        z-index: -1;
+        background:
+          radial-gradient(1200px 600px at 20% -10%,
+            rgba(16, 185, 129, 0.08), transparent 60%),
+          radial-gradient(800px 400px at 80% 110%,
+            rgba(59, 130, 246, 0.06), transparent 60%);
         pointer-events: none;
-        background: repeating-linear-gradient(
-          0deg,
-          transparent,
-          transparent 2px,
-          rgba(0, 0, 0, 0.1) 2px,
-          rgba(0, 0, 0, 0.1) 4px
-        );
       }
 
-      /* Header */
+      /* Legacy containers - giấu canvas matrix rain (JS cũ vẫn gọi initMatrixRain
+         nhưng sẽ không render nếu canvas display:none) */
+      .matrix-rain,
+      .scanline-overlay { display: none; }
+
+      /* Scrollbar tinh gọn */
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb {
+        background: var(--bg-3);
+        border-radius: 8px;
+        border: 2px solid var(--bg-0);
+      }
+      ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+      /* =========================================================
+         HEADER
+         ========================================================= */
       .header {
-        background: rgba(0, 0, 0, 0.95);
-        backdrop-filter: blur(10px);
-        -webkit-backdrop-filter: blur(10px);
-        border-bottom: 1px solid rgba(0, 255, 0, 0.3);
-        padding: 1rem 2rem;
+        background: rgba(10, 11, 14, 0.85);
+        backdrop-filter: saturate(180%) blur(16px);
+        -webkit-backdrop-filter: saturate(180%) blur(16px);
+        border-bottom: 1px solid var(--border);
+        padding: 0.9rem 1.5rem;
         position: sticky;
         top: 0;
         z-index: 100;
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
+      }
+      body.light-theme .header {
+        background: rgba(255, 255, 255, 0.85);
       }
 
       .header-content {
@@ -116,2247 +155,1046 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
+        gap: 1rem;
       }
 
-      .logo {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-      }
+      .logo { display: flex; align-items: center; gap: 12px; }
 
       .logo-icon {
-        width: 52px;
-        height: 52px;
-        background: transparent;
-        border: 2px solid var(--accent-primary);
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.5rem;
-        color: var(--accent-primary);
-        box-shadow:
-          0 0 20px rgba(0, 255, 0, 0.3),
-          inset 0 0 20px rgba(0, 255, 0, 0.1);
-        transition: all 0.3s ease;
-        animation: pulse 2s ease-in-out infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          box-shadow:
-            0 0 20px rgba(0, 255, 0, 0.3),
-            inset 0 0 20px rgba(0, 255, 0, 0.1);
-        }
-        50% {
-          box-shadow:
-            0 0 40px rgba(0, 255, 0, 0.5),
-            inset 0 0 30px rgba(0, 255, 0, 0.2);
-        }
-      }
-
-      .logo-icon:hover {
-        transform: scale(1.05);
-        box-shadow: 0 0 50px rgba(0, 255, 0, 0.6);
+        width: 40px; height: 40px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent) 0%, #059669 100%);
+        display: grid; place-items: center;
+        color: white;
+        font-size: 1.05rem;
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
       }
 
       .logo-text h1 {
-        font-size: 1.35rem;
+        font-size: 1rem;
         font-weight: 700;
-        color: var(--accent-primary);
-        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-        letter-spacing: 1px;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
       }
-
       .logo-text span {
-        font-size: 0.75rem;
-        color: var(--text-secondary);
-        letter-spacing: 2px;
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        letter-spacing: 0.06em;
         text-transform: uppercase;
+        font-weight: 500;
       }
 
       .status-badge {
-        display: flex;
+        display: inline-flex;
         align-items: center;
         gap: 10px;
-        padding: 10px 20px;
-        background: rgba(0, 255, 0, 0.05);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        border-radius: 4px;
-        font-size: 0.8rem;
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      .status-badge:hover {
-        background: rgba(0, 255, 0, 0.1);
-        box-shadow: 0 0 15px rgba(0, 255, 0, 0.2);
+        padding: 6px 12px;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        font-weight: 500;
       }
 
       .status-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
+        width: 8px; height: 8px;
         background: var(--text-muted);
+        border-radius: 50%;
         transition: all 0.3s ease;
       }
-
       .status-dot.running {
-        background: var(--success);
-        box-shadow: 0 0 15px var(--success);
-        animation: blink 0.8s infinite;
+        background: var(--accent);
+        box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.2);
+        animation: dot-pulse 1.5s ease-in-out infinite;
+      }
+      @keyframes dot-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
       }
 
-      @keyframes blink {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.3;
-        }
+      .theme-toggle-btn {
+        padding: 6px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
       }
+      .theme-toggle-btn:hover {
+        background: var(--bg-2);
+        color: var(--text-primary);
+      }
+      .toggle-icon { font-size: 0.95rem; }
 
-      /* Main container */
+      /* Layout: sidebar (config) + workspace (the rest) */
       .container {
-        max-width: 1440px;
+        max-width: 1400px;
         margin: 0 auto;
-        padding: 2.5rem;
+        padding: 1.5rem;
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2.5rem;
+        grid-template-columns: minmax(340px, 400px) 1fr;
+        gap: 1.25rem;
+        align-items: start;
+      }
+
+      .workspace {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+        min-width: 0; /* cho phép content shrink trong grid */
       }
 
       @media (max-width: 1024px) {
         .container {
           grid-template-columns: 1fr;
-          padding: 1.5rem;
         }
       }
 
       /* Cards */
       .card {
-        background: rgba(0, 10, 0, 0.9);
-        border-radius: var(--radius);
-        border: 1px solid rgba(0, 255, 0, 0.3);
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
         overflow: hidden;
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.1);
-        transition: all 0.3s ease;
+        transition: border-color 0.2s;
       }
-
-      .card:hover {
-        border-color: rgba(0, 255, 0, 0.5);
-        box-shadow: 0 0 30px rgba(0, 255, 0, 0.2);
-      }
+      .card:hover { border-color: var(--border-strong); }
+      /* Khi card nằm trong container (sidebar) vẫn cần margin-bottom = 0
+         vì container đã dùng gap */
 
       .card-header {
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid rgba(0, 255, 0, 0.2);
+        padding: 0.95rem 1.25rem;
         display: flex;
         align-items: center;
-        gap: 12px;
-        background: rgba(0, 255, 0, 0.05);
+        gap: 0.65rem;
+        border-bottom: 1px solid var(--border);
+        background: linear-gradient(180deg, var(--bg-1), transparent);
       }
-
-      .card-header::before {
-        content: ">";
-        color: var(--accent-primary);
-        font-weight: bold;
-        animation: blink 1s infinite;
-      }
-
       .card-header i {
-        font-size: 1rem;
-        color: var(--accent-primary);
+        color: var(--accent);
+        font-size: 0.95rem;
       }
-
       .card-header h2 {
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      .card-body {
-        padding: 1.5rem;
-      }
-
-      /* Form elements */
-      .form-group {
-        margin-bottom: 1.25rem;
-      }
-
-      .form-group:last-child {
-        margin-bottom: 0;
-      }
-
-      .form-label {
-        display: block;
-        font-size: 0.8rem;
-        font-weight: 500;
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      .form-label::before {
-        content: "$ ";
-        color: var(--accent-primary);
-      }
-
-      .form-input {
-        width: 100%;
-        padding: 12px 16px;
-        background: rgba(0, 20, 0, 0.8);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        border-radius: var(--radius-sm);
         color: var(--text-primary);
-        font-size: 0.85rem;
-        font-family: "JetBrains Mono", monospace;
-        transition: all 0.3s ease;
+        letter-spacing: -0.005em;
+      }
+      .card-body { padding: 1.25rem; }
+
+      /* Sidebar card sticks (dễ thao tác khi scroll xuống dưới) */
+      @media (min-width: 1025px) {
+        .container > .card:first-child {
+          position: sticky;
+          top: 5rem;
+          max-height: calc(100vh - 6rem);
+          overflow-y: auto;
+        }
       }
 
-      .form-input:focus {
-        outline: none;
-        border-color: var(--accent-primary);
-        box-shadow:
-          0 0 20px rgba(0, 255, 0, 0.2),
-          inset 0 0 10px rgba(0, 255, 0, 0.05);
-        background: rgba(0, 30, 0, 0.9);
+      .fade-in {
+        animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
-      .form-input::placeholder {
-        color: var(--text-muted);
-        font-style: italic;
-      }
-
-      textarea.form-input {
-        scrollbar-width: thin;
-        scrollbar-color: var(--accent-primary) rgba(0, 20, 0, 0.8);
-      }
-
-      textarea.form-input::-webkit-scrollbar {
-        width: 8px;
-      }
-
-      textarea.form-input::-webkit-scrollbar-track {
-        background: rgba(0, 20, 0, 0.8);
-        border-radius: 4px;
-      }
-
-      textarea.form-input::-webkit-scrollbar-thumb {
-        background: var(--accent-primary);
-        border-radius: 4px;
-        border: 1px solid rgba(0, 20, 0, 0.8);
-      }
-
-      textarea.form-input::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-secondary);
-      }
+      /* =========================================================
+         FORM CONTROLS
+         ========================================================= */
+      .form-group { margin-bottom: 1rem; }
 
       .form-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 1rem;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
       }
+
+      .form-label {
+        display: block;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 0.4rem;
+        letter-spacing: 0.01em;
+      }
+
+      .form-input {
+        width: 100%;
+        padding: 0.6rem 0.8rem;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.88rem;
+        font-family: inherit;
+        transition: all 0.15s;
+        line-height: 1.4;
+      }
+      textarea.form-input {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        resize: vertical;
+      }
+      .form-input::placeholder { color: var(--text-muted); }
+      .form-input:hover { border-color: var(--border-strong); }
+      .form-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-ring);
+      }
+      select.form-input {
+        cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0a4ad' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        padding-right: 2.2rem;
+      }
+      .form-input[type="date"] { cursor: pointer; }
 
       /* Toggle switch */
       .toggle-group {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        gap: 0.75rem;
       }
-
       .toggle {
         position: relative;
-        width: 48px;
-        height: 26px;
-      }
-
-      .toggle input {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-
-      .toggle-slider {
-        position: absolute;
-        cursor: pointer;
-        inset: 0;
-        background: var(--bg-input);
-        border-radius: 50px;
-        transition: 0.3s;
-      }
-
-      .toggle-slider::before {
-        content: "";
-        position: absolute;
-        height: 20px;
-        width: 20px;
-        left: 3px;
-        bottom: 3px;
-        background: var(--text-secondary);
-        border-radius: 50%;
-        transition: 0.3s;
-      }
-
-      .toggle input:checked + .toggle-slider {
-        background: var(--accent-gradient);
-      }
-
-      .toggle input:checked + .toggle-slider::before {
-        transform: translateX(22px);
-        background: white;
-      }
-
-      /* Topics list */
-      .topics-container {
-        max-height: 300px;
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: var(--accent-primary) var(--bg-input);
-      }
-
-      .topics-container::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .topics-container::-webkit-scrollbar-track {
-        background: var(--bg-input);
-        border-radius: 3px;
-      }
-
-      .topics-container::-webkit-scrollbar-thumb {
-        background: var(--accent-primary);
-        border-radius: 3px;
-      }
-
-      .topic-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px;
-        background: rgba(255, 255, 255, 0.03);
-        border-radius: var(--radius-sm);
-        margin-bottom: 8px;
-        transition: all 0.3s ease;
-      }
-
-      .topic-item:hover {
-        background: rgba(255, 255, 255, 0.06);
-      }
-
-      .topic-number {
-        width: 28px;
-        height: 28px;
-        background: var(--accent-gradient);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        font-weight: 600;
+        display: inline-block;
+        width: 38px;
+        height: 22px;
         flex-shrink: 0;
       }
-
-      .topic-content {
-        flex: 1;
-        min-width: 0;
+      .toggle input { opacity: 0; width: 0; height: 0; }
+      .toggle-slider {
+        position: absolute; cursor: pointer;
+        inset: 0;
+        background: var(--bg-3);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        transition: 0.2s;
+      }
+      .toggle-slider::before {
+        position: absolute; content: "";
+        height: 16px; width: 16px;
+        left: 2px; top: 50%;
+        transform: translateY(-50%);
+        background: white;
+        border-radius: 50%;
+        transition: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+      .toggle input:checked + .toggle-slider {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .toggle input:checked + .toggle-slider::before {
+        transform: translate(16px, -50%);
       }
 
-      .topic-title {
-        font-size: 0.875rem;
+      /* =========================================================
+         BUTTONS
+         ========================================================= */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        padding: 0.55rem 1rem;
+        background: var(--bg-2);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        font-family: inherit;
+        font-size: 0.82rem;
         font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        user-select: none;
+      }
+      .btn:hover {
+        background: var(--bg-3);
+        border-color: var(--border-strong);
+      }
+      .btn:active { transform: translateY(1px); }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #03231a;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      body.light-theme .btn-primary { color: white; }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
       }
 
-      .topic-keyword {
-        font-size: 0.75rem;
+      .btn-secondary {
+        background: var(--bg-2);
+        color: var(--text-primary);
+        border-color: var(--border);
+      }
+
+      .btn-warning {
+        background: var(--warning);
+        color: #2a1a00;
+        border-color: var(--warning);
+        font-weight: 600;
+      }
+      .btn-warning:hover { filter: brightness(1.1); }
+
+      .btn-danger {
+        background: var(--error);
+        color: white;
+        border-color: var(--error);
+        font-weight: 600;
+      }
+      .btn-danger:hover { filter: brightness(1.1); }
+
+      .btn-icon {
+        padding: 0.5rem 0.65rem;
+        background: var(--bg-2);
+      }
+
+      .btn-large {
+        padding: 0.75rem 1.4rem;
+        font-size: 0.9rem;
+      }
+
+      .btn-edit {
+        padding: 6px 10px;
+        background: var(--bg-2);
+        color: var(--info);
+        border-color: var(--border);
+      }
+      .btn-edit:hover {
+        background: var(--info);
+        color: white;
+        border-color: var(--info);
+      }
+
+      .btn-delete {
+        padding: 6px 10px;
+        background: var(--bg-2);
+        color: var(--error);
+        border-color: var(--border);
+      }
+      .btn-delete:hover {
+        background: var(--error);
+        color: white;
+        border-color: var(--error);
+      }
+
+      .btn-expand {
+        padding: 6px 12px;
+        background: var(--bg-2);
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+      }
+      .btn-expand:hover {
+        color: var(--text-primary);
+      }
+      .btn-expand.active {
+        background: var(--accent-dim);
+        color: var(--accent);
+        border-color: var(--border-accent);
+      }
+
+      /* Mode selector (pill tabs) */
+      .mode-btn {
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+      }
+      .mode-btn:hover { color: var(--text-primary); }
+      .mode-btn.active {
+        background: var(--accent-dim);
+        color: var(--accent);
+        border-color: var(--border-accent);
+      }
+
+      /* Tooltip */
+      .tooltip { position: relative; }
+      .tooltip::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: calc(100% + 6px);
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 4px 8px;
+        background: var(--bg-3);
+        color: var(--text-primary);
+        border-radius: 4px;
+        font-size: 0.72rem;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.15s;
+        box-shadow: var(--shadow-md);
+      }
+      .tooltip:hover::after { opacity: 1; }
+
+      /* =========================================================
+         TOPICS & EMPTY STATES
+         ========================================================= */
+      .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
         color: var(--text-muted);
       }
-
-      .topic-delete {
-        background: none;
-        border: none;
-        color: var(--error);
-        cursor: pointer;
-        padding: 4px;
-        opacity: 0.6;
-        transition: opacity 0.3s;
+      .empty-state i {
+        font-size: 2rem;
+        opacity: 0.5;
+        margin-bottom: 0.6rem;
+      }
+      .empty-state p {
+        font-size: 0.85rem;
       }
 
+      .topics-container {
+        max-height: 320px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .topic-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.7rem 0.85rem;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.5rem;
+        transition: all 0.15s;
+      }
+      .topic-item:hover {
+        border-color: var(--border-accent);
+        transform: translateX(2px);
+      }
+      .topic-number {
+        min-width: 22px;
+        height: 22px;
+        display: grid; place-items: center;
+        background: var(--accent-dim);
+        color: var(--accent);
+        font-size: 0.72rem;
+        font-weight: 600;
+        border-radius: 6px;
+        flex-shrink: 0;
+      }
+      .topic-content { flex: 1; min-width: 0; }
+      .topic-title {
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-primary);
+        word-break: break-word;
+      }
+      .topic-keyword {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-top: 0.2rem;
+      }
+      .topic-keyword i { color: var(--accent); margin-right: 2px; }
+      .topic-tags i { color: var(--text-muted); margin-right: 2px; }
+      .topic-delete {
+        padding: 4px 8px;
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: all 0.15s;
+        font-size: 0.75rem;
+      }
       .topic-delete:hover {
-        opacity: 1;
+        background: var(--error);
+        border-color: var(--error);
+        color: white;
       }
 
       .add-topic-form {
         display: flex;
-        gap: 8px;
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border-color);
+        gap: 0.5rem;
+        flex-wrap: wrap;
       }
+      .add-topic-form .form-input { flex: 1 1 200px; }
+      .add-topic-form .btn { flex-shrink: 0; }
 
-      .add-topic-form .form-input {
-        flex: 1;
-      }
 
-      /* Buttons */
-      .btn {
-        padding: 12px 24px;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 0.875rem;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-      }
-
-      .btn-primary {
-        background: transparent;
-        color: var(--accent-primary);
-        border: 2px solid var(--accent-primary);
-        position: relative;
-        overflow: hidden;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-      }
-
-      .btn-primary::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(0, 255, 0, 0.3),
-          transparent
-        );
-        transition: left 0.5s ease;
-      }
-
-      .btn-primary:hover::before {
-        left: 100%;
-      }
-
-      .btn-primary:hover {
-        background: rgba(0, 255, 0, 0.1);
-        box-shadow:
-          0 0 30px rgba(0, 255, 0, 0.4),
-          inset 0 0 20px rgba(0, 255, 0, 0.1);
-        text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
-      }
-
-      .btn-secondary {
-        background: transparent;
-        color: var(--text-secondary);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-      }
-
-      .btn-secondary:hover {
-        background: rgba(0, 255, 0, 0.1);
-        border-color: var(--accent-primary);
-      }
-
-      /* Mode selector buttons */
-      .mode-btn {
-        background: transparent;
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        color: var(--text-secondary);
-        transition: all 0.3s ease;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      .mode-btn:hover {
-        background: rgba(0, 255, 0, 0.1);
-        border-color: var(--accent-primary);
-        color: var(--text-primary);
-      }
-
-      .mode-btn.active {
-        background: rgba(0, 255, 0, 0.2);
-        border-color: var(--accent-primary);
-        color: var(--accent-primary);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-      }
-
-      .btn-danger {
-        background: transparent;
-        color: var(--error);
-        border: 2px solid var(--error);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-      }
-
-      .btn-danger:hover {
-        background: rgba(255, 0, 0, 0.1);
-        box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
-      }
-
-      .btn-icon {
-        width: 40px;
-        height: 40px;
-        padding: 0;
-        border-radius: var(--radius-sm);
-      }
-
-      .btn-large {
-        width: 100%;
-        padding: 16px 32px;
-        font-size: 0.9rem;
-        border-radius: var(--radius);
-      }
-
-      .btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none !important;
-      }
-
-      /* Progress section */
-      .progress-section {
-        grid-column: 1 / -1;
-      }
-
+      /* =========================================================
+         PROGRESS SECTION
+         ========================================================= */
       .progress-stats {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
       }
-
-      @media (max-width: 768px) {
-        .progress-stats {
-          grid-template-columns: repeat(2, 1fr);
-        }
-      }
-
       .stat-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 0.9rem;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        padding: 1.25rem;
         text-align: center;
-        transition: all 0.3s ease;
+        transition: all 0.15s;
       }
-
-      .stat-card:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(0, 212, 255, 0.15);
-        transform: translateY(-2px);
-      }
-
+      .stat-card:hover { border-color: var(--border-strong); }
       .stat-value {
-        font-size: 2rem;
+        font-size: 1.55rem;
         font-weight: 700;
-        margin-bottom: 0.25rem;
+        line-height: 1.1;
+        font-family: "JetBrains Mono", monospace;
       }
-
-      .stat-value.success {
-        color: var(--success);
-      }
-      .stat-value.warning {
-        color: var(--warning);
-      }
-      .stat-value.error {
-        color: var(--error);
-      }
-      .stat-value.info {
-        color: var(--info);
-      }
-
+      .stat-value.info { color: var(--info); }
+      .stat-value.success { color: var(--success); }
+      .stat-value.error { color: var(--error); }
+      .stat-value.warning { color: var(--warning); }
       .stat-label {
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         color: var(--text-muted);
+        margin-top: 0.25rem;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.04em;
       }
 
-      .progress-bar-container {
-        margin-bottom: 1.5rem;
-      }
-
+      .progress-bar-container { margin-bottom: 1.25rem; }
       .progress-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 0.5rem;
+        font-size: 0.82rem;
       }
-
-      .progress-task {
-        font-size: 0.875rem;
-        color: var(--text-secondary);
-      }
-
+      .progress-task { color: var(--text-secondary); }
       .progress-percent {
-        font-size: 0.875rem;
+        font-family: "JetBrains Mono", monospace;
         font-weight: 600;
-        color: var(--accent-primary);
+        color: var(--accent);
       }
-
       .progress-bar {
-        height: 10px;
-        background: var(--bg-input);
-        border-radius: 5px;
+        width: 100%;
+        height: 8px;
+        background: var(--bg-2);
+        border-radius: 999px;
         overflow: hidden;
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        border: 1px solid var(--border);
       }
-
       .progress-fill {
         height: 100%;
-        background: var(--accent-primary);
-        border-radius: 0;
-        transition: width 0.5s ease;
-        position: relative;
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.6);
-      }
-
-      .progress-fill::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(
-          90deg,
-          transparent 0%,
-          rgba(255, 255, 255, 0.4) 50%,
-          transparent 100%
-        );
-        animation: shimmer 1s infinite;
-      }
-
-      @keyframes shimmer {
-        0% {
-          transform: translateX(-100%);
-        }
-        100% {
-          transform: translateX(100%);
-        }
-      }
-
-      /* Logs - Terminal Style */
-      .logs-container {
-        height: 500px;
-        max-height: 70vh;
-        overflow-y: auto;
-        background: rgba(0, 5, 0, 0.95);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        border-radius: var(--radius-sm);
-        padding: 1rem;
-        font-family: "JetBrains Mono", "Share Tech Mono", monospace;
-        font-size: 0.75rem;
-        scrollbar-width: thin;
-        scrollbar-color: var(--accent-primary) transparent;
-        line-height: 1.6;
+        background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+        transition: width 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 999px;
       }
 
       .progress-live-grid {
         display: grid;
-        grid-template-columns: 2fr 1fr;
+        grid-template-columns: 1fr 1fr;
         gap: 1rem;
-        align-items: start;
+        margin-bottom: 1.25rem;
+      }
+      @media (max-width: 900px) {
+        .progress-live-grid { grid-template-columns: 1fr; }
       }
 
-      @media (max-width: 1100px) {
-        .progress-live-grid {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .task-checklist-panel {
-        background: rgba(0, 8, 0, 0.95);
-        border: 1px solid rgba(0, 255, 0, 0.25);
+      /* Logs terminal */
+      .logs-container {
+        background: #07080b;
+        border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        height: 500px;
-        max-height: 70vh;
+        padding: 0.6rem 0.75rem;
+        height: 300px;
+        overflow-y: auto;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 0.76rem;
+        line-height: 1.6;
+      }
+      body.light-theme .logs-container { background: #1a1d24; color: #e8eaed; }
+      .log-entry {
+        display: flex;
+        gap: 0.55rem;
+        padding: 1px 0;
+      }
+      .log-time {
+        color: #6b7280;
+        font-size: 0.72rem;
+        flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .log-message {
+        word-break: break-word;
+        color: #e8eaed;
+      }
+      .log-message.info { color: #e8eaed; }
+      .log-message.success { color: #34d399; }
+      .log-message.warning { color: #fbbf24; }
+      .log-message.error { color: #f87171; }
+
+      /* Task checklist panel */
+      .task-checklist-panel {
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        height: 300px;
         display: flex;
         flex-direction: column;
         overflow: hidden;
       }
-
       .task-checklist-header {
-        padding: 0.85rem 1rem;
-        border-bottom: 1px solid rgba(0, 255, 0, 0.2);
-        font-size: 0.8rem;
-        color: var(--accent-primary);
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        padding: 0.55rem 0.75rem;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        background: var(--bg-1);
       }
-
+      .task-checklist-header i { color: var(--accent); margin-right: 4px; }
       .task-checklist-table-wrap {
-        overflow: auto;
         flex: 1;
-        scrollbar-width: thin;
-        scrollbar-color: var(--accent-primary) transparent;
+        overflow-y: auto;
       }
-
-      .task-checklist-table-wrap::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .task-checklist-table-wrap::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      .task-checklist-table-wrap::-webkit-scrollbar-thumb {
-        background: var(--accent-primary);
-        border-radius: 3px;
-      }
-
       .task-checklist-table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.76rem;
+        font-size: 0.78rem;
       }
-
-      .task-checklist-table th,
-      .task-checklist-table td {
-        padding: 0.6rem 0.7rem;
-        border-bottom: 1px solid rgba(0, 255, 0, 0.08);
-        text-align: left;
-        vertical-align: top;
-      }
-
-      .task-checklist-table tbody tr {
-        transition: background 0.2s ease;
-      }
-
-      .task-checklist-table tbody tr:hover {
-        background: rgba(255, 255, 255, 0.03);
-      }
-
-      .task-step-cell {
-        position: relative;
-      }
-
-      .task-step-content {
-        transition: opacity 0.2s ease;
-      }
-
-      .retry-action-btn {
-        position: absolute;
-        right: 0.3rem;
-        top: 50%;
-        transform: translateY(-50%);
-        opacity: 0;
-        pointer-events: none;
-        border: 1px solid rgba(245, 158, 11, 0.5);
-        color: #fbbf24;
-        background: rgba(245, 158, 11, 0.12);
-        border-radius: 999px;
-        font-size: 0.68rem;
-        padding: 0.2rem 0.55rem;
-        cursor: pointer;
-        transition: opacity 0.2s ease, background 0.2s ease;
-      }
-
-      .task-checklist-table tbody tr.allow-retry:hover .retry-action-btn {
-        opacity: 1;
-        pointer-events: auto;
-      }
-
-      .task-checklist-table tbody tr.allow-retry:hover .task-step-content {
-        opacity: 0.35;
-      }
-
-      .retry-action-btn:hover {
-        background: rgba(245, 158, 11, 0.22);
-      }
-
-      .task-checklist-table th {
+      .task-checklist-table thead {
         position: sticky;
         top: 0;
+        background: var(--bg-2);
         z-index: 1;
-        background: rgba(0, 12, 0, 0.95);
-        color: var(--text-muted);
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.8px;
       }
-
+      .task-checklist-table th {
+        padding: 0.45rem 0.6rem;
+        text-align: left;
+        color: var(--text-muted);
+        font-weight: 500;
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid var(--border);
+      }
+      .task-checklist-table td {
+        padding: 0.45rem 0.6rem;
+        border-bottom: 1px solid var(--border);
+        vertical-align: top;
+        color: var(--text-primary);
+      }
+      .task-checklist-table tr:last-child td { border-bottom: none; }
+      .task-detail {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+        line-height: 1.4;
+      }
+      .task-step-content { display: block; }
       .task-status {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
+        padding: 2px 8px;
         border-radius: 999px;
-        padding: 0.15rem 0.45rem;
-        font-size: 0.68rem;
-        border: 1px solid transparent;
+        font-size: 0.7rem;
+        font-weight: 500;
       }
-
       .task-status.pending {
-        color: #a3b3a3;
-        border-color: rgba(163, 179, 163, 0.25);
+        background: var(--bg-3);
+        color: var(--text-muted);
       }
-
       .task-status.running {
-        color: #fcd34d;
-        border-color: rgba(252, 211, 77, 0.35);
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--info);
       }
-
       .task-status.success {
-        color: #4ade80;
-        border-color: rgba(74, 222, 128, 0.35);
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent);
       }
-
+      .task-status.failed,
       .task-status.error {
-        color: #f87171;
-        border-color: rgba(248, 113, 113, 0.35);
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--error);
       }
-
-      .task-detail {
-        color: var(--text-secondary);
+      .task-status.warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--warning);
       }
-
-      .logs-container::-webkit-scrollbar {
-        width: 6px;
+      .retry-action-btn {
+        margin-top: 4px;
+        padding: 3px 8px;
+        background: var(--bg-3);
+        color: var(--warning);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-size: 0.7rem;
+        cursor: pointer;
       }
-
-      .logs-container::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      .logs-container::-webkit-scrollbar-thumb {
-        background: var(--accent-primary);
-        border-radius: 3px;
-      }
-
-      .log-entry {
-        display: flex;
-        gap: 12px;
-        padding: 4px 0;
-        border-bottom: 1px solid rgba(0, 255, 0, 0.05);
-      }
-
-      .log-entry::before {
-        content: ">";
-        color: var(--accent-primary);
-        font-weight: bold;
-      }
-
-      .log-time {
-        color: #006600;
-        flex-shrink: 0;
-      }
-
-      .log-message {
-        flex: 1;
-        word-break: break-word;
-        color: #00ff00;
-      }
-
-      .log-message.success {
-        color: #00ff00;
-        text-shadow: 0 0 8px rgba(0, 255, 0, 0.6);
-      }
-      .log-message.warning {
-        color: #ccff00;
-      }
-      .log-message.error {
-        color: #ff3333;
-        text-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
-      }
-      .log-message.info {
-        color: #00cc00;
-      }
-
-      /* Typewriter cursor effect */
-      .log-message[style*="border-right"] {
-        animation: cursorBlink 0.5s step-end infinite;
-      }
-
-      @keyframes cursorBlink {
-        0%,
-        100% {
-          border-color: var(--accent-primary);
-        }
-        50% {
-          border-color: transparent;
-        }
+      .retry-action-btn:hover {
+        background: var(--warning);
+        color: #2a1a00;
+        border-color: var(--warning);
       }
 
       /* Control buttons */
       .control-buttons {
         display: flex;
-        gap: 1rem;
-        margin-top: 1.5rem;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        padding-top: 0.5rem;
+        border-top: 1px solid var(--border);
+        padding-top: 1rem;
       }
-
-      .control-buttons .btn {
-        flex: 1;
-      }
-
-      /* Warning button */
-      .btn-warning {
-        background: linear-gradient(135deg, #f59e0b, #d97706);
-        color: #000;
-        font-weight: 600;
-      }
-
-      .btn-warning:hover {
-        box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);
-        transform: translateY(-2px);
-      }
+      .control-buttons .btn { flex: 1 1 160px; }
+      #runningControls { display: flex; gap: 0.75rem; flex: 1 1 100%; }
+      #runningControls .btn { flex: 1; }
 
       /* Pause banner */
       .pause-banner {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
         margin-top: 1rem;
-        padding: 1rem 1.5rem;
-        background: rgba(245, 158, 11, 0.15);
+        padding: 0.75rem 1rem;
+        background: rgba(245, 158, 11, 0.1);
         border: 1px solid rgba(245, 158, 11, 0.3);
         border-radius: var(--radius-sm);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        color: #fbbf24;
-        font-weight: 500;
+        color: var(--warning);
+        font-size: 0.85rem;
       }
 
-      .pause-banner i {
-        font-size: 1.25rem;
+      /* =========================================================
+         CONTENT ACCORDION
+         ========================================================= */
+      .content-list-container {
+        min-height: 80px;
       }
-
-      /* Content Preview */
-      .content-preview-container {
-        background: rgba(0, 0, 0, 0.25);
-        border-radius: var(--radius-sm);
-        border: 1px solid var(--border-color);
-        overflow: hidden;
-      }
-
-      .content-preview-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        background: rgba(0, 0, 0, 0.2);
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      .content-preview-title {
-        font-size: 0.875rem;
-        font-weight: 600;
-        color: var(--accent-primary);
-      }
-
-      .content-preview-meta {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-
-      .content-preview-body {
-        padding: 1.25rem;
-        max-height: 600px;
-        overflow-y: auto;
-        font-size: 0.9rem;
-        line-height: 1.7;
-        color: var(--text-secondary);
-      }
-
-      .content-preview-body h1,
-      .content-preview-body h2,
-      .content-preview-body h3 {
-        color: var(--text-primary);
-        margin: 1rem 0 0.5rem 0;
-      }
-
-      .content-preview-body h2 {
-        font-size: 1.25rem;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 0.5rem;
-      }
-
-      .content-preview-body p {
-        margin-bottom: 0.75rem;
-      }
-
-      .content-preview-body ul,
-      .content-preview-body ol {
-        margin-left: 1.5rem;
-        margin-bottom: 0.75rem;
-      }
-
-      .content-preview-body li {
-        margin-bottom: 0.25rem;
-      }
-
-      .content-preview-body strong {
-        color: var(--accent-primary);
-      }
-
-      .content-preview-body a {
-        color: var(--accent-primary);
-        text-decoration: underline;
-      }
-
       .content-preview-empty {
         text-align: center;
-        padding: 3rem;
+        padding: 2.5rem 1rem;
         color: var(--text-muted);
       }
-
       .content-preview-empty i {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        opacity: 0.5;
+        font-size: 2rem;
+        opacity: 0.4;
+        margin-bottom: 0.5rem;
       }
-
-      /* Content Accordion */
       .content-accordion-item {
-        background: rgba(0, 0, 0, 0.2);
-        border: 1px solid var(--border-color);
+        background: var(--bg-2);
+        border: 1px solid var(--border);
         border-radius: var(--radius-sm);
-        margin-bottom: 0.75rem;
+        margin-bottom: 0.5rem;
         overflow: hidden;
-        transition: all 0.3s ease;
+        transition: border-color 0.15s;
       }
-
-      .content-accordion-item:hover {
-        border-color: rgba(0, 212, 255, 0.2);
-      }
+      .content-accordion-item:hover { border-color: var(--border-strong); }
 
       .content-accordion-header {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        padding: 1rem;
+        gap: 0.75rem;
+        padding: 0.7rem 0.85rem;
         cursor: pointer;
-        transition: background 0.3s ease;
       }
-
-      .content-accordion-header:hover {
-        background: rgba(255, 255, 255, 0.03);
-      }
-
       .content-accordion-info {
         flex: 1;
         min-width: 0;
       }
-
       .content-accordion-title {
-        font-size: 0.9rem;
-        font-weight: 600;
+        font-size: 0.87rem;
+        font-weight: 500;
         color: var(--text-primary);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        margin-bottom: 0.25rem;
+        margin-bottom: 0.2rem;
+        word-break: break-word;
       }
-
       .content-accordion-meta {
-        font-size: 0.75rem;
+        display: flex;
+        gap: 0.85rem;
+        font-size: 0.73rem;
         color: var(--text-muted);
+        flex-wrap: wrap;
       }
-
-      .content-accordion-meta span {
-        margin-right: 1rem;
-      }
-
       .content-accordion-actions {
         display: flex;
-        gap: 0.5rem;
+        gap: 0.3rem;
         flex-shrink: 0;
       }
-
       .content-accordion-body {
-        display: none;
-        padding: 1rem;
-        border-top: 1px solid var(--border-color);
-        background: rgba(0, 0, 0, 0.15);
-        max-height: 400px;
-        overflow-y: auto;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+        padding: 0 1rem;
+        background: var(--bg-0);
+        border-top: 1px solid transparent;
       }
-
       .content-accordion-body.open {
-        display: block;
-        animation: slideDown 0.3s ease;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 1rem;
+        border-top-color: var(--border);
       }
-
-      @keyframes slideDown {
-        from {
-          opacity: 0;
-          max-height: 0;
-        }
-        to {
-          opacity: 1;
-          max-height: 400px;
-        }
-      }
-
-      .content-accordion-body h2 {
-        font-size: 1.1rem;
+      .content-accordion-body h1,
+      .content-accordion-body h2,
+      .content-accordion-body h3 {
         color: var(--text-primary);
-        margin: 1rem 0 0.5rem 0;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 0.5rem;
+        margin: 0.75rem 0 0.4rem;
       }
-
+      .content-accordion-body h2 { font-size: 1.05rem; }
+      .content-accordion-body h3 { font-size: 0.95rem; }
       .content-accordion-body p {
-        font-size: 0.875rem;
-        line-height: 1.6;
+        font-size: 0.87rem;
         color: var(--text-secondary);
         margin-bottom: 0.5rem;
+        line-height: 1.6;
       }
-
       .content-accordion-body ul,
       .content-accordion-body ol {
-        margin-left: 1.5rem;
-        margin-bottom: 0.5rem;
+        margin: 0.4rem 0 0.4rem 1.2rem;
+        font-size: 0.87rem;
+        color: var(--text-secondary);
       }
+      .content-accordion-body strong { color: var(--text-primary); }
+      .content-accordion-body a { color: var(--accent); }
 
-      .content-accordion-body strong {
-        color: var(--accent-primary);
-      }
-
-      .btn-expand {
-        padding: 6px 12px;
-        font-size: 0.75rem;
-        background: rgba(0, 212, 255, 0.1);
-        border: 1px solid rgba(0, 212, 255, 0.3);
-        color: var(--accent-primary);
-      }
-
-      .btn-expand:hover {
-        background: rgba(0, 212, 255, 0.2);
-      }
-
-      .btn-expand.active {
-        background: var(--accent-primary);
-        color: #000;
-      }
-
-      /* Edit Modal */
+      /* =========================================================
+         MODAL SYSTEM
+         ========================================================= */
       .modal-overlay {
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(8px);
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(4px);
         z-index: 1000;
-        display: flex;
+        display: none;
         align-items: center;
         justify-content: center;
-        padding: 2rem;
+        padding: 1rem;
       }
-
-      .modal-content {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius);
-        width: 100%;
-        max-width: 900px;
-        max-height: 90vh;
-        overflow: hidden;
+      .modal-overlay.show {
         display: flex;
-        flex-direction: column;
-        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+        animation: fadeIn 0.2s ease;
+      }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+      .modal-content,
+      .modal-dialog {
+        background: var(--bg-1);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        max-width: 520px;
+        width: 100%;
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+        animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .modal-content.modal-wide { max-width: 1100px; }
+      @keyframes scaleIn {
+        from { opacity: 0; transform: scale(0.96); }
+        to { opacity: 1; transform: scale(1); }
       }
 
       .modal-header {
+        padding: 1rem 1.25rem;
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--border-color);
-        background: rgba(0, 0, 0, 0.2);
-      }
-
-      .modal-header h3 {
-        font-size: 1.1rem;
+        gap: 0.6rem;
+        border-bottom: 1px solid var(--border);
         color: var(--text-primary);
       }
-
-      .modal-body {
-        padding: 1.5rem;
-        overflow-y: auto;
-        flex: 1;
+      .modal-header i { color: var(--accent); }
+      .modal-header.warning i { color: var(--warning); }
+      .modal-header.error i { color: var(--error); }
+      .modal-title {
+        font-size: 0.95rem;
+        font-weight: 600;
       }
-
+      .modal-header h3 {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+      .modal-body {
+        padding: 1.25rem;
+        color: var(--text-secondary);
+      }
+      .modal-message { font-size: 0.9rem; line-height: 1.6; }
+      .modal-input {
+        width: 100%;
+        margin-top: 0.75rem;
+        padding: 0.55rem 0.75rem;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.88rem;
+      }
+      .modal-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-ring);
+      }
       .modal-footer {
+        padding: 0.9rem 1.25rem;
         display: flex;
         justify-content: flex-end;
-        gap: 1rem;
-        padding: 1rem 1.5rem;
-        border-top: 1px solid var(--border-color);
-        background: rgba(0, 0, 0, 0.2);
+        gap: 0.5rem;
+        border-top: 1px solid var(--border);
+        background: var(--bg-0);
+      }
+      .modal-btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border);
+        font-family: inherit;
+        transition: all 0.15s;
+      }
+      .modal-btn-cancel {
+        background: transparent;
+        color: var(--text-secondary);
+      }
+      .modal-btn-cancel:hover { background: var(--bg-2); color: var(--text-primary); }
+      .modal-btn-confirm {
+        background: var(--accent);
+        color: #03231a;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      body.light-theme .modal-btn-confirm { color: white; }
+      .modal-btn-confirm:hover { background: var(--accent-hover); }
+      .modal-btn-danger {
+        background: var(--error);
+        color: white;
+        border-color: var(--error);
       }
 
-      /* Wide modal for split view */
-      .modal-wide {
-        max-width: 1400px;
-      }
-
-      /* Split view for edit */
+      /* Edit modal split view */
       .edit-split-view {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
-        padding: 1rem !important;
+        padding: 1rem 1.25rem;
       }
-
+      @media (max-width: 768px) {
+        .edit-split-view { grid-template-columns: 1fr; }
+      }
       .edit-panel {
         display: flex;
         flex-direction: column;
-        border: 1px solid var(--border-color);
+        height: 55vh;
+        min-height: 300px;
+        background: var(--bg-0);
+        border: 1px solid var(--border);
         border-radius: var(--radius-sm);
         overflow: hidden;
       }
-
       .edit-panel-header {
-        padding: 0.75rem 1rem;
-        background: rgba(0, 0, 0, 0.3);
-        color: var(--text-muted);
-        font-size: 0.85rem;
-        font-weight: 600;
-        border-bottom: 1px solid var(--border-color);
+        padding: 0.5rem 0.75rem;
+        background: var(--bg-2);
+        border-bottom: 1px solid var(--border);
+        font-size: 0.78rem;
+        color: var(--text-secondary);
       }
-
-      .edit-panel-header i {
-        margin-right: 0.5rem;
-      }
-
+      .edit-panel-header i { color: var(--accent); margin-right: 4px; }
       .edit-textarea {
         flex: 1;
-        min-height: 500px;
+        resize: none;
         border: none;
         border-radius: 0;
-        font-family: "Consolas", "Monaco", monospace;
-        font-size: 0.85rem;
-        line-height: 1.6;
-        padding: 1rem;
-        resize: none;
+        background: var(--bg-0);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.8rem;
       }
-
+      .edit-textarea:focus { box-shadow: none; }
       .edit-preview {
         flex: 1;
-        min-height: 500px;
-        padding: 1.5rem;
         overflow-y: auto;
-        background: rgba(255, 255, 255, 0.02);
-        font-size: 0.9rem;
-        line-height: 1.7;
+        padding: 0.9rem;
+        font-size: 0.85rem;
         color: var(--text-secondary);
       }
+      .edit-preview h2 { font-size: 1rem; color: var(--text-primary); margin: 0.5rem 0; }
+      .edit-preview h3 { font-size: 0.9rem; color: var(--text-primary); margin: 0.4rem 0; }
+      .edit-preview p { margin-bottom: 0.4rem; line-height: 1.55; }
+      .edit-preview strong { color: var(--text-primary); }
 
-      .edit-preview h2 {
-        font-size: 1.2rem;
-        color: var(--text-primary);
-        margin: 1.5rem 0 0.75rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      .edit-preview h2:first-child {
-        margin-top: 0;
-      }
-
-      .edit-preview h3 {
-        font-size: 1rem;
-        color: var(--text-primary);
-        margin: 1rem 0 0.5rem 0;
-      }
-
-      .edit-preview p {
-        margin-bottom: 0.75rem;
-      }
-
-      .edit-preview ul,
-      .edit-preview ol {
-        margin-left: 1.5rem;
-        margin-bottom: 0.75rem;
-      }
-
-      .edit-preview li {
-        margin-bottom: 0.25rem;
-      }
-
-      .edit-preview strong {
-        color: var(--accent-primary);
-      }
-
-      .edit-preview a {
-        color: var(--accent-primary);
-        text-decoration: underline;
-      }
-
-      @media (max-width: 1024px) {
-        .edit-split-view {
-          grid-template-columns: 1fr;
-        }
-
-        .edit-textarea,
-        .edit-preview {
-          min-height: 300px;
-        }
-      }
-
-      /* Action buttons in accordion */
-      .btn-edit {
-        padding: 6px 10px;
-        font-size: 0.75rem;
-        background: rgba(124, 58, 237, 0.1);
-        border: 1px solid rgba(124, 58, 237, 0.3);
-        color: #a78bfa;
-      }
-
-      .btn-edit:hover {
-        background: rgba(124, 58, 237, 0.2);
-      }
-
-      .btn-delete {
-        padding: 6px 10px;
-        font-size: 0.75rem;
-        background: rgba(255, 77, 77, 0.1);
-        border: 1px solid rgba(255, 77, 77, 0.3);
-        color: var(--error);
-      }
-
-      .btn-delete:hover {
-        background: rgba(255, 77, 77, 0.2);
-      }
-
-      /* Tooltip */
-      .tooltip {
-        position: relative;
-      }
-
-      .tooltip::after {
-        content: attr(data-tooltip);
-        position: absolute;
-        bottom: 100%;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 8px 12px;
-        background: var(--bg-secondary);
-        color: var(--text-primary);
-        font-size: 0.75rem;
-        border-radius: 6px;
-        white-space: nowrap;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-        pointer-events: none;
-      }
-
-      .tooltip:hover::after {
-        opacity: 1;
-        visibility: visible;
-        bottom: calc(100% + 8px);
-      }
-
-      /* Empty state */
-      .empty-state {
-        text-align: center;
-        padding: 3rem;
-        color: var(--text-muted);
-      }
-
-      .empty-state i {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        opacity: 0.5;
-      }
-
-      /* Animations */
-      .fade-in {
-        animation: fadeIn 0.5s ease;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      /* Notification toast */
+      /* =========================================================
+         TOAST
+         ========================================================= */
       .toast {
         position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        padding: 1rem 1.5rem;
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
+        bottom: 1.5rem;
+        right: 1.5rem;
+        padding: 0.75rem 1rem;
+        background: var(--bg-3);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
         border-radius: var(--radius-sm);
-        box-shadow: var(--shadow);
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 0.55rem;
+        font-size: 0.85rem;
+        box-shadow: var(--shadow-lg);
         transform: translateY(100px);
         opacity: 0;
-        transition: all 0.3s ease;
-        z-index: 1000;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 2000;
+        max-width: 360px;
+      }
+      .toast.show { transform: translateY(0); opacity: 1; }
+      .toast.success { border-left-color: var(--success); }
+      .toast.success i { color: var(--success); }
+      .toast.warning { border-left-color: var(--warning); }
+      .toast.warning i { color: var(--warning); }
+      .toast.error { border-left-color: var(--error); }
+      .toast.error i { color: var(--error); }
+      .toast.info i { color: var(--info); }
+
+      /* =========================================================
+         RESPONSIVE TWEAKS
+         ========================================================= */
+      @media (max-width: 640px) {
+        .container { padding: 1rem; }
+        .progress-stats { grid-template-columns: repeat(2, 1fr); }
+        .form-row { grid-template-columns: 1fr; }
+        .logo-text span { display: none; }
       }
 
-      .toast.show {
-        transform: translateY(0);
-        opacity: 1;
-      }
-
-      .toast.success {
-        border-left: 4px solid var(--success);
-      }
-      .toast.error {
-        border-left: 4px solid var(--error);
-      }
-      .toast.warning {
-        border-left: 4px solid var(--warning);
-      }
-
-      /* Custom Modal Dialog */
-      .modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: rgba(0, 0, 0, 0.85);
-        backdrop-filter: blur(8px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-      }
-
-      .modal-overlay.show {
-        opacity: 1;
-        visibility: visible;
-      }
-
-      .modal-dialog {
-        background: var(--bg-card);
-        border: 2px solid var(--accent-primary);
-        border-radius: var(--radius);
-        box-shadow:
-          0 0 50px rgba(0, 255, 0, 0.4),
-          inset 0 0 30px rgba(0, 255, 0, 0.05);
-        max-width: 450px;
-        width: 90%;
-        transform: scale(0.8) translateY(-20px);
-        transition: all 0.3s ease;
-        overflow: hidden;
-      }
-
-      .modal-overlay.show .modal-dialog {
-        transform: scale(1) translateY(0);
-      }
-
-      .modal-header {
-        padding: 1.25rem 1.5rem;
-        border-bottom: 1px solid var(--border-color);
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-      }
-
-      .modal-header i {
-        font-size: 1.5rem;
-        color: var(--accent-primary);
-        text-shadow: 0 0 10px var(--accent-primary);
-      }
-
-      .modal-header.warning i {
-        color: var(--warning);
-        text-shadow: 0 0 10px var(--warning);
-      }
-
-      .modal-header.error i {
-        color: var(--error);
-        text-shadow: 0 0 10px var(--error);
-      }
-
-      .modal-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: var(--text-primary);
-        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-      }
-
-      .modal-body {
-        padding: 1.5rem;
-      }
-
-      .modal-message {
-        color: var(--text-secondary);
-        font-size: 0.95rem;
-        line-height: 1.6;
-        margin-bottom: 1rem;
-      }
-
-      .modal-input {
-        width: 100%;
-        padding: 0.875rem 1rem;
-        background: var(--bg-input);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-sm);
-        color: var(--text-primary);
-        font-size: 0.9rem;
-        font-family: inherit;
-        transition: all 0.2s;
-      }
-
-      .modal-input:focus {
-        outline: none;
-        border-color: var(--accent-primary);
-        box-shadow: 0 0 15px rgba(0, 255, 0, 0.3);
-      }
-
-      .modal-input::placeholder {
+      /* Inline helpers used by JS-generated markup */
+      .loading-content {
+        text-align: center;
+        padding: 2rem;
         color: var(--text-muted);
-      }
-
-      .modal-footer {
-        padding: 1rem 1.5rem;
-        border-top: 1px solid var(--border-color);
-        display: flex;
-        justify-content: flex-end;
-        gap: 0.75rem;
-      }
-
-      .modal-btn {
-        padding: 0.625rem 1.25rem;
-        border-radius: var(--radius-sm);
-        font-size: 0.875rem;
-        font-weight: 500;
-        font-family: inherit;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 1px solid transparent;
-      }
-
-      .modal-btn-cancel {
-        background: transparent;
-        border-color: var(--border-color);
-        color: var(--text-muted);
-      }
-
-      .modal-btn-cancel:hover {
-        border-color: var(--text-muted);
-        color: var(--text-secondary);
-        background: rgba(0, 255, 0, 0.05);
-      }
-
-      .modal-btn-confirm {
-        background: var(--accent-gradient);
-        color: #000;
-        border: none;
-      }
-
-      .modal-btn-confirm:hover {
-        background: var(--accent-gradient-hover);
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
-      }
-
-      .modal-btn-danger {
-        background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
-        color: #fff;
-        border: none;
-      }
-
-      .modal-btn-danger:hover {
-        box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
-      }
-
-      @keyframes modalPulse {
-        0%,
-        100% {
-          box-shadow: 0 0 50px rgba(0, 255, 0, 0.4);
-        }
-        50% {
-          box-shadow: 0 0 70px rgba(0, 255, 0, 0.6);
-        }
-      }
-
-      .modal-overlay.show .modal-dialog {
-        animation: modalPulse 2s ease-in-out infinite;
-      }
-
-      /* Theme Toggle */
-      .theme-toggle-btn {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 14px;
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        background: var(--bg-input);
-        color: var(--text-primary);
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 0.75rem;
-        transition: all 0.3s ease;
-      }
-      .theme-toggle-btn:hover {
-        border-color: var(--accent-primary);
-        box-shadow: 0 0 10px rgba(0,255,0,0.2);
-      }
-      .theme-toggle-btn .toggle-icon {
-        font-size: 1rem;
-        transition: transform 0.3s ease;
-      }
-
-      /* ============ VSCode Dark Theme (Default) ============ */
-      :root {
-        --bg-primary: #1e1e1e;
-        --bg-secondary: #252526;
-        --bg-card: #252526;
-        --bg-input: #1f1f1f;
-        --accent-primary: #0e639c;
-        --accent-secondary: #1177bb;
-        --accent-tertiary: #3794ff;
-        --accent-gradient: linear-gradient(135deg, #0e639c 0%, #1177bb 60%, #3794ff 100%);
-        --accent-gradient-hover: linear-gradient(135deg, #1177bb 0%, #3794ff 100%);
-        --text-primary: #d4d4d4;
-        --text-secondary: #c5c5c5;
-        --text-muted: #8b949e;
-        --success: #4ec9b0;
-        --warning: #d7ba7d;
-        --error: #f48771;
-        --info: #4fc1ff;
-        --border-color: #3c3c3c;
-        --glass-bg: rgba(255, 255, 255, 0.02);
-        --shadow: 0 12px 26px rgba(0, 0, 0, 0.35);
-        --shadow-glow: 0 0 0 rgba(0, 0, 0, 0);
-        --radius: 8px;
-        --radius-sm: 6px;
-      }
-
-      body {
-        font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
-        background: radial-gradient(circle at 20% 0%, #252526 0%, #1e1e1e 42%, #181818 100%);
-        color: var(--text-primary);
-      }
-
-      .matrix-rain,
-      .scanline-overlay {
-        display: none;
-      }
-
-      .header {
-        background: rgba(37, 37, 38, 0.95);
-        border-bottom: 1px solid var(--border-color);
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
-      }
-
-      .logo-icon {
-        border: 1px solid var(--border-color);
-        color: var(--accent-tertiary);
-        background: #1f1f1f;
-        box-shadow: none;
-        animation: none;
-      }
-
-      .logo-text h1 {
-        color: #e5e5e5;
-        text-shadow: none;
-        letter-spacing: 0.4px;
-      }
-
-      .logo-text span {
-        color: var(--text-muted);
-        letter-spacing: 0.5px;
-        text-transform: none;
-      }
-
-      .status-badge {
-        background: #1f1f1f;
-        border: 1px solid var(--border-color);
-        color: var(--text-secondary);
-        letter-spacing: 0.3px;
-        text-transform: none;
-      }
-
-      .status-badge:hover {
-        background: #2a2d2e;
-        box-shadow: none;
-      }
-
-      .status-dot.running {
-        background: var(--success);
-        box-shadow: 0 0 0 2px rgba(78, 201, 176, 0.2);
-      }
-
-      .card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-color);
-        box-shadow: var(--shadow);
-      }
-
-      .card:hover {
-        border-color: #4b4b4b;
-        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.38);
-      }
-
-      .card-header {
-        background: #2d2d30;
-        border-bottom: 1px solid var(--border-color);
-      }
-
-      .card-header::before {
-        content: "";
-      }
-
-      .card-header i {
-        color: var(--accent-tertiary);
-      }
-
-      .card-header h2 {
-        text-transform: none;
-        letter-spacing: 0.3px;
-        color: #e8e8e8;
-      }
-
-      .form-label {
-        color: var(--text-secondary);
-        text-transform: none;
-        letter-spacing: 0.2px;
-      }
-
-      .form-label::before {
-        content: "";
-      }
-
-      .form-input {
-        background: var(--bg-input);
-        border: 1px solid var(--border-color);
-        color: var(--text-primary);
-        font-family: "Inter", "Segoe UI", sans-serif;
-      }
-
-      .form-input:focus {
-        border-color: var(--accent-primary);
-        box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.28);
-        background: #212325;
-      }
-
-      .form-input::placeholder {
-        color: var(--text-muted);
-      }
-
-      textarea.form-input {
-        scrollbar-color: var(--accent-primary) #1a1a1a;
-      }
-
-      textarea.form-input::-webkit-scrollbar-track {
-        background: #1a1a1a;
-      }
-
-      textarea.form-input::-webkit-scrollbar-thumb {
-        background: #3f3f46;
-        border: 1px solid #1a1a1a;
-      }
-
-      textarea.form-input::-webkit-scrollbar-thumb:hover {
-        background: #555;
-      }
-
-      .topic-item {
-        background: #1f1f1f;
-        border: 1px solid #303030;
-      }
-
-      .topic-item:hover {
-        background: #252729;
-      }
-
-      .topic-number {
-        background: var(--accent-primary);
-        color: #fff;
-      }
-
-      .btn {
-        border: 1px solid transparent;
-        font-weight: 600;
-      }
-
-      .btn-primary {
-        background: var(--accent-primary);
-        color: #fff;
-        border-color: #1177bb;
-        text-transform: none;
-        letter-spacing: 0.3px;
-      }
-
-      .btn-primary::before {
-        display: none;
-      }
-
-      .btn-primary:hover {
-        background: var(--accent-secondary);
-        box-shadow: none;
-        text-shadow: none;
-      }
-
-      .btn-secondary {
-        background: #2d2d30;
-        color: var(--text-primary);
-        border-color: #3d3d42;
-      }
-
-      .btn-secondary:hover {
-        background: #37373d;
-        border-color: #4a4a51;
-      }
-
-      .mode-btn {
-        background: #252526;
-        border-color: #3a3a3d;
-        color: var(--text-secondary);
-        text-transform: none;
-        letter-spacing: 0.2px;
-      }
-
-      .mode-btn:hover {
-        background: #2e2f33;
-        border-color: #4a4b50;
-        color: var(--text-primary);
-      }
-
-      .mode-btn.active {
-        background: #1f2a35;
-        border-color: var(--accent-primary);
-        color: #9cdcfe;
-        box-shadow: inset 0 0 0 1px rgba(14, 99, 156, 0.2);
-      }
-
-      .progress-bar {
-        background: #1a1a1a;
-      }
-
-      .progress-fill {
-        background: linear-gradient(90deg, #0e639c, #1177bb);
-        box-shadow: none;
-      }
-
-      .logs-container {
-        background: #1e1e1e;
-        border: 1px solid var(--border-color);
-        font-family: "Consolas", "JetBrains Mono", monospace;
-      }
-
-      .logs-container::-webkit-scrollbar-thumb,
-      .task-checklist-table-wrap::-webkit-scrollbar-thumb {
-        background: #4f4f52;
-      }
-
-      .task-checklist-panel {
-        background: #1f1f1f;
-        border: 1px solid var(--border-color);
-      }
-
-      .task-checklist-header {
-        color: #9cdcfe;
-        border-bottom: 1px solid var(--border-color);
-        text-transform: none;
-        letter-spacing: 0.2px;
-      }
-
-      .task-checklist-table th {
-        background: #252526;
-        color: var(--text-muted);
-      }
-
-      .task-checklist-table th,
-      .task-checklist-table td {
-        border-bottom: 1px solid #323232;
-      }
-
-      .task-checklist-table tbody tr:hover {
-        background: #2a2d2e;
-      }
-
-      .log-entry {
-        border-bottom: 1px solid #2d2d2f;
-      }
-
-      .log-entry::before {
-        content: "";
-      }
-
-      .log-time {
-        color: #6a9955;
-      }
-
-      .log-message {
-        color: #d4d4d4;
-      }
-
-      .log-message.success {
-        color: #4ec9b0;
-        text-shadow: none;
-      }
-
-      .log-message.warning {
-        color: #d7ba7d;
-      }
-
-      .log-message.error {
-        color: #f48771;
-        text-shadow: none;
-      }
-
-      .log-message.info {
-        color: #9cdcfe;
-      }
-
-      .content-accordion-item {
-        background: #1f1f1f;
-      }
-
-      .content-accordion-header:hover {
-        background: #2a2d2e;
-      }
-
-      .content-accordion-body {
-        background: #1e1e1e;
-      }
-
-      .btn-expand {
-        background: #1f2a35;
-        border-color: #284b63;
-        color: #9cdcfe;
-      }
-
-      .btn-expand:hover {
-        background: #243746;
-      }
-
-      .btn-expand.active {
-        background: var(--accent-primary);
-        color: #fff;
-      }
-
-      .btn-edit {
-        background: rgba(79, 193, 255, 0.12);
-        border-color: rgba(79, 193, 255, 0.35);
-        color: #9cdcfe;
-      }
-
-      .btn-edit:hover {
-        background: rgba(79, 193, 255, 0.18);
-      }
-
-      .modal-dialog,
-      .modal-content {
-        border-color: var(--border-color);
-        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
-      }
-
-      .modal-overlay.show .modal-dialog {
-        animation: none;
-      }
-
-      .modal-header i,
-      .modal-title {
-        text-shadow: none;
-      }
-
-      .modal-btn-cancel:hover {
-        background: #2f2f31;
-      }
-
-      .modal-btn-confirm {
-        background: var(--accent-primary);
-        color: #fff;
-      }
-
-      .modal-btn-confirm:hover {
-        background: var(--accent-secondary);
-        box-shadow: none;
-      }
-
-      .toast {
-        background: #252526;
-        border-color: var(--border-color);
-        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.35);
-      }
-
-      .theme-toggle-btn {
-        background: #2d2d30;
-        border-color: #3f3f44;
-        color: var(--text-secondary);
-      }
-
-      .theme-toggle-btn:hover {
-        border-color: var(--accent-primary);
-        background: #35353a;
-      }
-
-      /* ============ LIGHT THEME ============ */
-      body.light-theme {
-        --bg-primary: #f4f6fb;
-        --bg-secondary: #ffffff;
-        --bg-card: #ffffff;
-        --bg-input: #f7f9fc;
-        --accent-primary: #2563eb;
-        --accent-secondary: #1d4ed8;
-        --accent-tertiary: #3b82f6;
-        --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 70%, #1d4ed8 100%);
-        --accent-gradient-hover: linear-gradient(135deg, #60a5fa 0%, #3b82f6 70%, #2563eb 100%);
-        --text-primary: #1f2937;
-        --text-secondary: #4b5563;
-        --text-muted: #94a3b8;
-        --success: #059669;
-        --warning: #b45309;
-        --error: #dc2626;
-        --info: #0369a1;
-        --border-color: #e2e8f0;
-        --glass-bg: rgba(37, 99, 235, 0.03);
-        --shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-        --shadow-glow: 0 10px 28px rgba(15, 23, 42, 0.08);
-        --radius: 12px;
-        --radius-sm: 6px;
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: radial-gradient(circle at 20% 0%, #ffffff 0%, #f7f9fc 45%, #edf2f8 100%);
-        color: var(--text-primary);
-      }
-
-      body.light-theme .matrix-rain,
-      body.light-theme .scanline-overlay {
-        display: none !important;
-      }
-
-      body.light-theme .header {
-        background: rgba(255, 255, 255, 0.92);
-        border-bottom: 1px solid #e5eaf1;
-        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-      }
-
-      body.light-theme .logo-icon {
-        border-color: #d7dfee;
-        color: var(--accent-primary);
-        background: #ffffff;
-        box-shadow: 0 3px 10px rgba(37, 99, 235, 0.08);
-        animation: none;
-      }
-
-      body.light-theme .logo-text h1 {
-        color: var(--text-primary);
-        text-shadow: none;
-      }
-      body.light-theme .logo-text span {
-        color: var(--text-secondary);
-      }
-
-      body.light-theme .card {
-        background: var(--bg-card);
-        border: 1px solid #e2e8f0;
-        box-shadow: var(--shadow);
-      }
-
-      body.light-theme .card-header {
-        background: #f8fafc;
-        border-bottom: 1px solid #e5eaf1;
-      }
-      body.light-theme .card-header h2 {
-        color: var(--text-primary);
-        text-shadow: none;
-      }
-
-      body.light-theme .form-input {
-        background: var(--bg-input);
-        border: 1px solid #d7deea;
-        color: var(--text-primary);
-      }
-      body.light-theme .form-input:focus {
-        border-color: var(--accent-primary);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
-        background: #ffffff;
-      }
-      body.light-theme .form-input::placeholder {
-        color: var(--text-muted);
-      }
-
-      body.light-theme textarea.form-input {
-        scrollbar-color: var(--accent-primary) var(--bg-input);
-      }
-      body.light-theme textarea.form-input::-webkit-scrollbar-track {
-        background: var(--bg-input);
-      }
-      body.light-theme textarea.form-input::-webkit-scrollbar-thumb {
-        background: var(--accent-primary);
-        border: 1px solid var(--bg-input);
-      }
-      body.light-theme textarea.form-input::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-secondary);
-      }
-
-      body.light-theme .form-label {
-        color: var(--text-secondary);
-      }
-
-      body.light-theme .btn-primary {
-        background: var(--accent-gradient);
-        color: #fff;
-        border: none;
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.2);
-      }
-      body.light-theme .btn-primary:hover {
-        box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
-      }
-
-      body.light-theme .btn-secondary {
-        background: var(--bg-input);
-        border: 1px solid #d7deea;
-        color: var(--text-primary);
-      }
-      body.light-theme .btn-secondary:hover {
-        background: #eef3fa;
-      }
-
-      body.light-theme .btn-warning {
-        background: linear-gradient(135deg, #f59e0b, #d97706);
-        color: #fff;
-      }
-
-      body.light-theme .status-badge {
-        background: #f5f8ff;
-        border: 1px solid #d7e3fb;
-        color: var(--text-secondary);
-      }
-
-      body.light-theme .log-entry {
-        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-      }
-      body.light-theme .log-time {
-        color: var(--text-muted);
-      }
-      body.light-theme .log-message {
-        color: var(--text-primary);
-      }
-
-      body.light-theme .progress-bar {
-        background: rgba(0, 0, 0, 0.06);
-      }
-      body.light-theme .progress-fill {
-        background: var(--accent-gradient);
-      }
-
-      body.light-theme .topic-item {
-        background: var(--bg-input);
-        border: 1px solid #e2e8f0;
-      }
-
-      body.light-theme .toggle-slider {
-        background: #cbd5e1;
-      }
-      body.light-theme .toggle input:checked + .toggle-slider {
-        background: var(--accent-primary);
-      }
-
-      body.light-theme .logs-container {
-        background: #fbfcff;
-        border: 1px solid #e2e8f0;
-      }
-      body.light-theme .task-checklist-panel {
-        background: #fbfcff;
-        border: 1px solid #e2e8f0;
-      }
-      body.light-theme .task-checklist-header {
-        border-bottom: 1px solid #e5eaf1;
-        color: #334155;
-      }
-      body.light-theme .task-checklist-table th {
-        background: #f3f6fb;
-      }
-      body.light-theme .task-checklist-table td,
-      body.light-theme .task-checklist-table th {
-        border-bottom: 1px solid #e8edf5;
-      }
-      body.light-theme .task-checklist-table tbody tr:hover {
-        background: #f1f6ff;
-      }
-
-      body.light-theme .toast {
-        background: var(--bg-card);
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-        color: var(--text-primary);
-      }
-
-      body.light-theme .mode-btn {
-        background: var(--bg-input);
-        border: 1px solid #d7deea;
-        color: var(--text-secondary);
-      }
-      body.light-theme .mode-btn.active {
-        background: var(--accent-primary);
-        color: #fff;
-        border-color: var(--accent-primary);
-        box-shadow: 0 6px 14px rgba(37, 99, 235, 0.2);
-      }
-
-      body.light-theme .theme-toggle-btn {
-        background: var(--bg-input);
-        border-color: #d7deea;
-        color: var(--text-primary);
-      }
-      body.light-theme .theme-toggle-btn:hover {
-        border-color: var(--accent-primary);
-        box-shadow: 0 4px 10px rgba(37, 99, 235, 0.14);
-      }
-
-      body.light-theme .empty-state {
-        color: var(--text-muted);
-      }
-
-      body.light-theme .modal-overlay {
-        background: rgba(15, 23, 42, 0.25);
-      }
-      body.light-theme .modal-dialog {
-        background: var(--bg-card);
-        border: 1px solid #dbe3f1;
-        box-shadow: 0 16px 48px rgba(15, 23, 42, 0.14);
-        animation: none;
-      }
-
-      body.light-theme * {
-        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
       }
     </style>
   </head>
   <body>
-    <!-- Matrix Rain Background -->
-    <div class="matrix-rain">
-      <canvas id="matrixCanvas"></canvas>
-    </div>
+    <!-- Legacy canvas kept for JS compatibility (CSS hides it) -->
+    <div class="matrix-rain"><canvas id="matrixCanvas"></canvas></div>
     <div class="scanline-overlay"></div>
 
     <!-- Header -->
     <header class="header">
       <div class="header-content">
         <div class="logo">
-          <div class="logo-icon">
-            <i class="fas fa-terminal"></i>
-          </div>
+          <div class="logo-icon"><i class="fas fa-bolt"></i></div>
           <div class="logo-text">
-            <h1>WP_AUTOPOSTER</h1>
-            <span>// Workflow Control Panel</span>
+            <h1>WP Auto Poster</h1>
+            <span>Control Panel</span>
           </div>
         </div>
         <div class="status-badge">
@@ -2372,69 +1210,32 @@
 
     <!-- Main Container -->
     <div class="container">
-      <!-- Configuration Card -->
+      <!-- ============================================================
+           CONFIG CARD (left column)
+           ============================================================ -->
       <div class="card fade-in">
         <div class="card-header">
-          <i class="fas fa-cog"></i>
+          <i class="fas fa-sliders"></i>
           <h2>Cấu hình</h2>
         </div>
         <div class="card-body">
-          <!-- AI Provider - Only Gemini Web Chat -->
+          <!-- AI Provider info -->
           <div class="form-group">
-            <label class="form-label">🤖 AI Provider</label>
-            <div
-              style="
-                padding: 0.75rem;
-                background: linear-gradient(
-                  135deg,
-                  rgba(99, 102, 241, 0.2),
-                  rgba(139, 92, 246, 0.2)
-                );
-                border-radius: 8px;
-                border: 1px solid rgba(99, 102, 241, 0.3);
-              "
-            >
-              <div style="display: flex; align-items: center; gap: 10px">
-                <span style="font-size: 1.5rem">🌐</span>
-                <div>
-                  <strong style="color: var(--text-primary)"
-                    >Gemini Web Chat</strong
-                  >
-                  <p
-                    style="
-                      font-size: 0.8rem;
-                      color: var(--text-secondary);
-                      margin: 0.25rem 0 0 0;
-                    "
-                  >
-                    Miễn phí • Tự động chat với Gemini • Cần đăng nhập Google
-                  </p>
-                </div>
-              </div>
+            <label class="form-label">AI Provider</label>
+            <select class="form-input" id="aiProviderSelect" name="aiProvider">
+              <option value="gemini_web">Gemini Web Chat (Google)</option>
+              <option value="chatgpt_web">ChatGPT Web (OpenAI)</option>
+            </select>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem;">
+              Cả hai đều miễn phí · Tự động chat trên trình duyệt · Cần đăng nhập tài khoản tương ứng (lưu cookie để dùng lại lần sau)
             </div>
-            <input
-              type="hidden"
-              name="aiProvider"
-              value="gemini_web"
-              id="providerGeminiWeb"
-            />
           </div>
 
-          <!-- Gemini Web Prompt Template (always visible) -->
+          <!-- Prompt template -->
           <div class="form-group" id="geminiPromptGroup">
-            <label class="form-label">📝 Prompt Template</label>
-            <textarea
-              class="form-input"
-              id="geminiPrompt"
-              rows="10"
-              style="
-                font-family: monospace;
-                font-size: 0.85rem;
-                line-height: 1.5;
-              "
-              placeholder="Nhập prompt mẫu..."
-            >
-Viết bài blog chuẩn SEO google với tiêu đề "{title}". THANG MÁY KENZO VIỆT NAM chuyên lắp đặt, sửa chữa, bảo trì thang máy. Từ khóa SEO "{keyword}". Từ khóa in đậm, bài viết trên 1500 từ.
+            <label class="form-label">Prompt Template</label>
+            <textarea class="form-input" id="geminiPrompt" rows="8"
+              placeholder="Nhập prompt mẫu...">Viết bài blog chuẩn SEO google với tiêu đề "{title}". THANG MÁY KENZO VIỆT NAM chuyên lắp đặt, sửa chữa, bảo trì thang máy. Từ khóa SEO "{keyword}". Từ khóa in đậm, bài viết trên 1500 từ.
 Từ khóa SEO lặp lại không vượt quá 3%.
 Thông tin cần tư vấn liên hệ: CÔNG TY TNHH THANG MÁY KENZO VIỆT NAM
 Trụ sở: 07 Đường DD5, Phường Tân Hưng Thuận, Quận 12, TP.HCM
@@ -2443,112 +1244,53 @@ Chi nhánh Bình Dương: 113, NE3, Chánh Phú Hoà, Bến Cát, Bình Dương 
 Chi nhánh Quy Nhơn: Tổ 15, Khu 2, P. Nhơn Bình, Tp. Quy nhơn - ĐT: 0937 596 248
 Mail: thanhtienelevator@gmail.com
 Website: https://suachuathangmay247.com
-         https://thangmaykenzo.com</textarea
-            >
-            <div
-              style="
-                font-size: 0.75rem;
-                color: var(--text-secondary);
-                margin-top: 0.5rem;
-              "
-            >
-              💡 Sử dụng <code>{title}</code> và <code>{keyword}</code> để chèn
-              tiêu đề và từ khóa SEO
+         https://thangmaykenzo.com</textarea>
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem;">
+              Dùng <code style="color: var(--accent); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">{title}</code>
+              và <code style="color: var(--accent); background: var(--bg-2); padding: 1px 5px; border-radius: 3px;">{keyword}</code> để chèn biến
             </div>
           </div>
 
-          <!-- Site Preset Selector -->
-          <div
-            class="form-group"
-            style="
-              margin-bottom: 1.5rem;
-              padding-bottom: 1.5rem;
-              border-bottom: 1px solid var(--border-color);
-            "
-          >
-            <label class="form-label">
-              <i class="fas fa-bookmark"></i> Chọn cấu hình đã lưu
-            </label>
-            <div style="display: flex; gap: 0.5rem; align-items: center">
-              <select
-                class="form-input"
-                id="presetSelect"
-                style="flex: 1"
-                onchange="loadPreset()"
-              >
+          <!-- Preset selector -->
+          <div class="form-group" style="padding-bottom: 1rem; border-bottom: 1px solid var(--border);">
+            <label class="form-label"><i class="fas fa-bookmark"></i> Cấu hình đã lưu</label>
+            <div style="display: flex; gap: 0.4rem;">
+              <select class="form-input" id="presetSelect" style="flex: 1;" onchange="loadPreset()">
                 <option value="">-- Chọn site đã lưu --</option>
               </select>
-              <button
-                class="btn btn-primary"
-                onclick="saveCurrentAsPreset()"
-                title="Lưu cấu hình hiện tại"
-                style="padding: 10px 14px"
-              >
+              <button class="btn btn-primary tooltip" data-tooltip="Lưu" onclick="saveCurrentAsPreset()">
                 <i class="fas fa-save"></i>
               </button>
-              <button
-                class="btn btn-delete"
-                onclick="deleteCurrentPreset()"
-                title="Xóa preset đã chọn"
-                style="padding: 10px 14px"
-              >
+              <button class="btn btn-delete tooltip" data-tooltip="Xóa" onclick="deleteCurrentPreset()">
                 <i class="fas fa-trash"></i>
               </button>
             </div>
-            <div
-              style="
-                font-size: 0.75rem;
-                color: var(--text-secondary);
-                margin-top: 0.5rem;
-              "
-            >
-              💾 Lưu cấu hình để sử dụng nhanh cho nhiều website
-            </div>
           </div>
 
+          <!-- WordPress credentials -->
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">WordPress Username</label>
-              <input
-                type="text"
-                class="form-input"
-                id="wpUsername"
-                placeholder="admin"
-              />
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">WP Username</label>
+              <input type="text" class="form-input" id="wpUsername" placeholder="admin" />
             </div>
-            <div class="form-group">
-              <label class="form-label">WordPress Password</label>
-              <input
-                type="password"
-                class="form-input"
-                id="wpPassword"
-                placeholder="••••••••"
-              />
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">WP Password</label>
+              <input type="password" class="form-input" id="wpPassword" placeholder="••••••••" />
             </div>
           </div>
 
           <div class="form-group">
             <label class="form-label">WordPress Login URL</label>
-            <input
-              type="url"
-              class="form-input"
-              id="wpLoginUrl"
-              placeholder="https://your-site.com/wp-login.php"
-            />
+            <input type="url" class="form-input" id="wpLoginUrl" placeholder="https://your-site.com/wp-login.php" />
           </div>
 
           <div class="form-group">
             <label class="form-label">WordPress Admin URL</label>
-            <input
-              type="url"
-              class="form-input"
-              id="wpAdminUrl"
-              placeholder="https://your-site.com/wp-admin"
-            />
+            <input type="url" class="form-input" id="wpAdminUrl" placeholder="https://your-site.com/wp-admin" />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Danh mục khi đăng bài</label>
+            <label class="form-label">Danh mục đăng bài</label>
             <select class="form-input" id="categoryName">
               <option value="Tin tức" selected>Tin tức</option>
               <option value="BLOG">BLOG</option>
@@ -2556,34 +1298,19 @@ Website: https://suachuathangmay247.com
           </div>
 
           <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Số bài/ngày</label>
-              <input
-                type="number"
-                class="form-input"
-                id="postsPerDay"
-                value="2"
-                min="1"
-                max="10"
-              />
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Bài/ngày</label>
+              <input type="number" class="form-input" id="postsPerDay" value="2" min="1" max="10" />
             </div>
-            <div class="form-group">
-              <label class="form-label">Delay giữa các bài (giây)</label>
-              <input
-                type="number"
-                class="form-input"
-                id="delayBetweenRequests"
-                value="65"
-                min="1"
-              />
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Delay (giây)</label>
+              <input type="number" class="form-input" id="delayBetweenRequests" value="65" min="1" />
             </div>
           </div>
 
           <div class="form-group">
-            <div class="toggle-group">
-              <label class="form-label" style="margin-bottom: 0"
-                >Headless Mode (Ẩn trình duyệt)</label
-              >
+            <div class="toggle-group" style="justify-content: space-between;">
+              <span style="font-size: 0.85rem;">Headless (ẩn browser)</span>
               <label class="toggle">
                 <input type="checkbox" id="headlessMode" />
                 <span class="toggle-slider"></span>
@@ -2591,55 +1318,42 @@ Website: https://suachuathangmay247.com
             </div>
           </div>
 
-          <div class="form-group" style="margin-top: 1rem">
-            <label class="form-label">Tùy chọn tự động</label>
-            <div style="display: grid; gap: 0.6rem">
-              <div class="toggle-group" style="justify-content: space-between">
-                <span>Auto SEO keyword (Rank Math)</span>
-                <label class="toggle">
-                  <input type="checkbox" id="autoSetSeoKeyword" checked />
-                  <span class="toggle-slider"></span>
-                </label>
+          <div class="form-group">
+            <label class="form-label">Tự động hóa</label>
+            <div style="display: grid; gap: 0.55rem;">
+              <div class="toggle-group" style="justify-content: space-between;">
+                <span style="font-size: 0.85rem;">Auto SEO keyword (Rank Math)</span>
+                <label class="toggle"><input type="checkbox" id="autoSetSeoKeyword" checked /><span class="toggle-slider"></span></label>
               </div>
-              <div class="toggle-group" style="justify-content: space-between">
-                <span>Auto chèn hình trong bài</span>
-                <label class="toggle">
-                  <input type="checkbox" id="autoInsertInlineImages" checked />
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="toggle-group" style="justify-content: space-between;">
+                <span style="font-size: 0.85rem;">Auto chèn hình trong bài</span>
+                <label class="toggle"><input type="checkbox" id="autoInsertInlineImages" checked /><span class="toggle-slider"></span></label>
               </div>
-              <div class="toggle-group" style="justify-content: space-between">
-                <span>Auto ảnh đại diện</span>
-                <label class="toggle">
-                  <input type="checkbox" id="autoSetFeaturedImage" />
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="toggle-group" style="justify-content: space-between;">
+                <span style="font-size: 0.85rem;">Auto ảnh đại diện</span>
+                <label class="toggle"><input type="checkbox" id="autoSetFeaturedImage" /><span class="toggle-slider"></span></label>
               </div>
-              <div class="toggle-group" style="justify-content: space-between">
-                <span>Auto chọn danh mục</span>
-                <label class="toggle">
-                  <input type="checkbox" id="autoSelectCategory" checked />
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="toggle-group" style="justify-content: space-between;">
+                <span style="font-size: 0.85rem;">Auto chọn danh mục</span>
+                <label class="toggle"><input type="checkbox" id="autoSelectCategory" checked /><span class="toggle-slider"></span></label>
               </div>
-              <div class="toggle-group" style="justify-content: space-between">
-                <span>Auto thêm tag</span>
-                <label class="toggle">
-                  <input type="checkbox" id="autoAddTags" checked />
-                  <span class="toggle-slider"></span>
-                </label>
+              <div class="toggle-group" style="justify-content: space-between;">
+                <span style="font-size: 0.85rem;">Auto thêm tag</span>
+                <label class="toggle"><input type="checkbox" id="autoAddTags" checked /><span class="toggle-slider"></span></label>
               </div>
             </div>
           </div>
 
-          <button class="btn btn-secondary btn-large" onclick="saveConfig()">
-            <i class="fas fa-save"></i>
-            Lưu cấu hình
+          <button class="btn btn-secondary btn-large" onclick="saveConfig()" style="width: 100%;">
+            <i class="fas fa-save"></i> Lưu cấu hình
           </button>
         </div>
       </div>
 
-      <!-- Topics Card -->
+      <!-- ============================================================
+           TOPICS CARD (right column)
+           ============================================================ -->
+      <div class="workspace">
       <div class="card fade-in">
         <div class="card-header">
           <i class="fas fa-list-alt"></i>
@@ -2647,311 +1361,154 @@ Website: https://suachuathangmay247.com
         </div>
         <div class="card-body">
           <!-- Mode Selector -->
-          <div
-            class="mode-selector"
-            style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem"
-          >
-            <button
-              class="btn mode-btn active"
-              id="modeSharedKeyword"
-              onclick="switchInputMode('shared')"
-              style="flex: 1; padding: 10px 16px; font-size: 0.8rem"
-            >
-              <i class="fas fa-key"></i>
-              Nhiều tiêu đề + 1 từ khóa
+          <div style="display: flex; gap: 0.4rem; margin-bottom: 1rem;">
+            <button class="btn mode-btn active" id="modeSharedKeyword"
+                    onclick="switchInputMode('shared')" style="flex: 1;">
+              <i class="fas fa-key"></i> Nhiều tiêu đề + 1 từ khóa
             </button>
-            <button
-              class="btn mode-btn"
-              id="modeIndividualKeyword"
-              onclick="switchInputMode('individual')"
-              style="flex: 1; padding: 10px 16px; font-size: 0.8rem"
-            >
-              <i class="fas fa-tags"></i>
-              Mỗi tiêu đề + từ khóa riêng
+            <button class="btn mode-btn" id="modeIndividualKeyword"
+                    onclick="switchInputMode('individual')" style="flex: 1;">
+              <i class="fas fa-tags"></i> Mỗi tiêu đề + từ khóa riêng
             </button>
           </div>
 
-          <!-- Shared Keyword Mode (Default) -->
+          <!-- Shared Keyword Mode -->
           <div id="sharedKeywordMode">
-            <div class="form-group" style="margin-bottom: 1rem">
-              <label class="form-label"
-                >🔑 Từ khóa SEO (dùng chung cho tất cả)</label
-              >
-              <input
-                type="text"
-                class="form-input"
-                id="sharedKeyword"
-                placeholder="Nhập từ khóa SEO chung..."
-                style="border-color: var(--accent-primary)"
-              />
-            </div>
-            <div class="form-group" style="margin-bottom: 1rem">
-              <label class="form-label"
-                >🏷️ Tags (dùng chung cho tất cả - phân cách bằng dấu
-                phẩy)</label
-              >
-              <input
-                type="text"
-                class="form-input"
-                id="sharedTags"
-                placeholder="hoa lan hồ điệp, chậu hoa lan hồ điệp, lan hồ điệp tím..."
-              />
+            <div class="form-row">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Từ khóa SEO chung</label>
+                <input type="text" class="form-input" id="sharedKeyword" placeholder="Từ khóa SEO dùng chung..." />
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Tags chung (phân cách dấu phẩy)</label>
+                <input type="text" class="form-input" id="sharedTags" placeholder="lan hồ điệp, chậu hoa..." />
+              </div>
             </div>
             <div class="form-group">
-              <label class="form-label"
-                >📝 Danh sách tiêu đề (mỗi dòng 1 tiêu đề)</label
-              >
-              <textarea
-                class="form-input"
-                id="bulkTitles"
-                rows="6"
-                placeholder="Nhập mỗi tiêu đề trên 1 dòng...
+              <label class="form-label">Danh sách tiêu đề (mỗi dòng 1 tiêu đề)</label>
+              <textarea class="form-input" id="bulkTitles" rows="5" placeholder="Nhập mỗi tiêu đề trên 1 dòng...
 Ví dụ:
 Báo giá thang máy gia đình 2025
-Lắp đặt thang máy tải khách
-Sửa chữa thang máy tải hàng"
-                style="line-height: 1.6"
-              ></textarea>
+Lắp đặt thang máy tải khách"></textarea>
             </div>
-            <button
-              class="btn btn-primary"
-              onclick="addBulkTitles()"
-              style="width: 100%; margin-top: 0.75rem"
-            >
-              <i class="fas fa-plus-circle"></i>
-              Thêm tất cả tiêu đề
+            <button class="btn btn-primary" onclick="addBulkTitles()" style="width: 100%;">
+              <i class="fas fa-plus-circle"></i> Thêm tất cả tiêu đề
             </button>
           </div>
 
           <!-- Individual Keyword Mode -->
-          <div id="individualKeywordMode" style="display: none">
+          <div id="individualKeywordMode" style="display: none;">
             <div class="add-topic-form">
-              <input
-                type="text"
-                class="form-input"
-                id="newTitle"
-                placeholder="Tiêu đề bài viết..."
-              />
-              <input
-                type="text"
-                class="form-input"
-                id="newKeyword"
-                placeholder="Từ khóa SEO..."
-              />
-              <input
-                type="text"
-                class="form-input"
-                id="newTags"
-                placeholder="Tags (phân cách bằng dấu phẩy)..."
-                style="flex: 2"
-              />
-              <button
-                class="btn btn-primary btn-icon tooltip"
-                data-tooltip="Thêm"
-                onclick="addTopic()"
-              >
+              <input type="text" class="form-input" id="newTitle" placeholder="Tiêu đề bài viết..." />
+              <input type="text" class="form-input" id="newKeyword" placeholder="Từ khóa SEO..." />
+              <input type="text" class="form-input" id="newTags" placeholder="Tags..." style="flex: 2 1 260px;" />
+              <button class="btn btn-primary btn-icon tooltip" data-tooltip="Thêm" onclick="addTopic()">
                 <i class="fas fa-plus"></i>
               </button>
             </div>
           </div>
 
           <!-- Topics List -->
-          <div
-            class="topics-container"
-            id="topicsContainer"
-            style="margin-top: 1.25rem"
-          >
+          <div class="topics-container" id="topicsContainer" style="margin-top: 1rem;">
             <div class="empty-state" id="emptyTopics">
               <i class="fas fa-folder-open"></i>
               <p>Chưa có chủ đề nào</p>
             </div>
           </div>
 
-          <div style="margin-top: 1rem; display: flex; gap: 0.5rem">
-            <button
-              class="btn btn-secondary"
-              onclick="loadSampleTopics()"
-              style="flex: 1"
-            >
-              <i class="fas fa-magic"></i>
-              Thêm mẫu
+          <div style="margin-top: 0.85rem; display: flex; gap: 0.5rem;">
+            <button class="btn btn-secondary" onclick="loadSampleTopics()" style="flex: 1;">
+              <i class="fas fa-wand-magic-sparkles"></i> Thêm mẫu
             </button>
-            <button
-              class="btn btn-secondary"
-              onclick="clearAllTopics()"
-              style="flex: 1"
-            >
-              <i class="fas fa-trash"></i>
-              Xóa tất cả
+            <button class="btn btn-secondary" onclick="clearAllTopics()" style="flex: 1;">
+              <i class="fas fa-trash"></i> Xóa tất cả
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Date Distribution Card -->
+      <!-- ============================================================
+           DATE DISTRIBUTION CARD
+           ============================================================ -->
       <div class="card fade-in" id="dateDistributionCard">
         <div class="card-header">
           <i class="fas fa-calendar-alt"></i>
           <h2>Phân bố ngày đăng</h2>
         </div>
         <div class="card-body">
-          <div id="dateDisabledOverlay" style="position: relative">
-            <div
-              id="dateDisabledMsg"
-              style="
-                text-align: center;
-                padding: 1.5rem;
-                color: var(--text-muted);
-                border: 1px dashed var(--border-color);
-                border-radius: var(--radius);
-              "
-            >
-              <i
-                class="fas fa-lock"
-                style="font-size: 1.5rem; margin-bottom: 0.5rem; display: block"
-              ></i>
-              <p>Vui lòng thêm tiêu đề bài viết trước</p>
+          <div id="dateDisabledOverlay" style="position: relative;">
+            <div id="dateDisabledMsg" style="
+              text-align: center;
+              padding: 1.5rem;
+              color: var(--text-muted);
+              border: 1px dashed var(--border);
+              border-radius: var(--radius-sm);
+            ">
+              <i class="fas fa-lock" style="font-size: 1.3rem; display: block; margin-bottom: 0.4rem;"></i>
+              <p style="font-size: 0.85rem;">Vui lòng thêm tiêu đề bài viết trước</p>
             </div>
           </div>
 
-          <div id="dateInputSection" style="display: none">
-            <div class="form-group" style="margin-bottom: 1rem">
-              <label class="form-label">🗓️ Số ngày đăng</label>
-              <div
-                style="
-                  display: flex;
-                  align-items: center;
-                  gap: 0.5rem;
-                  max-width: 260px;
-                "
-              >
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  style="padding: 8px 12px"
-                  onclick="adjustScheduleDays(-1)"
-                  title="Giảm 1 ngày"
-                >
+          <div id="dateInputSection" style="display: none;">
+            <div class="form-group">
+              <label class="form-label">Số ngày đăng</label>
+              <div style="display: flex; align-items: center; gap: 0.5rem; max-width: 240px;">
+                <button type="button" class="btn btn-secondary btn-icon" onclick="adjustScheduleDays(-1)" title="−1">
                   <i class="fas fa-minus"></i>
                 </button>
-                <input
-                  type="number"
-                  class="form-input"
-                  id="scheduleDaysCount"
-                  min="1"
-                  value="1"
-                  style="text-align: center; max-width: 110px"
-                  onchange="setScheduleDaysFromInput()"
-                />
-                <button
-                  type="button"
-                  class="btn btn-secondary"
-                  style="padding: 8px 12px"
-                  onclick="adjustScheduleDays(1)"
-                  title="Tăng 1 ngày"
-                >
+                <input type="number" class="form-input" id="scheduleDaysCount" min="1" value="1"
+                       style="text-align: center;" onchange="setScheduleDaysFromInput()" />
+                <button type="button" class="btn btn-secondary btn-icon" onclick="adjustScheduleDays(1)" title="+1">
                   <i class="fas fa-plus"></i>
                 </button>
               </div>
             </div>
 
-            <div
-              style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem"
-            >
-              <div class="form-group">
-                <label class="form-label">📅 Ngày bắt đầu</label>
-                <input
-                  type="date"
-                  class="form-input"
-                  id="scheduleStartDate"
-                  onchange="onScheduleDateChanged('start')"
-                />
+            <div class="form-row">
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Ngày bắt đầu</label>
+                <input type="date" class="form-input" id="scheduleStartDate" onchange="onScheduleDateChanged('start')" />
               </div>
-              <div class="form-group">
-                <label class="form-label">📅 Ngày kết thúc</label>
-                <input
-                  type="date"
-                  class="form-input"
-                  id="scheduleEndDate"
-                  onchange="onScheduleDateChanged('end')"
-                />
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">Ngày kết thúc</label>
+                <input type="date" class="form-input" id="scheduleEndDate" onchange="onScheduleDateChanged('end')" />
               </div>
             </div>
 
-            <div
-              id="dateValidationMsg"
-              style="
-                margin-top: 0.75rem;
-                padding: 0.75rem 1rem;
-                border-radius: var(--radius-sm);
-                display: none;
-                font-size: 0.85rem;
-              "
-            ></div>
+            <div id="dateValidationMsg" style="
+              margin-top: 0.75rem;
+              padding: 0.55rem 0.8rem;
+              border-radius: var(--radius-sm);
+              display: none;
+              font-size: 0.82rem;
+            "></div>
 
-            <div
-              id="dateSummary"
-              style="
-                margin-top: 1rem;
-                padding: 1rem;
-                background: var(--bg-input);
-                border: 1px solid var(--border-color);
-                border-radius: var(--radius);
-                display: none;
-              "
-            >
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: repeat(3, 1fr);
-                  gap: 0.75rem;
-                  text-align: center;
-                "
-              >
+            <div id="dateSummary" style="
+              margin-top: 1rem;
+              padding: 0.85rem;
+              background: var(--bg-2);
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              display: none;
+            ">
+              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; text-align: center;">
                 <div>
-                  <div style="color: var(--text-muted); font-size: 0.75rem">
-                    Tổng bài viết
+                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
+                    Tổng bài
                   </div>
-                  <div
-                    id="summaryTotalPosts"
-                    style="
-                      font-size: 1.25rem;
-                      font-weight: 700;
-                      color: var(--accent-primary);
-                    "
-                  >
-                    0
-                  </div>
+                  <div id="summaryTotalPosts" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
                 </div>
                 <div>
-                  <div style="color: var(--text-muted); font-size: 0.75rem">
+                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
                     Tổng ngày
                   </div>
-                  <div
-                    id="summaryTotalDays"
-                    style="
-                      font-size: 1.25rem;
-                      font-weight: 700;
-                      color: var(--accent-primary);
-                    "
-                  >
-                    0
-                  </div>
+                  <div id="summaryTotalDays" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
                 </div>
                 <div>
-                  <div style="color: var(--text-muted); font-size: 0.75rem">
+                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
                     Bài/ngày
                   </div>
-                  <div
-                    id="summaryPostsPerDay"
-                    style="
-                      font-size: 1.25rem;
-                      font-weight: 700;
-                      color: var(--accent-primary);
-                    "
-                  >
-                    0
-                  </div>
+                  <div id="summaryPostsPerDay" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
                 </div>
               </div>
             </div>
@@ -2959,33 +1516,18 @@ Sửa chữa thang máy tải hàng"
         </div>
       </div>
 
-      <!-- Progress Section -->
+      <!-- ============================================================
+           PROGRESS CARD
+           ============================================================ -->
       <div class="card progress-section fade-in">
-        <div
-          class="card-header"
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          "
-        >
-          <div style="display: flex; align-items: center; gap: 0.75rem">
-            <i class="fas fa-tasks"></i>
+        <div class="card-header" style="justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.65rem;">
+            <i class="fas fa-gauge-high"></i>
             <h2>Tiến trình</h2>
           </div>
-          <button
-            class="btn btn-icon tooltip"
-            data-tooltip="Bật/tắt âm thanh"
-            onclick="toggleTypingSound()"
-            id="soundToggleBtn"
-            style="
-              padding: 0.5rem;
-              font-size: 0.85rem;
-              background: transparent;
-              border: 1px solid var(--border-color);
-              color: var(--text-muted);
-            "
-          >
+          <button class="btn btn-icon tooltip" data-tooltip="Bật/tắt âm thanh"
+                  onclick="toggleTypingSound()" id="soundToggleBtn"
+                  style="padding: 5px 10px; font-size: 0.8rem;">
             <i class="fas fa-volume-up" id="soundIcon"></i>
           </button>
         </div>
@@ -3015,11 +1557,7 @@ Sửa chữa thang máy tải hàng"
               <span class="progress-percent" id="progressValue">0%</span>
             </div>
             <div class="progress-bar">
-              <div
-                class="progress-fill"
-                id="progressBar"
-                style="width: 0%"
-              ></div>
+              <div class="progress-fill" id="progressBar" style="width: 0%;"></div>
             </div>
           </div>
 
@@ -3027,7 +1565,7 @@ Sửa chữa thang máy tải hàng"
             <div class="logs-container" id="logsContainer">
               <div class="log-entry">
                 <span class="log-time">--:--:--</span>
-                <span class="log-message">Đang chờ bắt đầu...</span>
+                <span class="log-message info">Sẵn sàng. Thêm chủ đề và nhấn Bắt đầu để chạy.</span>
               </div>
             </div>
             <div class="task-checklist-panel">
@@ -3038,10 +1576,10 @@ Sửa chữa thang máy tải hàng"
                 <table class="task-checklist-table">
                   <thead>
                     <tr>
-                      <th style="width: 52px">#</th>
-                      <th style="width: 110px">Bài</th>
+                      <th style="width: 42px;">#</th>
+                      <th style="width: 100px;">Bài</th>
                       <th>Checklist</th>
-                      <th style="width: 120px">Trạng thái</th>
+                      <th style="width: 110px;">Trạng thái</th>
                     </tr>
                   </thead>
                   <tbody id="taskChecklistBody"></tbody>
@@ -3051,121 +1589,82 @@ Sửa chữa thang máy tải hàng"
           </div>
 
           <div class="control-buttons">
-            <!-- Start button - shown initially -->
-            <button
-              class="btn btn-primary btn-large"
-              id="startBtn"
-              onclick="startAutomation()"
-            >
-              <i class="fas fa-play"></i>
-              Bắt đầu
+            <button class="btn btn-primary btn-large" id="startBtn" onclick="startAutomation()">
+              <i class="fas fa-play"></i> Bắt đầu
             </button>
-            <!-- Running controls - shown after start -->
-            <div id="runningControls" style="display: none; gap: 1rem">
-              <button
-                class="btn btn-warning btn-large"
-                id="pauseBtn"
-                onclick="pauseAutomation()"
-              >
-                <i class="fas fa-pause"></i>
-                Tạm dừng
+            <div id="runningControls" style="display: none;">
+              <button class="btn btn-warning btn-large" id="pauseBtn" onclick="pauseAutomation()">
+                <i class="fas fa-pause"></i> Tạm dừng
               </button>
-              <button
-                class="btn btn-primary btn-large"
-                id="resumeBtn"
-                onclick="resumeAutomation()"
-                style="display: none"
-              >
-                <i class="fas fa-play"></i>
-                Tiếp tục
+              <button class="btn btn-primary btn-large" id="resumeBtn" onclick="resumeAutomation()" style="display: none;">
+                <i class="fas fa-play"></i> Tiếp tục
               </button>
-              <button
-                class="btn btn-danger btn-large"
-                id="stopBtn"
-                onclick="stopAutomation()"
-              >
-                <i class="fas fa-stop"></i>
-                Kết thúc
+              <button class="btn btn-danger btn-large" id="stopBtn" onclick="stopAutomation()">
+                <i class="fas fa-stop"></i> Kết thúc
               </button>
             </div>
           </div>
-          <!-- Pause info banner -->
-          <div id="pauseBanner" class="pause-banner" style="display: none">
+
+          <div id="pauseBanner" class="pause-banner" style="display: none;">
             <i class="fas fa-exclamation-triangle"></i>
             <span id="pauseReason">Đã tạm dừng</span>
           </div>
         </div>
       </div>
 
-      <!-- Content Preview Section -->
-      <div class="card progress-section fade-in">
+      <!-- ============================================================
+           CONTENT PREVIEW CARD
+           ============================================================ -->
+      <div class="card fade-in">
         <div class="card-header">
           <i class="fas fa-file-alt"></i>
           <h2>
             Nội dung đã tạo
-            <span
-              id="contentCount"
-              style="font-size: 0.8rem; color: var(--text-muted)"
-              >(0)</span
-            >
+            <span id="contentCount" style="font-size: 0.78rem; color: var(--text-muted); font-weight: 400; margin-left: 0.35rem;">(0)</span>
           </h2>
         </div>
         <div class="card-body">
           <div class="content-list-container" id="contentListContainer">
             <div class="content-preview-empty" id="contentListEmpty">
               <i class="fas fa-file-alt"></i>
-              <p>Nội dung sẽ hiển thị ở đây khi Gemini tạo xong</p>
+              <p style="font-size: 0.88rem;">Nội dung sẽ hiển thị ở đây khi Gemini tạo xong</p>
             </div>
-            <div id="contentAccordion">
-              <!-- Accordion items will be inserted here dynamically -->
-            </div>
+            <div id="contentAccordion"></div>
           </div>
         </div>
       </div>
+      </div> <!-- /.workspace -->
     </div>
 
-    <!-- Edit Content Modal -->
-    <div class="modal-overlay" id="editModal" style="display: none">
+    <!-- ============================================================
+         EDIT CONTENT MODAL
+         ============================================================ -->
+    <div class="modal-overlay" id="editModal" style="display: none;">
       <div class="modal-content modal-wide">
-        <div class="modal-header">
-          <div>
-            <h3><i class="fas fa-edit"></i> Chỉnh sửa nội dung</h3>
-            <span
-              id="editTitle"
-              style="color: var(--text-muted); font-size: 0.85rem"
-            ></span>
+        <div class="modal-header" style="justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.6rem;">
+            <i class="fas fa-edit"></i>
+            <div>
+              <h3>Chỉnh sửa nội dung</h3>
+              <span id="editTitle" style="color: var(--text-muted); font-size: 0.8rem; font-weight: 400;"></span>
+            </div>
           </div>
-          <div style="display: flex; align-items: center; gap: 1rem">
-            <span style="color: var(--text-muted); font-size: 0.85rem"
-              >Số từ: <strong id="editWordCount">0</strong></span
-            >
-            <button class="btn btn-icon" onclick="closeEditModal()">
-              <i class="fas fa-times"></i>
-            </button>
+          <div style="display: flex; align-items: center; gap: 0.85rem;">
+            <span style="color: var(--text-muted); font-size: 0.8rem;">
+              Số từ: <strong id="editWordCount" style="color: var(--text-primary);">0</strong>
+            </span>
+            <button class="btn btn-icon" onclick="closeEditModal()"><i class="fas fa-times"></i></button>
           </div>
         </div>
         <div class="modal-body edit-split-view">
-          <!-- HTML Editor -->
           <div class="edit-panel">
-            <div class="edit-panel-header">
-              <i class="fas fa-code"></i> Mã HTML
-            </div>
-            <textarea
-              id="editContentArea"
-              class="form-input edit-textarea"
-              placeholder="Nhập nội dung HTML..."
-              oninput="updateEditPreview()"
-            ></textarea>
+            <div class="edit-panel-header"><i class="fas fa-code"></i> Mã HTML</div>
+            <textarea id="editContentArea" class="form-input edit-textarea"
+                      placeholder="Nhập nội dung HTML..." oninput="updateEditPreview()"></textarea>
           </div>
-
-          <!-- Visual Preview -->
           <div class="edit-panel">
-            <div class="edit-panel-header">
-              <i class="fas fa-eye"></i> Xem trước
-            </div>
-            <div class="edit-preview" id="editPreview">
-              <!-- Preview will render here -->
-            </div>
+            <div class="edit-panel-header"><i class="fas fa-eye"></i> Xem trước</div>
+            <div class="edit-preview" id="editPreview"></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -3179,7 +1678,9 @@ Sửa chữa thang máy tải hàng"
       </div>
     </div>
 
-    <!-- Custom Modal Dialog -->
+    <!-- ============================================================
+         CUSTOM MODAL DIALOG
+         ============================================================ -->
     <div class="modal-overlay" id="customModal">
       <div class="modal-dialog">
         <div class="modal-header" id="modalHeader">
@@ -3187,24 +1688,12 @@ Sửa chữa thang máy tải hàng"
           <span class="modal-title" id="modalTitle">Xác nhận</span>
         </div>
         <div class="modal-body">
-          <p class="modal-message" id="modalMessage">
-            Bạn có chắc chắn muốn thực hiện hành động này?
-          </p>
-          <input
-            type="text"
-            class="modal-input"
-            id="modalInput"
-            style="display: none"
-            placeholder=""
-          />
+          <p class="modal-message" id="modalMessage">Bạn có chắc chắn muốn thực hiện hành động này?</p>
+          <input type="text" class="modal-input" id="modalInput" style="display: none;" placeholder="" />
         </div>
         <div class="modal-footer">
-          <button class="modal-btn modal-btn-cancel" id="modalCancel">
-            Hủy
-          </button>
-          <button class="modal-btn modal-btn-confirm" id="modalConfirm">
-            Xác nhận
-          </button>
+          <button class="modal-btn modal-btn-cancel" id="modalCancel">Hủy</button>
+          <button class="modal-btn modal-btn-confirm" id="modalConfirm">Xác nhận</button>
         </div>
       </div>
     </div>
@@ -3216,6 +1705,55 @@ Sửa chữa thang máy tải hàng"
     </div>
 
     <script>
+      // ============================================================================
+      // WAKE LOCK — Giữ màn hình không ngủ khi automation đang chạy
+      // Chỉ hoạt động khi tab đang mở (browser sẽ tự release khi tab ẩn).
+      // ============================================================================
+
+      let wakeLockSentinel = null;
+
+      async function acquireWakeLock() {
+        if (!("wakeLock" in navigator)) {
+          console.log("Wake Lock API không khả dụng trên browser này");
+          return false;
+        }
+        try {
+          wakeLockSentinel = await navigator.wakeLock.request("screen");
+          wakeLockSentinel.addEventListener("release", () => {
+            // Browser tự release khi tab ẩn — log nhưng không làm gì thêm
+            console.log("Wake lock released");
+          });
+          console.log("🔆 Wake lock acquired");
+          return true;
+        } catch (err) {
+          console.warn("Không thể xin wake lock:", err);
+          return false;
+        }
+      }
+
+      async function releaseWakeLock() {
+        if (wakeLockSentinel !== null) {
+          try {
+            await wakeLockSentinel.release();
+          } catch (_) {}
+          wakeLockSentinel = null;
+          console.log("🌙 Wake lock released by app");
+        }
+      }
+
+      // Khi user quay lại tab sau khi đã chuyển đi, browser đã release wake lock.
+      // Nếu automation vẫn đang chạy thì ta xin lại.
+      document.addEventListener("visibilitychange", async () => {
+        if (
+          document.visibilityState === "visible" &&
+          typeof isRunning !== "undefined" &&
+          isRunning &&
+          wakeLockSentinel === null
+        ) {
+          await acquireWakeLock();
+        }
+      });
+
       // ============================================================================
       // MATRIX RAIN EFFECT
       // ============================================================================
@@ -3324,6 +1862,48 @@ Sửa chữa thang máy tải hàng"
           document.getElementById("themeLabel").textContent = "Dark";
         }
       }
+
+      // ============================================================================
+      // WAKE LOCK — giữ màn hình không tắt khi đang chạy automation.
+      // Chỉ hoạt động khi tab đang active; nếu user chuyển tab thì browser sẽ
+      // tự release, và khi quay lại tab này sẽ tự acquire lại.
+      // ============================================================================
+      let wakeLock = null;
+
+      async function requestWakeLock() {
+        if (!("wakeLock" in navigator)) {
+          console.warn("Wake Lock API không được trình duyệt hỗ trợ");
+          return false;
+        }
+        try {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => {
+            // Browser có thể auto-release (ví dụ khi tab ẩn). Reset biến để
+            // visibilitychange có thể xin lại.
+            wakeLock = null;
+          });
+          return true;
+        } catch (err) {
+          console.warn("Không xin được wake lock:", err.message);
+          return false;
+        }
+      }
+
+      async function releaseWakeLock() {
+        if (wakeLock) {
+          try {
+            await wakeLock.release();
+          } catch (_) {}
+          wakeLock = null;
+        }
+      }
+
+      // Khi tab quay lại visible và automation đang chạy thì xin lại wake lock
+      document.addEventListener("visibilitychange", async () => {
+        if (document.visibilityState === "visible" && isRunning && !wakeLock) {
+          await requestWakeLock();
+        }
+      });
 
       document.addEventListener("DOMContentLoaded", () => {
         loadSavedTheme();
@@ -4425,8 +3005,9 @@ Sửa chữa thang máy tải hàng"
 
       // Save configuration
       async function saveConfig() {
+        const providerEl = document.getElementById("aiProviderSelect");
         const config = {
-          ai_provider: "gemini_web", // Only Gemini Web Chat
+          ai_provider: providerEl ? providerEl.value : "gemini_web",
           gemini_prompt: document.getElementById("geminiPrompt").value,
           wp_username: document.getElementById("wpUsername").value,
           wp_password: document.getElementById("wpPassword").value,
@@ -4482,6 +3063,12 @@ Sửa chữa thang máy tải hàng"
         if (savedConfig) {
           const config = JSON.parse(savedConfig);
 
+          // AI Provider
+          const providerEl = document.getElementById("aiProviderSelect");
+          if (providerEl && config.ai_provider) {
+            providerEl.value = config.ai_provider;
+          }
+
           // Gemini Prompt
           if (config.gemini_prompt) {
             document.getElementById("geminiPrompt").value =
@@ -4535,6 +3122,11 @@ Sửa chữa thang máy tải hàng"
             config.wp_login_url || document.getElementById("wpLoginUrl").value;
           document.getElementById("wpAdminUrl").value =
             config.wp_admin_url || document.getElementById("wpAdminUrl").value;
+          // AI Provider (server)
+          const providerEl2 = document.getElementById("aiProviderSelect");
+          if (providerEl2 && config.ai_provider) {
+            providerEl2.value = config.ai_provider;
+          }
           document.getElementById("categoryName").value =
             config.category_name || "Tin tức";
           document.getElementById("autoSetSeoKeyword").checked =
@@ -5054,6 +3646,8 @@ Sửa chữa thang máy tải hàng"
 
           if (result.success) {
             isRunning = true;
+            // Xin wake lock để màn hình không ngủ khi tab active
+            requestWakeLock();
             document.getElementById("startBtn").style.display = "none";
             document.getElementById("runningControls").style.display = "flex";
             document.getElementById("pauseBtn").style.display = "block";
@@ -5087,6 +3681,7 @@ Sửa chữa thang máy tải hàng"
           await fetch("/api/stop", { method: "POST" });
 
           isRunning = false;
+          releaseWakeLock();
           document.getElementById("startBtn").style.display = "block";
           document.getElementById("runningControls").style.display = "none";
           document.getElementById("pauseBanner").style.display = "none";
@@ -5189,6 +3784,7 @@ Sửa chữa thang máy tải hàng"
           // Check if finished
           if (!status.is_running && isRunning) {
             isRunning = false;
+            releaseWakeLock();
             document.getElementById("startBtn").style.display = "block";
             document.getElementById("runningControls").style.display = "none";
             document.getElementById("pauseBanner").style.display = "none";
