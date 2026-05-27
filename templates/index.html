@@ -498,6 +498,18 @@
         border-color: var(--error);
       }
 
+      .btn-rerender {
+        padding: 6px 10px;
+        background: var(--bg-2);
+        color: var(--warning);
+        border-color: var(--border);
+      }
+      .btn-rerender:hover {
+        background: var(--warning);
+        color: #2a1a00;
+        border-color: var(--warning);
+      }
+
       .btn-expand {
         padding: 6px 12px;
         background: var(--bg-2);
@@ -633,6 +645,131 @@
       .add-topic-form .form-input { flex: 1 1 200px; }
       .add-topic-form .btn { flex-shrink: 0; }
 
+      .date-distribution-card .card-body {
+        display: grid;
+        gap: 0.95rem;
+      }
+      .date-disabled-overlay { position: relative; }
+      .date-disabled-msg {
+        text-align: center;
+        padding: 1.5rem;
+        color: var(--text-muted);
+        border: 1px dashed var(--border);
+        border-radius: var(--radius-sm);
+      }
+      .date-disabled-msg i {
+        font-size: 1.3rem;
+        display: block;
+        margin-bottom: 0.4rem;
+      }
+      .date-disabled-msg p { font-size: 0.85rem; }
+
+      .date-input-section { display: none; }
+      .date-input-section > * + * {
+        margin-top: 10px;
+      }
+      .schedule-days-group {
+        max-width: 340px;
+      }
+      .schedule-days-control {
+        display: grid;
+        grid-template-columns: auto minmax(120px, 1fr) auto;
+        gap: 0.6rem;
+        align-items: center;
+      }
+      .schedule-days-control .btn-icon {
+        min-width: 44px;
+        height: 44px;
+        padding: 0;
+      }
+      #scheduleDaysCount {
+        text-align: center;
+        font-size: 1.05rem;
+        font-weight: 600;
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+      }
+
+      .schedule-date-fields {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem;
+      }
+      .schedule-date-field {
+        margin-bottom: 0;
+      }
+      .schedule-date-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.4rem;
+      }
+      .schedule-date-label-row .form-label {
+        margin-bottom: 0;
+      }
+      .schedule-refresh-btn {
+        min-width: 36px;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+      }
+
+      #dateValidationMsg {
+        margin-top: 10px;
+        padding: 0.6rem 0.85rem;
+        border-radius: var(--radius-sm);
+        display: none;
+        font-size: 0.82rem;
+        line-height: 1.45;
+      }
+
+      #dateSummary {
+        margin-top: 10px;
+        padding: 0.2rem;
+        background: var(--bg-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        display: none;
+      }
+      .date-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        text-align: center;
+      }
+      .date-summary-item {
+        padding: 0.95rem 0.75rem;
+      }
+      .date-summary-item + .date-summary-item {
+        border-left: 1px solid var(--border);
+      }
+      .date-summary-label {
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .date-summary-value {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--accent);
+        font-family: "JetBrains Mono", monospace;
+      }
+
+      @media (max-width: 760px) {
+        .schedule-days-group {
+          max-width: none;
+        }
+        .schedule-date-fields {
+          grid-template-columns: 1fr;
+        }
+        .date-summary-grid {
+          grid-template-columns: 1fr;
+        }
+        .date-summary-item + .date-summary-item {
+          border-left: none;
+          border-top: 1px solid var(--border);
+        }
+      }
 
       /* =========================================================
          PROGRESS SECTION
@@ -755,12 +892,53 @@
       .task-checklist-header {
         padding: 0.55rem 0.75rem;
         border-bottom: 1px solid var(--border);
+        background: var(--bg-1);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      .task-checklist-header i { color: var(--accent); margin-right: 4px; }
+      .task-checklist-title {
         font-size: 0.78rem;
         font-weight: 600;
         color: var(--text-secondary);
-        background: var(--bg-1);
       }
-      .task-checklist-header i { color: var(--accent); margin-right: 4px; }
+      .task-checklist-summary {
+        font-size: 0.68rem;
+        color: var(--text-muted);
+      }
+      .task-checklist-toolbar {
+        display: flex;
+        gap: 0.4rem;
+        padding: 0.45rem 0.55rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-2);
+        align-items: center;
+      }
+      .checklist-filter {
+        min-width: 0;
+        font-size: 0.72rem;
+        padding: 0.28rem 0.4rem;
+        height: 30px;
+      }
+      .checklist-order-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        white-space: nowrap;
+      }
+      .checklist-order-toggle input {
+        accent-color: var(--accent);
+      }
+      .checklist-clear-btn {
+        margin-left: auto;
+        padding: 0.3rem 0.55rem;
+        font-size: 0.7rem;
+        height: 30px;
+      }
       .task-checklist-table-wrap {
         flex: 1;
         overflow-y: auto;
@@ -793,6 +971,15 @@
         color: var(--text-primary);
       }
       .task-checklist-table tr:last-child td { border-bottom: none; }
+      .task-checklist-table tr.row-error td {
+        background: rgba(239, 68, 68, 0.06);
+      }
+      .task-checklist-table tr.row-warning td {
+        background: rgba(245, 158, 11, 0.06);
+      }
+      .task-checklist-table tr.row-running td {
+        background: rgba(59, 130, 246, 0.06);
+      }
       .task-detail {
         font-size: 0.7rem;
         color: var(--text-muted);
@@ -800,6 +987,31 @@
         line-height: 1.4;
       }
       .task-step-content { display: block; }
+      .task-group-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 0.65rem;
+        font-weight: 500;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+      .task-group-tag.content {
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.35);
+        background: rgba(56, 189, 248, 0.12);
+      }
+      .task-group-tag.post {
+        color: #a78bfa;
+        border-color: rgba(167, 139, 250, 0.35);
+        background: rgba(167, 139, 250, 0.12);
+      }
+      .task-group-tag.system {
+        color: var(--text-muted);
+      }
       .task-status {
         display: inline-flex;
         align-items: center;
@@ -923,6 +1135,33 @@
         font-size: 0.73rem;
         color: var(--text-muted);
         flex-wrap: wrap;
+      }
+      .meta-icon {
+        color: var(--text-muted);
+        margin-right: 0.28rem;
+        width: 0.9rem;
+        text-align: center;
+      }
+      .content-status-tag {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0.1rem 0.45rem;
+        font-size: 0.68rem;
+      }
+      .content-status-tag.success {
+        color: var(--success);
+        border-color: rgba(0, 255, 136, 0.35);
+        background: rgba(0, 255, 136, 0.12);
+      }
+      .content-status-tag.failed {
+        color: var(--error);
+        border-color: rgba(255, 77, 109, 0.45);
+        background: rgba(255, 77, 109, 0.14);
+      }
+      .content-fail-reason {
+        margin-top: 0.25rem;
+        font-size: 0.72rem;
+        color: var(--error);
       }
       .content-accordion-actions {
         display: flex;
@@ -1199,7 +1438,7 @@
         </div>
         <div class="status-badge">
           <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
-            <span class="toggle-icon" id="themeIcon">☀️</span>
+            <i class="fas fa-sun toggle-icon" id="themeIcon"></i>
             <span id="themeLabel">Light</span>
           </button>
           <span class="status-dot" id="statusDot"></span>
@@ -1305,6 +1544,14 @@ Website: https://suachuathangmay247.com
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label">Delay (giây)</label>
               <input type="number" class="form-input" id="delayBetweenRequests" value="65" min="1" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Ngưỡng từ hợp lệ cho content</label>
+            <input type="number" class="form-input" id="contentMinValidWords" value="1401" min="1" />
+            <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem;">
+              Nội dung chỉ được xem là hợp lệ khi số từ lớn hơn hoặc bằng ngưỡng này.
             </div>
           </div>
 
@@ -1430,85 +1677,74 @@ Lắp đặt thang máy tải khách"></textarea>
       <!-- ============================================================
            DATE DISTRIBUTION CARD
            ============================================================ -->
-      <div class="card fade-in" id="dateDistributionCard">
+      <div class="card fade-in date-distribution-card" id="dateDistributionCard">
         <div class="card-header">
           <i class="fas fa-calendar-alt"></i>
           <h2>Phân bố ngày đăng</h2>
         </div>
         <div class="card-body">
-          <div id="dateDisabledOverlay" style="position: relative;">
-            <div id="dateDisabledMsg" style="
-              text-align: center;
-              padding: 1.5rem;
-              color: var(--text-muted);
-              border: 1px dashed var(--border);
-              border-radius: var(--radius-sm);
-            ">
-              <i class="fas fa-lock" style="font-size: 1.3rem; display: block; margin-bottom: 0.4rem;"></i>
-              <p style="font-size: 0.85rem;">Vui lòng thêm tiêu đề bài viết trước</p>
+          <div id="dateDisabledOverlay" class="date-disabled-overlay">
+            <div id="dateDisabledMsg" class="date-disabled-msg">
+              <i class="fas fa-lock"></i>
+              <p>Vui lòng thêm tiêu đề bài viết trước</p>
             </div>
           </div>
 
-          <div id="dateInputSection" style="display: none;">
-            <div class="form-group">
+          <div id="dateInputSection" class="date-input-section">
+            <div class="form-group schedule-days-group">
               <label class="form-label">Số ngày đăng</label>
-              <div style="display: flex; align-items: center; gap: 0.5rem; max-width: 240px;">
+              <div class="schedule-days-control">
                 <button type="button" class="btn btn-secondary btn-icon" onclick="adjustScheduleDays(-1)" title="−1">
                   <i class="fas fa-minus"></i>
                 </button>
                 <input type="number" class="form-input" id="scheduleDaysCount" min="1" value="1"
-                       style="text-align: center;" onchange="setScheduleDaysFromInput()" />
+                       onchange="setScheduleDaysFromInput()" />
                 <button type="button" class="btn btn-secondary btn-icon" onclick="adjustScheduleDays(1)" title="+1">
                   <i class="fas fa-plus"></i>
                 </button>
               </div>
             </div>
 
-            <div class="form-row">
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Ngày bắt đầu</label>
+            <div class="schedule-date-fields">
+              <div class="form-group schedule-date-field">
+                <div class="schedule-date-label-row">
+                  <label class="form-label">Ngày bắt đầu</label>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-icon tooltip schedule-refresh-btn"
+                    data-tooltip="Lấy ngày hôm nay"
+                    onclick="refreshScheduleStartToday()"
+                    title="Cập nhật ngày bắt đầu = hôm nay"
+                  >
+                    <i class="fas fa-rotate-right"></i>
+                  </button>
+                </div>
                 <input type="date" class="form-input" id="scheduleStartDate" onchange="onScheduleDateChanged('start')" />
               </div>
-              <div class="form-group" style="margin-bottom: 0;">
-                <label class="form-label">Ngày kết thúc</label>
+              <div class="form-group schedule-date-field">
+                <div class="schedule-date-label-row">
+                  <label class="form-label">Ngày kết thúc</label>
+                  <span class="schedule-refresh-btn" style="visibility: hidden; display: inline-block;" aria-hidden="true"></span>
+                </div>
                 <input type="date" class="form-input" id="scheduleEndDate" onchange="onScheduleDateChanged('end')" />
               </div>
             </div>
 
-            <div id="dateValidationMsg" style="
-              margin-top: 0.75rem;
-              padding: 0.55rem 0.8rem;
-              border-radius: var(--radius-sm);
-              display: none;
-              font-size: 0.82rem;
-            "></div>
+            <div id="dateValidationMsg"></div>
 
-            <div id="dateSummary" style="
-              margin-top: 1rem;
-              padding: 0.85rem;
-              background: var(--bg-2);
-              border: 1px solid var(--border);
-              border-radius: var(--radius-sm);
-              display: none;
-            ">
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; text-align: center;">
-                <div>
-                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
-                    Tổng bài
-                  </div>
-                  <div id="summaryTotalPosts" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
+            <div id="dateSummary">
+              <div class="date-summary-grid">
+                <div class="date-summary-item">
+                  <div class="date-summary-label">Tổng bài</div>
+                  <div id="summaryTotalPosts" class="date-summary-value">0</div>
                 </div>
-                <div>
-                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
-                    Tổng ngày
-                  </div>
-                  <div id="summaryTotalDays" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
+                <div class="date-summary-item">
+                  <div class="date-summary-label">Tổng ngày</div>
+                  <div id="summaryTotalDays" class="date-summary-value">0</div>
                 </div>
-                <div>
-                  <div style="color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;">
-                    Bài/ngày
-                  </div>
-                  <div id="summaryPostsPerDay" style="font-size: 1.25rem; font-weight: 700; color: var(--accent); font-family: 'JetBrains Mono', monospace;">0</div>
+                <div class="date-summary-item">
+                  <div class="date-summary-label">Bài/ngày</div>
+                  <div id="summaryPostsPerDay" class="date-summary-value">0</div>
                 </div>
               </div>
             </div>
@@ -1570,7 +1806,36 @@ Lắp đặt thang máy tải khách"></textarea>
             </div>
             <div class="task-checklist-panel">
               <div class="task-checklist-header">
-                <i class="fas fa-list-check"></i> Checklist thực hiện
+                <div class="task-checklist-title">
+                  <i class="fas fa-list-check"></i> Checklist thực hiện
+                </div>
+                <div class="task-checklist-summary" id="taskChecklistSummary">0 dòng</div>
+              </div>
+              <div class="task-checklist-toolbar">
+                <select id="checklistGroupFilter" class="form-input checklist-filter" onchange="renderTaskChecklist()">
+                  <option value="all">Tất cả nhóm</option>
+                  <option value="content">Content</option>
+                  <option value="post">Đăng bài</option>
+                  <option value="system">Hệ thống</option>
+                </select>
+                <select id="checklistStatusFilter" class="form-input checklist-filter" onchange="renderTaskChecklist()">
+                  <option value="all">Mọi trạng thái</option>
+                  <option value="running">Đang chạy</option>
+                  <option value="success">Đã xong</option>
+                  <option value="warning">Cảnh báo</option>
+                  <option value="error">Thất bại</option>
+                </select>
+                <label class="checklist-order-toggle">
+                  <input type="checkbox" id="checklistOnlyErrors" onchange="renderTaskChecklist()" />
+                  Chỉ hiện lỗi
+                </label>
+                <label class="checklist-order-toggle">
+                  <input type="checkbox" id="checklistNewestFirst" checked onchange="renderTaskChecklist()" />
+                  Mới nhất trước
+                </label>
+                <button class="btn btn-secondary checklist-clear-btn" onclick="clearChecklistRows()">
+                  <i class="fas fa-broom"></i> Xóa checklist
+                </button>
               </div>
               <div class="task-checklist-table-wrap">
                 <table class="task-checklist-table">
@@ -1723,7 +1988,7 @@ Lắp đặt thang máy tải khách"></textarea>
             // Browser tự release khi tab ẩn — log nhưng không làm gì thêm
             console.log("Wake lock released");
           });
-          console.log("🔆 Wake lock acquired");
+          console.log("[wake-lock] acquired");
           return true;
         } catch (err) {
           console.warn("Không thể xin wake lock:", err);
@@ -1737,7 +2002,7 @@ Lắp đặt thang máy tải khách"></textarea>
             await wakeLockSentinel.release();
           } catch (_) {}
           wakeLockSentinel = null;
-          console.log("🌙 Wake lock released by app");
+          console.log("[wake-lock] released by app");
         }
       }
 
@@ -1844,12 +2109,13 @@ Lắp đặt thang máy tải khách"></textarea>
       let activeWpPost = null;
       let currentPhase = "";
       const postTitleToIndex = {};
+      const CHECKLIST_MAX_ROWS = 500;
 
       // Initialize
       function toggleTheme() {
         const body = document.body;
         const isLight = body.classList.toggle("light-theme");
-        document.getElementById("themeIcon").textContent = isLight ? "🌙" : "☀️";
+        document.getElementById("themeIcon").className = isLight ? "fas fa-moon toggle-icon" : "fas fa-sun toggle-icon";
         document.getElementById("themeLabel").textContent = isLight ? "Dark" : "Light";
         localStorage.setItem("wp_theme", isLight ? "light" : "hacker");
       }
@@ -1858,8 +2124,11 @@ Lắp đặt thang máy tải khách"></textarea>
         const saved = localStorage.getItem("wp_theme");
         if (saved === "light") {
           document.body.classList.add("light-theme");
-          document.getElementById("themeIcon").textContent = "🌙";
+          document.getElementById("themeIcon").className = "fas fa-moon toggle-icon";
           document.getElementById("themeLabel").textContent = "Dark";
+        } else {
+          document.getElementById("themeIcon").className = "fas fa-sun toggle-icon";
+          document.getElementById("themeLabel").textContent = "Light";
         }
       }
 
@@ -2056,6 +2325,8 @@ Lắp đặt thang máy tải khách"></textarea>
 
       function getTaskStatusText(status) {
         if (status === "success") return "Đã xong";
+        if (status === "warning") return "Cảnh báo";
+        if (status === "failed") return "Thất bại";
         if (status === "error") return "Thất bại";
         if (status === "running") return "Đang chạy";
         return "Chờ";
@@ -2063,9 +2334,17 @@ Lắp đặt thang máy tải khách"></textarea>
 
       function getTaskStatusIcon(status) {
         if (status === "success") return "fas fa-check";
+        if (status === "warning") return "fas fa-triangle-exclamation";
+        if (status === "failed") return "fas fa-xmark";
         if (status === "error") return "fas fa-xmark";
         if (status === "running") return "fas fa-spinner fa-spin";
         return "far fa-circle";
+      }
+
+      function getTaskGroupLabel(group) {
+        if (group === "content") return "Content";
+        if (group === "post") return "Đăng bài";
+        return "Hệ thống";
       }
 
       function extractPostContext(message) {
@@ -2078,7 +2357,7 @@ Lắp đặt thang máy tải khách"></textarea>
           return;
         }
 
-        const contentRetry = message.match(/^\[CONTENT\]\[POST:(\d+)\]\s+Tạo lại nội dung thiếu:\s*(.+)$/i);
+        const contentRetry = message.match(/^\[CONTENT\]\[POST:(\d+)\]\s+Tạo lại nội dung thiếu:\s*(.+?)(?:\s+\(lần\s+\d+\/\d+\))?$/i);
         if (contentRetry) {
           const idx = parseInt(contentRetry[1], 10);
           const title = (contentRetry[2] || "").trim();
@@ -2118,22 +2397,39 @@ Lắp đặt thang máy tải khách"></textarea>
         const title = (titleMatch[1] || "").trim().toLowerCase();
         if (!title) return null;
         const idx = postTitleToIndex[title];
-        if (!idx) return null;
+        if (typeof idx !== "number") return null;
         return { index: idx, title: titleMatch[1].trim() };
       }
 
-      function pushChecklistRow(postCtx, stepName, status, detail, time, actionType = null) {
+      function pushChecklistRow(postCtx, stepName, status, detail, time, actionType = null, group = null) {
         const postLabel = postCtx && postCtx.index ? `Bài ${postCtx.index}` : "Hệ thống";
+        const normalizedStatus = status === "failed" ? "error" : status;
+        const rowGroup = group || actionType || "system";
+        const lastRow = checklistRows[checklistRows.length - 1];
+        if (
+          lastRow &&
+          lastRow.postIndex === (postCtx && postCtx.index ? postCtx.index : 0) &&
+          lastRow.stepName === stepName &&
+          lastRow.status === normalizedStatus &&
+          lastRow.detail === detail
+        ) {
+          return;
+        }
+
         checklistRows.push({
           postIndex: postCtx && postCtx.index ? postCtx.index : 0,
           postLabel,
           postTitle: postCtx && postCtx.title ? postCtx.title : "",
           stepName,
-          status,
+          status: normalizedStatus,
           detail,
           time,
           actionType,
+          group: rowGroup,
         });
+        if (checklistRows.length > CHECKLIST_MAX_ROWS) {
+          checklistRows.splice(0, checklistRows.length - CHECKLIST_MAX_ROWS);
+        }
       }
 
       function updateLastRunningRow(postIndex, stepName, status, detail, time) {
@@ -2167,30 +2463,84 @@ Lắp đặt thang máy tải khách"></textarea>
           const contentPost = postFromTitle || activeContentPost;
           const wpPost = activeWpPost;
 
+          if (/Starting WordPress Auto Poster/i.test(message)) {
+            pushChecklistRow(null, "Khởi tạo phiên", "running", message, time, null, "system");
+            continue;
+          }
+          if (/Phase 1: Generating content/i.test(message)) {
+            pushChecklistRow(null, "Pha tạo content", "running", message, time, null, "system");
+            continue;
+          }
+          if (/Phase 2: WordPress Automation/i.test(message)) {
+            pushChecklistRow(null, "Pha đăng WordPress", "running", message, time, null, "system");
+            continue;
+          }
+          if (/SUMMARY:/i.test(message) || /completed!/i.test(message)) {
+            pushChecklistRow(null, "Tổng kết phiên", "success", message, time, null, "system");
+            continue;
+          }
+
+          const queuedManualRetryMatch = message.match(/Đã thêm vào hàng chờ rend lại content:\s*bài\s*(\d+)/i);
+          if (queuedManualRetryMatch) {
+            const idx = parseInt(queuedManualRetryMatch[1], 10);
+            const ctx = Number.isFinite(idx) && idx > 0 ? { index: idx, title: contentPost?.title || "" } : contentPost;
+            pushChecklistRow(ctx, "Xếp hàng chờ rend lại", "success", message, time, "content", "content");
+            continue;
+          }
+          if (/^\[RETRY\]\[CONTENT\]\[POST:\d+\]\s+Bắt đầu xử lý lại theo hàng chờ/i.test(message)) {
+            pushChecklistRow(contentPost, "Xử lý hàng chờ rend lại", "running", message, time, "content", "content");
+            continue;
+          }
+          if (/^\[CONTENT\]\[POST:\d+\]\s+Bắt đầu tạo nội dung:/i.test(message)) {
+            pushChecklistRow(contentPost, "Khởi tạo content", "running", message, time, "content", "content");
+            continue;
+          }
+          if (/^\[CONTENT\]\[POST:\d+\]\s+Tạo lại nội dung thiếu:/i.test(message)) {
+            pushChecklistRow(contentPost, "Rend lại content", "running", message, time, "content", "content");
+            continue;
+          }
+
+          const invalidWordMatch = message.match(/Nội dung cho '(.+?)' không hợp lệ \((.+)\) \[(\d+)\/(\d+)\]/i);
+          if (invalidWordMatch) {
+            const attempt = parseInt(invalidWordMatch[3], 10) || 0;
+            const total = parseInt(invalidWordMatch[4], 10) || 0;
+            const isFinalAttempt = total > 0 && attempt >= total;
+            pushChecklistRow(
+              contentPost,
+              "Kiểm tra ngưỡng từ",
+              isFinalAttempt ? "error" : "warning",
+              message,
+              time,
+              "content",
+              "content",
+            );
+            continue;
+          }
+
           if (/Đang nhập prompt/i.test(message)) {
-            pushChecklistRow(contentPost, "Fill prompt Gemini", "running", message, time, "content");
+            pushChecklistRow(contentPost, "Fill prompt Gemini", "running", message, time, "content", "content");
             continue;
           }
           if (/Đã gửi prompt/i.test(message) || /Đã nhập prompt qua fill\(\)/i.test(message)) {
             if (!updateLastRunningRow(contentPost?.index, "Fill prompt Gemini", "success", message, time)) {
-              pushChecklistRow(contentPost, "Fill prompt Gemini", "success", message, time, "content");
+              pushChecklistRow(contentPost, "Fill prompt Gemini", "success", message, time, "content", "content");
             }
             continue;
           }
           if (/Không tìm thấy ô nhập Gemini/i.test(message)) {
             if (!updateLastRunningRow(contentPost?.index, "Fill prompt Gemini", "error", message, time)) {
-              pushChecklistRow(contentPost, "Fill prompt Gemini", "error", message, time, "content");
+              pushChecklistRow(contentPost, "Fill prompt Gemini", "error", message, time, "content", "content");
             }
             continue;
           }
 
           if (/Đang trích xuất phản hồi/i.test(message)) {
-            pushChecklistRow(contentPost, "Lưu content", "running", message, time, "content");
+            pushChecklistRow(contentPost, "Lưu content", "running", message, time, "content", "content");
             continue;
           }
           if (/Đã tạo nội dung cho:/i.test(message) || /Đã tạo lại thành công cho tiêu đề:/i.test(message)) {
             if (!updateLastRunningRow(contentPost?.index, "Lưu content", "success", message, time)) {
-              pushChecklistRow(contentPost, "Lưu content", "success", message, time, "content");
+              pushChecklistRow(contentPost, "Lưu content", "success", message, time, "content", "content");
             }
             continue;
           }
@@ -2200,18 +2550,18 @@ Lắp đặt thang máy tải khách"></textarea>
             /Không thể tạo lại nội dung cho tiêu đề:/i.test(message)
           ) {
             if (!updateLastRunningRow(contentPost?.index, "Lưu content", "error", message, time)) {
-              pushChecklistRow(contentPost, "Lưu content", "error", message, time, "content");
+              pushChecklistRow(contentPost, "Lưu content", "error", message, time, "content", "content");
             }
             continue;
           }
 
-          if (/Tạo lại nội dung thiếu:/i.test(message)) {
-            pushChecklistRow(contentPost, "Tạo lại nội dung thiếu", "running", message, time, "content");
+          if (/Tạo lại nội dung thiếu:/i.test(message) || /Đã tạo lại thành công cho tiêu đề:/i.test(message)) {
+            pushChecklistRow(contentPost, "Rend lại content", "running", message, time, "content", "content");
             continue;
           }
 
-          if (/🔐 Logging into WordPress/i.test(message) || /Đang chờ đăng nhập/i.test(message)) {
-            pushChecklistRow(wpPost, "Đăng nhập WordPress", "running", message, time, "post");
+          if (/Logging into WordPress/i.test(message) || /Đang chờ đăng nhập/i.test(message)) {
+            pushChecklistRow(wpPost, "Đăng nhập WordPress", "running", message, time, "post", "post");
             continue;
           }
           if (
@@ -2220,30 +2570,34 @@ Lắp đặt thang máy tải khách"></textarea>
             /Login appears successful/i.test(message)
           ) {
             if (!updateLastRunningRow(wpPost?.index, "Đăng nhập WordPress", "success", message, time)) {
-              pushChecklistRow(wpPost, "Đăng nhập WordPress", "success", message, time, "post");
+              pushChecklistRow(wpPost, "Đăng nhập WordPress", "success", message, time, "post", "post");
             }
             continue;
           }
           if (/Login failed/i.test(message) || /Missing login credentials/i.test(message) || /Failed to login\. Exiting/i.test(message)) {
             if (!updateLastRunningRow(wpPost?.index, "Đăng nhập WordPress", "error", message, time)) {
-              pushChecklistRow(wpPost, "Đăng nhập WordPress", "error", message, time, "post");
+              pushChecklistRow(wpPost, "Đăng nhập WordPress", "error", message, time, "post", "post");
             }
             continue;
           }
 
           if (/Preparing to publish/i.test(message) || /Đang lưu bài viết/i.test(message)) {
-            pushChecklistRow(wpPost, "Đăng bài WordPress", "running", message, time, "post");
+            pushChecklistRow(wpPost, "Đăng bài WordPress", "running", message, time, "post", "post");
             continue;
           }
           if (/successfully!/i.test(message) || /Post saved/i.test(message)) {
             if (!updateLastRunningRow(wpPost?.index, "Đăng bài WordPress", "success", message, time)) {
-              pushChecklistRow(wpPost, "Đăng bài WordPress", "success", message, time, "post");
+              pushChecklistRow(wpPost, "Đăng bài WordPress", "success", message, time, "post", "post");
             }
+            continue;
+          }
+          if (/Đánh dấu bỏ qua đăng bài\s+\d+/i.test(message) || /Skipping post \d+ theo yêu cầu người dùng/i.test(message)) {
+            pushChecklistRow(wpPost, "Bỏ qua đăng bài", "warning", message, time, "post", "post");
             continue;
           }
           if (/Error creating post/i.test(message) || /Error publishing/i.test(message) || /Skipping post \d+ - no content/i.test(message) || /Bỏ qua bài \d+ sau/i.test(message)) {
             if (!updateLastRunningRow(wpPost?.index, "Đăng bài WordPress", "error", message, time)) {
-              pushChecklistRow(wpPost, "Đăng bài WordPress", "error", message, time, "post");
+              pushChecklistRow(wpPost, "Đăng bài WordPress", "error", message, time, "post", "post");
             }
           }
         }
@@ -2251,17 +2605,58 @@ Lắp đặt thang máy tải khách"></textarea>
         checklistProcessedLogCount = logs.length;
       }
 
+      function syncChecklistFromContentStatus(contentList = []) {
+        if (!Array.isArray(contentList) || contentList.length === 0) return;
+        const time = new Date().toLocaleTimeString("en-GB");
+        for (const item of contentList) {
+          if (item.status !== "failed") continue;
+          const postIndex = (parseInt(item.post_index, 10) || 0) + 1;
+          const reason = item.error_reason || "Không đạt ngưỡng từ";
+          const attempts = item.attempts || 1;
+          const detail = `Content fail (${attempts} lần): ${reason}`;
+          const exists = checklistRows.some(
+            (row) =>
+              row.group === "content" &&
+              row.postIndex === postIndex &&
+              row.stepName === "Kết quả content" &&
+              row.status === "error" &&
+              row.detail === detail,
+          );
+          if (exists) continue;
+          pushChecklistRow(
+            { index: postIndex, title: item.title || "" },
+            "Kết quả content",
+            "error",
+            detail,
+            time,
+            "content",
+            "content",
+          );
+        }
+      }
+
+      async function clearChecklistRows() {
+        const confirmed = await showConfirmDialog(
+          "Bạn muốn xóa toàn bộ các dòng checklist hiện tại?",
+          {
+            title: "Xóa checklist",
+            type: "warning",
+            confirmText: "Xóa",
+            cancelText: "Hủy",
+          },
+        );
+        if (!confirmed) return;
+        checklistRows = [];
+        renderTaskChecklist();
+        showToast("Đã xóa checklist", "success");
+      }
+
       function canQueueRetry(row) {
         if (!row || !row.actionType || !row.postIndex) return false;
         if (!isRunning) return false;
         if (row.status === "running") return false;
-        if (row.actionType === "content") {
-          return ["generating_content", "retry_content_queue"].includes(currentPhase);
-        }
-        if (row.actionType === "post") {
-          return ["creating_posts", "retry_post_queue"].includes(currentPhase);
-        }
-        return false;
+        if (row.actionType !== "content") return false;
+        return ["generating_content", "retry_content_queue"].includes(currentPhase);
       }
 
       async function queueRetryAction(actionType, postIndex) {
@@ -2287,16 +2682,56 @@ Lắp đặt thang máy tải khách"></textarea>
 
       function renderTaskChecklist() {
         const tbody = document.getElementById("taskChecklistBody");
+        const summary = document.getElementById("taskChecklistSummary");
+        const groupFilterEl = document.getElementById("checklistGroupFilter");
+        const statusFilterEl = document.getElementById("checklistStatusFilter");
+        const onlyErrorsEl = document.getElementById("checklistOnlyErrors");
+        const newestFirstEl = document.getElementById("checklistNewestFirst");
         if (!tbody) return;
-        tbody.innerHTML = checklistRows
+
+        const groupFilter = groupFilterEl ? groupFilterEl.value : "all";
+        const statusFilter = statusFilterEl ? statusFilterEl.value : "all";
+        const onlyErrors = onlyErrorsEl ? onlyErrorsEl.checked : false;
+        const newestFirst = newestFirstEl ? newestFirstEl.checked : true;
+
+        const filteredRows = checklistRows.filter((row) => {
+          const rowGroup = row.group || row.actionType || "system";
+          if (groupFilter !== "all" && rowGroup !== groupFilter) return false;
+          if (onlyErrors && row.status !== "error") return false;
+          if (statusFilter !== "all" && row.status !== statusFilter) return false;
+          return true;
+        });
+
+        const displayedRows = newestFirst ? [...filteredRows].reverse() : filteredRows;
+        const runningCount = checklistRows.filter((r) => r.status === "running").length;
+        const successCount = checklistRows.filter((r) => r.status === "success").length;
+        const warningCount = checklistRows.filter((r) => r.status === "warning").length;
+        const errorCount = checklistRows.filter((r) => r.status === "error").length;
+        const phaseLabel = currentPhase || "idle";
+        if (summary) {
+          summary.textContent =
+            `${displayedRows.length}/${checklistRows.length} dòng · ` +
+            `Run ${runningCount} · OK ${successCount} · Warn ${warningCount} · Fail ${errorCount} · ${phaseLabel}`;
+        }
+
+        tbody.innerHTML = displayedRows
           .map((row, index) => {
             const allowRetry = canQueueRetry(row);
+            const rowClass = row.status === "error"
+              ? "row-error"
+              : row.status === "warning"
+                ? "row-warning"
+                : row.status === "running"
+                  ? "row-running"
+                  : "";
+            const rowGroup = row.group || row.actionType || "system";
             return `
-            <tr class="${allowRetry ? "allow-retry" : ""}">
+            <tr class="${allowRetry ? "allow-retry" : ""} ${rowClass}">
               <td>${index + 1}</td>
               <td>
                 <div>${escapeHtml(row.postLabel)}</div>
                 <div class="task-detail">${escapeHtml(row.postTitle || "")}</div>
+                <span class="task-group-tag ${rowGroup}">${escapeHtml(getTaskGroupLabel(rowGroup))}</span>
               </td>
               <td class="task-step-cell">
                 <div class="task-step-content">
@@ -2562,6 +2997,8 @@ Lắp đặt thang máy tải khách"></textarea>
               data.auto_select_category !== false;
             document.getElementById("autoAddTags").checked =
               data.auto_add_tags !== false;
+            document.getElementById("contentMinValidWords").value =
+              data.content_min_valid_words || 1401;
             if (data.gemini_prompt) {
               document.getElementById("geminiPrompt").value =
                 data.gemini_prompt;
@@ -2627,6 +3064,12 @@ Lắp đặt thang máy tải khách"></textarea>
             document.getElementById("autoSelectCategory").checked,
           auto_add_tags: document.getElementById("autoAddTags").checked,
           gemini_prompt: document.getElementById("geminiPrompt").value,
+          content_min_valid_words:
+            Math.max(
+              1,
+              parseInt(document.getElementById("contentMinValidWords").value) ||
+                1401,
+            ),
         };
 
         try {
@@ -2697,6 +3140,52 @@ Lắp đặt thang máy tải khách"></textarea>
 
       // Render content list as accordion
       let loadedContents = {};
+      let contentListRenderSignature = "";
+      let openedAccordionIndex = null;
+      function hasLoadedContent(index) {
+        return Object.prototype.hasOwnProperty.call(loadedContents, index);
+      }
+
+      function getContentListSignature(contentList = []) {
+        return contentList
+          .map((item) =>
+            [
+              item.post_index,
+              item.title,
+              item.keyword,
+              item.word_count,
+              item.status || "",
+              item.error_reason || "",
+              item.attempts || 1,
+            ].join("|"),
+          )
+          .join("||");
+      }
+
+      function restoreOpenedAccordion(index, contentList = []) {
+        if (index === null || index === undefined) return;
+        if (index < 0 || index >= contentList.length) {
+          openedAccordionIndex = null;
+          return;
+        }
+
+        const body = document.getElementById(`accordion-body-${index}`);
+        const btn = document.getElementById(`expand-btn-${index}`);
+        if (!body || !btn) {
+          openedAccordionIndex = null;
+          return;
+        }
+
+        body.classList.add("open");
+        btn.classList.add("active");
+        btn.innerHTML = '<i class="fas fa-chevron-up"></i> Ẩn';
+
+        if (hasLoadedContent(index)) {
+          body.innerHTML =
+            loadedContents[index] ||
+            '<p style="color: var(--warning);">Nội dung trống</p>';
+        }
+      }
 
       function renderContentList(contentList) {
         const accordion = document.getElementById("contentAccordion");
@@ -2707,28 +3196,44 @@ Lắp đặt thang máy tải khách"></textarea>
           emptyState.style.display = "block";
           accordion.innerHTML = "";
           countBadge.textContent = "(0)";
+          contentListRenderSignature = "";
+          openedAccordionIndex = null;
           return;
         }
 
+        const newSignature = getContentListSignature(contentList);
+        const canSkipRerender =
+          newSignature === contentListRenderSignature &&
+          accordion.children.length === contentList.length &&
+          contentList.length > 0;
+        if (canSkipRerender) {
+          return;
+        }
+
+        contentListRenderSignature = newSignature;
+        const prevOpenedIndex = openedAccordionIndex;
         emptyState.style.display = "none";
         countBadge.textContent = `(${contentList.length})`;
 
-        // Only update if count changed
-        if (accordion.children.length === contentList.length) {
-          return;
-        }
-
         accordion.innerHTML = contentList
           .map(
-            (item, index) => `
+            (item, index) => {
+              const isFailed = item.status === "failed";
+              const statusLabel = isFailed ? "Fail" : "OK";
+              const failReason = item.error_reason || "";
+              const attempts = item.attempts || 1;
+              return `
           <div class="content-accordion-item" id="accordion-item-${index}">
             <div class="content-accordion-header" onclick="toggleContentAccordion(${index})">
               <div class="content-accordion-info">
                 <div class="content-accordion-title">${index + 1}. ${item.title}</div>
                 <div class="content-accordion-meta">
-                  <span>🔑 ${item.keyword}</span>
-                  <span>📝 ${item.word_count.toLocaleString()} từ</span>
+                  <span><i class="fas fa-key meta-icon"></i>${item.keyword}</span>
+                  <span><i class="fas fa-file-lines meta-icon"></i>${item.word_count.toLocaleString()} từ</span>
+                  <span><i class="fas fa-rotate-right meta-icon"></i>${attempts} lần</span>
+                  <span class="content-status-tag ${isFailed ? "failed" : "success"}">${statusLabel}</span>
                 </div>
+                ${isFailed ? `<div class="content-fail-reason">Lỗi: ${escapeHtml(failReason)}</div>` : ""}
               </div>
               <div class="content-accordion-actions">
                 <button class="btn btn-expand" id="expand-btn-${index}" onclick="event.stopPropagation(); toggleContentAccordion(${index})">
@@ -2741,6 +3246,9 @@ Lắp đặt thang máy tải khách"></textarea>
                 <button class="btn btn-secondary" onclick="event.stopPropagation(); copyContentByIndex(${index})" style="padding: 6px 10px; font-size: 0.75rem;" title="Copy HTML">
                   <i class="fas fa-copy"></i>
                 </button>
+                <button class="btn btn-rerender" onclick="event.stopPropagation(); requestRerenderByIndex(${index})" title="Rend lại nội dung này">
+                  <i class="fas fa-rotate"></i>
+                </button>
                 <button class="btn btn-delete" onclick="event.stopPropagation(); deleteContentByIndex(${index})" title="Xóa">
                   <i class="fas fa-trash"></i>
                 </button>
@@ -2752,9 +3260,12 @@ Lắp đặt thang máy tải khách"></textarea>
               </div>
             </div>
           </div>
-        `,
+        `;
+            },
           )
           .join("");
+
+        restoreOpenedAccordion(prevOpenedIndex, contentList);
       }
 
       // Toggle accordion content
@@ -2766,6 +3277,7 @@ Lắp đặt thang máy tải khách"></textarea>
           body.classList.remove("open");
           btn.classList.remove("active");
           btn.innerHTML = '<i class="fas fa-chevron-down"></i> Xem';
+          openedAccordionIndex = null;
           return;
         }
 
@@ -2784,15 +3296,24 @@ Lắp đặt thang máy tải khách"></textarea>
         body.classList.add("open");
         btn.classList.add("active");
         btn.innerHTML = '<i class="fas fa-chevron-up"></i> Ẩn';
+        openedAccordionIndex = index;
 
         // Load content if not loaded
-        if (!loadedContents[index]) {
+        if (!hasLoadedContent(index)) {
           try {
             const response = await fetch(`/api/content/${index}`);
             const result = await response.json();
             if (result.success) {
-              loadedContents[index] = result.data.content;
-              body.innerHTML = result.data.content;
+              const contentHtml = result.data.content || "";
+              loadedContents[index] = contentHtml;
+              if (contentHtml.trim()) {
+                body.innerHTML = contentHtml;
+              } else if (result.data.status === "failed") {
+                const reason = escapeHtml(result.data.error_reason || "Nội dung chưa đạt ngưỡng từ");
+                body.innerHTML = `<p style="color: var(--error);">Content lỗi: ${reason}</p>`;
+              } else {
+                body.innerHTML = '<p style="color: var(--warning);">Chưa có nội dung để hiển thị</p>';
+              }
             } else {
               body.innerHTML =
                 '<p style="color: var(--error);">Không thể tải nội dung</p>';
@@ -2801,15 +3322,15 @@ Lắp đặt thang máy tải khách"></textarea>
             body.innerHTML = '<p style="color: var(--error);">Lỗi kết nối</p>';
           }
         } else {
-          body.innerHTML = loadedContents[index];
+          body.innerHTML = loadedContents[index] || '<p style="color: var(--warning);">Nội dung trống</p>';
         }
       }
 
       // Copy content by index
       async function copyContentByIndex(index) {
-        if (loadedContents[index]) {
+        if (hasLoadedContent(index)) {
           try {
-            await navigator.clipboard.writeText(loadedContents[index]);
+            await navigator.clipboard.writeText(loadedContents[index] || "");
             showToast("Đã copy nội dung HTML!", "success");
           } catch (e) {
             showToast("Không thể copy", "error");
@@ -2822,8 +3343,8 @@ Lắp đặt thang máy tải khách"></textarea>
           const response = await fetch(`/api/content/${index}`);
           const result = await response.json();
           if (result.success) {
-            loadedContents[index] = result.data.content;
-            await navigator.clipboard.writeText(result.data.content);
+            loadedContents[index] = result.data.content || "";
+            await navigator.clipboard.writeText(result.data.content || "");
             showToast("Đã copy nội dung HTML!", "success");
           }
         } catch (e) {
@@ -2831,9 +3352,61 @@ Lắp đặt thang máy tải khách"></textarea>
         }
       }
 
+      async function requestRerenderByIndex(index) {
+        if (!isRunning) {
+          showToast("Chỉ có thể yêu cầu rend lại khi automation đang chạy", "warning");
+          return;
+        }
+
+        let skipPost = false;
+        if (["creating_posts", "retry_post_queue"].includes(currentPhase)) {
+          const confirmed = await showConfirmDialog(
+            "Đang trong quá trình đăng bài. Bạn muốn bỏ qua bài này để không đăng, hay tiếp tục đăng bình thường?",
+            {
+              title: "Đăng bài đang chạy",
+              type: "warning",
+              confirmText: "Bỏ qua bài này",
+              cancelText: "Tiếp tục đăng",
+            },
+          );
+
+          if (!confirmed) {
+            showToast("Tiếp tục đăng bài hiện tại", "info");
+            return;
+          }
+          skipPost = true;
+        } else if (!["generating_content", "retry_content_queue"].includes(currentPhase)) {
+          showToast("Chỉ thêm vào hàng chờ khi đang ở pha tạo content", "warning");
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/content/${index}/rerender`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ skip_post: skipPost }),
+          });
+          const result = await response.json();
+
+          if (result.success) {
+            showToast(result.message || "Đã xử lý yêu cầu rend lại", "success");
+            return;
+          }
+          if (result.requires_confirmation) {
+            showToast(result.message || "Cần xác nhận trước khi bỏ qua bài đăng", "warning");
+            return;
+          }
+          showToast(result.message || "Không thể yêu cầu rend lại", "error");
+        } catch (e) {
+          showToast("Lỗi kết nối khi yêu cầu rend lại", "error");
+        }
+      }
+
       // Clear content list
       function clearContentList() {
         loadedContents = {};
+        contentListRenderSignature = "";
+        openedAccordionIndex = null;
         document.getElementById("contentListEmpty").style.display = "block";
         document.getElementById("contentAccordion").innerHTML = "";
         document.getElementById("contentCount").textContent = "(0)";
@@ -2847,12 +3420,12 @@ Lắp đặt thang máy tải khách"></textarea>
 
         // Load content if not loaded
         let title = "";
-        if (!loadedContents[index]) {
+        if (!hasLoadedContent(index)) {
           try {
             const response = await fetch(`/api/content/${index}`);
             const result = await response.json();
             if (result.success) {
-              loadedContents[index] = result.data.content;
+              loadedContents[index] = result.data.content || "";
               title = result.data.title;
             }
           } catch (e) {
@@ -3034,6 +3607,12 @@ Lắp đặt thang máy tải khách"></textarea>
           delay_between_requests:
             parseInt(document.getElementById("delayBetweenRequests").value) ||
             30,
+          content_min_valid_words:
+            Math.max(
+              1,
+              parseInt(document.getElementById("contentMinValidWords").value) ||
+                1401,
+            ),
           headless_mode: document.getElementById("headlessMode").checked,
         };
 
@@ -3099,6 +3678,8 @@ Lắp đặt thang máy tải khách"></textarea>
             config.posts_per_day || 2;
           document.getElementById("delayBetweenRequests").value =
             config.delay_between_requests || 30;
+          document.getElementById("contentMinValidWords").value =
+            config.content_min_valid_words || 1401;
           document.getElementById("headlessMode").checked =
             config.headless_mode || false;
           document.getElementById("scheduleStartDate").value =
@@ -3145,6 +3726,10 @@ Lắp đặt thang máy tải khách"></textarea>
             config.delay_between_requests ||
             document.getElementById("delayBetweenRequests").value ||
             30;
+          document.getElementById("contentMinValidWords").value =
+            config.content_min_valid_words ||
+            document.getElementById("contentMinValidWords").value ||
+            1401;
           document.getElementById("headlessMode").checked =
             typeof config.headless_mode === "boolean"
               ? config.headless_mode
@@ -3532,6 +4117,14 @@ Lắp đặt thang máy tải khách"></textarea>
         validateDateDistribution();
       }
 
+      function refreshScheduleStartToday() {
+        ensureDefaultScheduleDates();
+        const startDateEl = document.getElementById("scheduleStartDate");
+        startDateEl.value = formatDateLocal(new Date());
+        onScheduleDateChanged("start");
+        showToast("Đã cập nhật ngày bắt đầu = hôm nay", "success");
+      }
+
       function validateDateDistribution() {
         const startDateEl = document.getElementById("scheduleStartDate");
         const endDateEl = document.getElementById("scheduleEndDate");
@@ -3561,7 +4154,7 @@ Lắp đặt thang máy tải khách"></textarea>
           msgEl.style.background = "rgba(255,0,0,0.15)";
           msgEl.style.color = "var(--error)";
           msgEl.style.border = "1px solid rgba(255,0,0,0.3)";
-          msgEl.textContent = "❌ Ngày kết thúc phải sau ngày bắt đầu";
+          msgEl.innerHTML = `<i class="fas fa-circle-xmark"></i> Ngày kết thúc phải sau ngày bắt đầu`;
           summaryEl.style.display = "none";
           return false;
         }
@@ -3574,7 +4167,7 @@ Lắp đặt thang máy tải khách"></textarea>
           msgEl.style.background = "rgba(255,0,0,0.15)";
           msgEl.style.color = "var(--error)";
           msgEl.style.border = "1px solid rgba(255,0,0,0.3)";
-          msgEl.textContent = "❌ Cần ít nhất 1 bài viết";
+          msgEl.innerHTML = `<i class="fas fa-circle-xmark"></i> Cần ít nhất 1 bài viết`;
           summaryEl.style.display = "none";
           return false;
         }
@@ -3764,6 +4357,7 @@ Lắp đặt thang máy tải khách"></textarea>
             renderLogsWithTypewriter(status.logs, logsContainer);
           }
           processChecklistLogs(status.logs || []);
+          syncChecklistFromContentStatus(status.content_list || []);
           renderTaskChecklist();
 
           // Update content list

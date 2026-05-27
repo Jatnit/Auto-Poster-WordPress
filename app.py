@@ -124,6 +124,209 @@ def _gemini_response_text(html_or_text: str) -> str:
     return text
 
 
+def _get_min_valid_words() -> int:
+    try:
+        configured = int(state.config.get("content_min_valid_words", 1401))
+    except Exception:
+        configured = 1401
+    return max(1, configured)
+
+
+def _get_content_auto_retry_attempts() -> int:
+    try:
+        configured = int(state.config.get("content_auto_rerender_retries", 2))
+    except Exception:
+        configured = 2
+    return max(0, configured)
+
+
+def _count_words(content: Optional[str]) -> int:
+    if not content:
+        return 0
+    return len(_gemini_response_text(content).split())
+
+
+def _find_content_row_by_post_index(post_index: int) -> Optional[int]:
+    for idx, item in enumerate(state.content_list):
+        if int(item.get("post_index", -1)) == post_index:
+            return idx
+    return None
+
+
+def _upsert_content_row(
+    post_index: int,
+    topic: dict,
+    content: str,
+    status: str = "success",
+    error_reason: str = "",
+    attempts: int = 1,
+) -> int:
+    cleaned_content = clean_gemini_content(content or "")
+    word_count = _count_words(cleaned_content)
+    row = {
+        "post_index": post_index,
+        "title": topic.get("title", ""),
+        "keyword": topic.get("keyword", ""),
+        "content": cleaned_content,
+        "word_count": word_count,
+        "status": status,
+        "error_reason": error_reason,
+        "attempts": attempts,
+    }
+    row_index = _find_content_row_by_post_index(post_index)
+    if row_index is None:
+        state.content_list.append(row)
+        state.content_list.sort(key=lambda x: int(x.get("post_index", 10**9)))
+        row_index = _find_content_row_by_post_index(post_index)
+        if row_index is None:
+            row_index = len(state.content_list) - 1
+    else:
+        state.content_list[row_index] = row
+
+    state.current_content = cleaned_content
+    return row_index
+
+
+def _queue_content_rerender(post_index: int) -> bool:
+    for item in state.retry_queue:
+        if item.get("action") == "rerender_content" and int(item.get("post_index", -1)) == post_index:
+            return False
+    state.retry_queue.append({"action": "rerender_content", "post_index": post_index})
+    return True
+
+
+def _generate_content_by_provider(provider: str, topic: dict, page=None) -> Optional[str]:
+    if provider == "gemini_web":
+        return generate_content_gemini_web(page, topic["title"], topic["keyword"])
+    if provider == "chatgpt_web":
+        return generate_content_chatgpt_web(page, topic["title"], topic["keyword"])
+    return generate_content(topic["title"], topic["keyword"])
+
+
+def _validate_generated_content(content: Optional[str]) -> tuple:
+    if not content:
+        return False, "", 0, "Không thể tạo nội dung (rỗng)"
+
+    cleaned_content = clean_gemini_content(content)
+    words = _count_words(cleaned_content)
+    min_valid_words = _get_min_valid_words()
+    if words < min_valid_words:
+        return False, cleaned_content, words, f"chỉ có {words}/{min_valid_words} từ"
+    return True, cleaned_content, words, ""
+
+
+def _generate_content_with_min_word_retries(
+    provider: str,
+    topic: dict,
+    post_index: int,
+    page=None,
+    source: str = "initial",
+) -> Optional[str]:
+    auto_retries = _get_content_auto_retry_attempts()
+    total_attempts = 1 + auto_retries
+    title = topic.get("title", "")
+    last_cleaned = ""
+    last_reason = "Không thể tạo nội dung (rỗng)"
+
+    for attempt in range(1, total_attempts + 1):
+        if attempt == 1:
+            add_log(f"[CONTENT][POST:{post_index + 1}] Bắt đầu tạo nội dung: {title}", "info")
+        else:
+            add_log(
+                f"[CONTENT][POST:{post_index + 1}] Tạo lại nội dung thiếu: {title} "
+                f"(lần {attempt}/{total_attempts})",
+                "warning",
+            )
+
+        if state.is_paused and not wait_if_paused():
+            return None
+        if not state.is_running:
+            return None
+
+        content = _generate_content_by_provider(provider, topic, page=page)
+        is_valid, cleaned_content, _, reason = _validate_generated_content(content)
+
+        if is_valid:
+            _upsert_content_row(
+                post_index,
+                topic,
+                cleaned_content,
+                status="success",
+                error_reason="",
+                attempts=attempt,
+            )
+            if attempt > 1:
+                add_log(
+                    f"Đã tạo lại thành công cho tiêu đề: {title} (sau {attempt} lần)",
+                    "success",
+                )
+            return cleaned_content
+
+        last_cleaned = cleaned_content or ""
+        last_reason = reason
+        add_log(
+            f"Nội dung cho '{title}' không hợp lệ ({reason}) "
+            f"[{attempt}/{total_attempts}]",
+            "error",
+        )
+
+    _upsert_content_row(
+        post_index,
+        topic,
+        last_cleaned,
+        status="failed",
+        error_reason=last_reason,
+        attempts=total_attempts,
+    )
+    add_log(
+        f"Không thể tạo lại nội dung cho tiêu đề: {title} "
+        f"(đã thử {total_attempts} lần)",
+        "error",
+    )
+    return None
+
+
+def _process_content_retry_queue(provider: str, total_topics: int, page=None):
+    if not state.retry_queue:
+        return
+    if state.current_phase not in ("generating_content", "retry_content_queue"):
+        return
+
+    state.current_phase = "retry_content_queue"
+    while state.retry_queue and state.is_running:
+        item = state.retry_queue.pop(0)
+        if item.get("action") != "rerender_content":
+            continue
+
+        post_index = int(item.get("post_index", -1))
+        if post_index < 0 or post_index >= len(state.topics):
+            add_log("Yêu cầu rend lại không hợp lệ (index ngoài phạm vi)", "warning")
+            continue
+
+        topic = state.topics[post_index]
+        add_log(
+            f"[RETRY][CONTENT][POST:{post_index + 1}] Bắt đầu xử lý lại theo hàng chờ: {topic['title']}",
+            "warning",
+        )
+        state.current_task = f"Re-render content {post_index + 1}/{total_topics}..."
+
+        if not wait_if_paused():
+            add_log("Stopped while paused", "warning")
+            return
+
+        validated = _generate_content_with_min_word_retries(
+            provider,
+            topic,
+            post_index,
+            page=page,
+            source="queue",
+        )
+        if post_index < len(state.generated_contents):
+            state.generated_contents[post_index] = validated
+
+    state.current_phase = "generating_content"
+
+
 def _anti_canvas_suffix() -> str:
     """
     Trả về đoạn chỉ thị Anti-Canvas bằng tiếng Việt + English fallback.
@@ -882,9 +1085,10 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
 
         # Validate lần cuối sau khi clean (phòng khi clean cắt nhiều quá)
         final_words = len(_gemini_response_text(content).split())
-        if final_words < min_words_part:
+        min_valid_words = int(state.config.get("content_min_valid_words", 1401))
+        if final_words < min_valid_words:
             add_log(
-                f"Sau khi clean chỉ còn {final_words} từ (quá ngắn) - bỏ qua bài này",
+                f"Sau khi clean chỉ còn {final_words}/{min_valid_words} từ (quá ngắn) - bỏ qua bài này",
                 "error",
             )
             return None
@@ -1315,9 +1519,10 @@ def generate_content_chatgpt_web(page, title: str, keyword: str) -> Optional[str
         content = clean_gemini_content(content)
 
         final_words = len(_gemini_response_text(content).split())
-        if final_words < min_words_part:
+        min_valid_words = int(state.config.get("content_min_valid_words", 1401))
+        if final_words < min_valid_words:
             add_log(
-                f"Sau clean còn {final_words} từ — bỏ qua bài này", "error"
+                f"Sau clean còn {final_words}/{min_valid_words} từ — bỏ qua bài này", "error"
             )
             return None
 
@@ -1352,6 +1557,208 @@ def generate_content(title: str, keyword: str, page=None) -> Optional[str]:
         return generate_content_chatgpt_web(page, title, keyword)
     else:
         return generate_content_gemini(title, keyword)
+
+
+def _click_first_visible(page, selectors, timeout: int = 1500, require_enabled: bool = False) -> bool:
+    """Click selector đầu tiên đang visible. Trả về True nếu click thành công."""
+    for sel in selectors:
+        try:
+            el = page.locator(sel).last
+            if el.is_visible(timeout=timeout):
+                if require_enabled and not el.is_enabled():
+                    continue
+                el.click()
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _click_visible_by_text(page, labels) -> bool:
+    """Best-effort click phần tử visible có text chứa một trong các label."""
+    try:
+        return bool(page.evaluate(
+            """(labels) => {
+                const nodes = Array.from(
+                    document.querySelectorAll(
+                        "button,[role='button'],[role='menuitem'],li,div[tabindex]"
+                    )
+                );
+                const isVisible = (el) => {
+                    const st = window.getComputedStyle(el);
+                    if (st.display === "none" || st.visibility === "hidden") return false;
+                    const r = el.getBoundingClientRect();
+                    return r.width > 0 && r.height > 0;
+                };
+                for (const node of nodes) {
+                    if (!isVisible(node)) continue;
+                    const txt = (node.innerText || node.textContent || "").trim().toLowerCase();
+                    if (!txt) continue;
+                    if (labels.some((l) => txt.includes(String(l).toLowerCase()))) {
+                        node.click();
+                        return true;
+                    }
+                }
+                return false;
+            }""",
+            labels,
+        ))
+    except Exception:
+        return False
+
+
+def _delete_current_gemini_session(page) -> bool:
+    """Xóa session Gemini hiện tại (best-effort)."""
+    try:
+        current_url = page.url or ""
+        if not re.search(r"gemini\.google\.com/(?:app|gem)/[^/?#]+", current_url):
+            add_log("Gemini: không thấy session cụ thể để xóa (bỏ qua)", "info")
+            return False
+
+        add_log("Gemini: đang xóa session chat vừa dùng...", "info")
+        old_url = current_url
+
+        menu_selectors = [
+            "[data-test-id='actions-menu-button']",
+            "[data-test-id*='actions-menu']",
+            "button[aria-label*='More options']",
+            "button[aria-label*='More']",
+            "button[aria-label*='Tùy chọn']",
+            "button[aria-label*='Tuỳ chọn']",
+            "button[aria-haspopup='menu']",
+        ]
+        delete_selectors = [
+            "[role='menuitem']:has-text('Delete')",
+            "button:has-text('Delete')",
+            "[role='menuitem']:has-text('Xóa')",
+            "button:has-text('Xóa')",
+            "li:has-text('Delete')",
+            "li:has-text('Xóa')",
+        ]
+        confirm_selectors = [
+            "button:has-text('Delete')",
+            "button:has-text('Xóa')",
+            "[role='button']:has-text('Delete')",
+            "[role='button']:has-text('Xóa')",
+            "button:has-text('Confirm')",
+            "button:has-text('Xác nhận')",
+        ]
+
+        opened_menu = _click_first_visible(page, menu_selectors, timeout=1500)
+        if not opened_menu:
+            try:
+                page.mouse.move(190, 210)
+                time.sleep(0.4)
+            except Exception:
+                pass
+            opened_menu = _click_first_visible(page, menu_selectors, timeout=1200)
+
+        if not opened_menu:
+            add_log("Gemini: không mở được menu session để xóa", "warning")
+            return False
+
+        time.sleep(0.5)
+        deleted = _click_first_visible(page, delete_selectors, timeout=1200)
+        if not deleted:
+            deleted = _click_visible_by_text(page, ["delete", "xóa", "xoá", "remove"])
+        if not deleted:
+            add_log("Gemini: không tìm thấy nút Delete/Xóa", "warning")
+            return False
+
+        time.sleep(0.6)
+        _click_first_visible(page, confirm_selectors, timeout=1000, require_enabled=True)
+        _click_visible_by_text(page, ["delete", "xóa", "xoá", "confirm", "xác nhận"])
+
+        for _ in range(8):
+            time.sleep(0.4)
+            try:
+                if page.url != old_url:
+                    add_log("Gemini: đã xóa session chat", "success")
+                    return True
+            except Exception:
+                break
+
+        add_log("Gemini: đã gửi lệnh xóa session (không xác minh được URL)", "info")
+        return True
+    except Exception as e:
+        add_log(f"Gemini: lỗi khi xóa session chat: {e}", "warning")
+        return False
+
+
+def _delete_current_chatgpt_session(page) -> bool:
+    """Xóa session ChatGPT hiện tại (best-effort)."""
+    try:
+        current_url = page.url or ""
+        if not re.search(r"chatgpt\.com/c/[^/?#]+", current_url):
+            add_log("ChatGPT: không thấy session /c/<id> để xóa (bỏ qua)", "info")
+            return False
+
+        add_log("ChatGPT: đang xóa session chat vừa dùng...", "info")
+        old_url = current_url
+
+        menu_selectors = [
+            "button[data-testid='conversation-options-button']",
+            "button[aria-label*='Conversation options']",
+            "button[aria-label*='More']",
+            "button[aria-label*='more']",
+            "button[aria-haspopup='menu']",
+        ]
+        delete_selectors = [
+            "[role='menuitem']:has-text('Delete')",
+            "button:has-text('Delete')",
+            "[role='menuitem']:has-text('Delete chat')",
+            "button:has-text('Delete chat')",
+            "[role='menuitem']:has-text('Xóa')",
+            "button:has-text('Xóa')",
+        ]
+        confirm_selectors = [
+            "button:has-text('Delete')",
+            "button:has-text('Delete chat')",
+            "button:has-text('Confirm')",
+            "button:has-text('Xóa')",
+            "button:has-text('Xác nhận')",
+        ]
+
+        opened_menu = _click_first_visible(page, menu_selectors, timeout=1500)
+        if not opened_menu:
+            add_log("ChatGPT: không mở được menu session để xóa", "warning")
+            return False
+
+        time.sleep(0.5)
+        deleted = _click_first_visible(page, delete_selectors, timeout=1200)
+        if not deleted:
+            deleted = _click_visible_by_text(page, ["delete chat", "delete", "xóa", "xoá"])
+        if not deleted:
+            add_log("ChatGPT: không tìm thấy nút Delete/Xóa", "warning")
+            return False
+
+        time.sleep(0.6)
+        _click_first_visible(page, confirm_selectors, timeout=1000, require_enabled=True)
+        _click_visible_by_text(page, ["delete chat", "delete", "confirm", "xóa", "xác nhận"])
+
+        for _ in range(8):
+            time.sleep(0.4)
+            try:
+                if page.url != old_url:
+                    add_log("ChatGPT: đã xóa session chat", "success")
+                    return True
+            except Exception:
+                break
+
+        add_log("ChatGPT: đã gửi lệnh xóa session (không xác minh được URL)", "info")
+        return True
+    except Exception as e:
+        add_log(f"ChatGPT: lỗi khi xóa session chat: {e}", "warning")
+        return False
+
+
+def cleanup_provider_chat_session(page, provider: str) -> bool:
+    """Xóa session chat hiện tại của provider sau khi render xong nội dung."""
+    if provider == "gemini_web":
+        return _delete_current_gemini_session(page)
+    if provider == "chatgpt_web":
+        return _delete_current_chatgpt_session(page)
+    return False
 
 # WORDPRESS AUTOMATION
  
@@ -1489,7 +1896,7 @@ def _safe_navigate(page: Page, url: str, timeout: int = 30000, max_retries: int 
 
 def login_to_wordpress(page: Page) -> bool:
     try:
-        add_log("🔐 Logging into WordPress...", "info")
+        add_log("Logging into WordPress...", "info")
         
         login_url = state.config.get("wp_login_url", "")
         username = state.config.get("wp_username", "")
@@ -1742,7 +2149,7 @@ def set_post_content(page: Page, content: str) -> bool:
             )
             if ok:
                 content_added = True
-                add_log("📄 Content set via TinyMCE API", "success")
+                add_log("Content set via TinyMCE API", "success")
         except Exception as e:
             add_log(f"TinyMCE API method skipped: {e}", "warning")
 
@@ -1779,7 +2186,7 @@ def set_post_content(page: Page, content: str) -> bool:
                         content,
                     )
                     content_added = True
-                    add_log("📄 Content set via textarea + TinyMCE sync", "success")
+                    add_log("Content set via textarea + TinyMCE sync", "success")
             except Exception as e:
                 add_log(f"Textarea method failed: {e}", "warning")
 
@@ -1806,7 +2213,7 @@ def set_post_content(page: Page, content: str) -> bool:
                 )
                 if ok:
                     content_added = True
-                    add_log("📄 Content set via JavaScript injection", "success")
+                    add_log("Content set via JavaScript injection", "success")
             except Exception as e:
                 add_log(f"JavaScript method failed: {e}", "warning")
 
@@ -3616,6 +4023,7 @@ def run_automation():
     if not PLAYWRIGHT_AVAILABLE:
         add_log("Playwright not available. Please install it first.", "error")
         state.is_running = False
+        state.current_phase = "stopped"
         return
     
     state.is_running = True
@@ -3623,6 +4031,9 @@ def run_automation():
     state.successful_posts = 0
     state.failed_posts = 0
     state.logs = []
+    state.retry_queue = []
+    state.skip_post_indices = set()
+    state.current_phase = "initializing"
     
     add_log("Starting WordPress Auto Poster...", "info")
     
@@ -3636,6 +4047,7 @@ def run_automation():
     if not is_browser_provider:
         add_log(f"Phase 1: Generating content with {provider.upper()}...", "info")
         state.current_task = "Generating content..."
+        state.current_phase = "generating_content"
         
         for i, topic in enumerate(state.topics):
             if not state.is_running:
@@ -3648,12 +4060,19 @@ def run_automation():
                 return
             
             state.current_task = f"Generating content {i+1}/{total_topics}..."
-            content = generate_content(topic["title"], topic["keyword"])
-            state.generated_contents.append(content)
+            validated_content = _generate_content_with_min_word_retries(
+                provider,
+                topic,
+                i,
+                source="initial",
+            )
+            state.generated_contents.append(validated_content)
             state.progress = ((i + 1) / state.total_tasks) * 100
             
             if i < len(state.topics) - 1 and state.is_running:
                 time.sleep(state.config["delay_between_requests"])
+
+        _process_content_retry_queue(provider, total_topics)
         
         successful_gen = sum(1 for c in state.generated_contents if c is not None)
         add_log(f"Generated {successful_gen}/{total_topics} articles", "success")
@@ -3728,6 +4147,7 @@ def run_automation():
                     f"Phase 1: Generating content with {provider_label}...",
                     "info",
                 )
+                state.current_phase = "generating_content"
                 
                 for i, topic in enumerate(state.topics):
                     if not state.is_running:
@@ -3745,36 +4165,21 @@ def run_automation():
                     state.current_title = topic["title"]
                     state.current_keyword = topic["keyword"]
                     
-                    if provider == "gemini_web":
-                        content = generate_content_gemini_web(
-                            page, topic["title"], topic["keyword"]
-                        )
-                    else:
-                        content = generate_content_chatgpt_web(
-                            page, topic["title"], topic["keyword"]
-                        )
-                    state.generated_contents.append(content)
-                    
-                    # Store cleaned content for preview
-                    if content:
-                        # Clean the content before storing
-                        cleaned_content = clean_gemini_content(content)
-                        state.current_content = cleaned_content
-                        # Count words
-                        text_only = re.sub(r'<[^>]*>', ' ', cleaned_content)
-                        word_count = len(text_only.split())
-                        # Add to content list
-                        state.content_list.append({
-                            "title": topic["title"],
-                            "keyword": topic["keyword"],
-                            "content": cleaned_content,
-                            "word_count": word_count
-                        })
+                    validated_content = _generate_content_with_min_word_retries(
+                        provider,
+                        topic,
+                        i,
+                        page=page,
+                        source="initial",
+                    )
+                    state.generated_contents.append(validated_content)
                     
                     state.progress = ((i + 1) / state.total_tasks) * 100
                     
                     if i < len(state.topics) - 1 and state.is_running:
                         time.sleep(3)  # Short delay between requests
+
+                _process_content_retry_queue(provider, total_topics, page=page)
                 
                 successful_gen = sum(1 for c in state.generated_contents if c is not None)
                 add_log(
@@ -3787,6 +4192,12 @@ def run_automation():
                     state.is_running = False
                     context.close()
                     return
+
+                # Dọn session chat AI vừa dùng để tránh rối lịch sử hội thoại.
+                try:
+                    cleanup_provider_chat_session(page, provider)
+                except Exception as e:
+                    add_log(f"Không thể dọn session chat: {e}", "warning")
 
                 # Tách tab: đóng tab AI đang chạy, mở tab mới sạch cho WordPress.
                 # Service worker + beforeunload handler trên Gemini/ChatGPT có
@@ -3808,9 +4219,11 @@ def run_automation():
             if not login_to_wordpress(page):
                 add_log("Failed to login. Exiting...", "error")
                 state.is_running = False
+                state.current_phase = "stopped"
                 context.close()
                 return
             
+            state.current_phase = "creating_posts"
             for i, (topic, content) in enumerate(zip(state.topics, state.generated_contents)):
                 if not state.is_running:
                     add_log("Stopped by user", "warning")
@@ -3821,6 +4234,11 @@ def run_automation():
                     add_log("Stopped while paused", "warning")
                     break
                 
+                if i in state.skip_post_indices:
+                    add_log(f"Skipping post {i+1} theo yêu cầu người dùng", "warning")
+                    state.failed_posts += 1
+                    continue
+
                 if content is None:
                     add_log(f"Skipping post {i+1} - no content", "warning")
                     state.failed_posts += 1
@@ -3868,14 +4286,19 @@ def run_automation():
             
         except Exception as e:
             add_log(f"Critical error: {e}", "error")
+            state.current_phase = "error"
         finally:
             time.sleep(2)
             context.close()
     
-    state.current_task = "Completed!"
-    state.progress = 100
+    if state.is_running:
+        state.current_task = "Completed!"
+        state.progress = 100
+        state.current_phase = "completed"
+        add_log("WordPress Auto Poster completed!", "success")
+    elif state.current_phase not in ("error", "stopped"):
+        state.current_phase = "stopped"
     state.is_running = False
-    add_log("WordPress Auto Poster completed!", "success")
 
 # FLASK ROUTES
 
@@ -3887,7 +4310,15 @@ def index():
 def get_status():
     # Return content_list without full content for performance
     content_list_summary = [
-        {"title": c["title"], "keyword": c["keyword"], "word_count": c["word_count"]}
+        {
+            "post_index": c.get("post_index", 0),
+            "title": c["title"],
+            "keyword": c["keyword"],
+            "word_count": c["word_count"],
+            "status": c.get("status", "success"),
+            "error_reason": c.get("error_reason", ""),
+            "attempts": c.get("attempts", 1),
+        }
         for c in state.content_list
     ]
     return jsonify({
@@ -3902,6 +4333,8 @@ def get_status():
         "gemini_available": GEMINI_AVAILABLE,
         "ollama_available": check_ollama(),
         "playwright_available": PLAYWRIGHT_AVAILABLE,
+        "current_phase": state.current_phase,
+        "retry_queue_count": len(state.retry_queue),
         "content_list": content_list_summary,
         "content_count": len(state.content_list)
     })
@@ -3910,6 +4343,16 @@ def get_status():
 def handle_config():
     if request.method == 'POST':
         data = request.json
+        if "content_min_valid_words" in data:
+            try:
+                data["content_min_valid_words"] = max(1, int(data["content_min_valid_words"]))
+            except (TypeError, ValueError):
+                data["content_min_valid_words"] = 1401
+        if "content_auto_rerender_retries" in data:
+            try:
+                data["content_auto_rerender_retries"] = max(0, int(data["content_auto_rerender_retries"]))
+            except (TypeError, ValueError):
+                data["content_auto_rerender_retries"] = 2
         state.config.update(data)
         if save_app_config(state.config):
             return jsonify({"success": True})
@@ -3939,6 +4382,10 @@ def manage_preset(name):
     
     elif request.method == 'PUT':
         data = request.json
+        try:
+            content_min_valid_words = max(1, int(data.get("content_min_valid_words", 1401)))
+        except (TypeError, ValueError):
+            content_min_valid_words = 1401
         presets[name] = {
             "wp_username": data.get("wp_username", ""),
             "wp_password": data.get("wp_password", ""),
@@ -3951,6 +4398,7 @@ def manage_preset(name):
             "auto_set_featured_image": data.get("auto_set_featured_image", False),
             "auto_select_category": data.get("auto_select_category", True),
             "auto_add_tags": data.get("auto_add_tags", True),
+            "content_min_valid_words": content_min_valid_words,
         }
         if save_site_presets(presets):
             return jsonify({"success": True, "message": f"Preset '{name}' saved"})
@@ -3984,10 +4432,21 @@ def update_content(index):
             
             state.content_list[index]['content'] = new_content
             state.content_list[index]['word_count'] = word_count
+            min_valid_words = _get_min_valid_words()
+            if word_count < min_valid_words:
+                state.content_list[index]['status'] = "failed"
+                state.content_list[index]['error_reason'] = (
+                    f"chỉ có {word_count}/{min_valid_words} từ (cập nhật thủ công)"
+                )
+            else:
+                state.content_list[index]['status'] = "success"
+                state.content_list[index]['error_reason'] = ""
+            state.content_list[index]['attempts'] = state.content_list[index].get('attempts', 1)
             
             # Also update generated_contents for WordPress posting
-            if index < len(state.generated_contents):
-                state.generated_contents[index] = new_content
+            post_index = int(state.content_list[index].get("post_index", index))
+            if 0 <= post_index < len(state.generated_contents):
+                state.generated_contents[post_index] = new_content
             
             add_log(f"Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
             return jsonify({"success": True, "word_count": word_count})
@@ -3996,20 +4455,104 @@ def update_content(index):
 @app.route('/api/content/<int:index>', methods=['DELETE'])
 def delete_content(index):
     if 0 <= index < len(state.content_list):
-        deleted_title = state.content_list[index]['title']
+        row = state.content_list[index]
+        deleted_title = row['title']
+        post_index = int(row.get("post_index", index))
         del state.content_list[index]
         
-        # Also remove from generated_contents
-        if index < len(state.generated_contents):
-            del state.generated_contents[index]
+        # Also remove from generated_contents/topics by real post index
+        if 0 <= post_index < len(state.generated_contents):
+            del state.generated_contents[post_index]
         
-        # Remove from topics to avoid creating post for this
-        if index < len(state.topics):
-            del state.topics[index]
+        if 0 <= post_index < len(state.topics):
+            del state.topics[post_index]
+
+        # Re-index content rows after deletion
+        for item in state.content_list:
+            item_post_index = int(item.get("post_index", -1))
+            if item_post_index > post_index:
+                item["post_index"] = item_post_index - 1
         
         add_log(f"Đã xóa: {deleted_title}", "warning")
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Content not found"})
+
+
+def _handle_rerender_request(content_row_index: int, skip_post: bool):
+    if not state.is_running:
+        return {"success": False, "message": "Chỉ có thể rend lại khi automation đang chạy"}, 400
+
+    if not (0 <= content_row_index < len(state.content_list)):
+        return {"success": False, "message": "Content không tồn tại"}, 404
+
+    row = state.content_list[content_row_index]
+    post_index = int(row.get("post_index", content_row_index))
+    phase = state.current_phase or ""
+
+    if phase in ("generating_content", "retry_content_queue"):
+        if _queue_content_rerender(post_index):
+            add_log(
+                f"Đã thêm vào hàng chờ rend lại content: bài {post_index + 1} - {row.get('title', '')}",
+                "warning",
+            )
+            return {"success": True, "queued": True, "message": "Đã thêm vào hàng chờ rend lại"}, 200
+        return {"success": True, "queued": False, "message": "Bài này đã có trong hàng chờ rend lại"}, 200
+
+    if phase in ("creating_posts", "retry_post_queue"):
+        if not skip_post:
+            return {
+                "success": False,
+                "requires_confirmation": True,
+                "message": "Đang trong quá trình đăng bài. Bạn có muốn bỏ qua bài này để không đăng không?"
+            }, 409
+
+        state.skip_post_indices.add(post_index)
+        if 0 <= post_index < len(state.generated_contents):
+            state.generated_contents[post_index] = None
+        add_log(
+            f"Đánh dấu bỏ qua đăng bài {post_index + 1} theo yêu cầu người dùng",
+            "warning",
+        )
+        return {
+            "success": True,
+            "queued": False,
+            "message": "Đã đánh dấu bỏ qua đăng bài này. Hãy rend lại ở pha tạo content."
+        }, 200
+
+    return {
+        "success": False,
+        "message": "Chỉ có thể thêm hàng chờ rend lại khi đang ở pha tạo content"
+    }, 400
+
+
+@app.route('/api/content/<int:index>/rerender', methods=['POST'])
+def rerender_content(index):
+    data = request.get_json(silent=True) or {}
+    skip_post = bool(data.get("skip_post", False))
+    payload, status_code = _handle_rerender_request(index, skip_post)
+    return jsonify(payload), status_code
+
+
+@app.route('/api/retry-queue', methods=['POST'])
+def enqueue_retry_action():
+    data = request.get_json(silent=True) or {}
+    action = data.get("action")
+    try:
+        post_index = int(data.get("post_index", 0)) - 1
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "post_index không hợp lệ"}), 400
+    skip_post = bool(data.get("skip_post", False))
+
+    if action != "content":
+        return jsonify({"success": False, "message": "Hiện chỉ hỗ trợ retry content"}), 400
+    if post_index < 0:
+        return jsonify({"success": False, "message": "post_index không hợp lệ"}), 400
+
+    row_index = _find_content_row_by_post_index(post_index)
+    if row_index is None:
+        return jsonify({"success": False, "message": "Không tìm thấy content tương ứng"}), 404
+    payload, status_code = _handle_rerender_request(row_index, skip_post)
+    return jsonify(payload), status_code
 
 @app.route('/api/start', methods=['POST'])
 def start_automation():
@@ -4036,6 +4579,9 @@ def start_automation():
     state.config["schedule_end_date"] = data.get("schedule_end_date", "")
     
     state.content_list = []
+    state.retry_queue = []
+    state.skip_post_indices = set()
+    state.current_phase = "initializing"
     state.is_paused = False
     state.pause_reason = ""
     
@@ -4050,6 +4596,7 @@ def stop_automation():
     state.is_running = False
     state.is_paused = False
     state.pause_reason = ""
+    state.current_phase = "stopped"
     add_log("Đã dừng bởi người dùng", "warning")
     return jsonify({"success": True})
 

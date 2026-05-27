@@ -29,6 +29,10 @@ DEFAULT_CONFIG = {
     "gemini_max_prompt_retries": 2, # số lần thử lại cho mỗi prompt
     # ChatGPT Web — share min_words_full/part với Gemini cho đơn giản
     "chatgpt_max_prompt_retries": 2,
+    # Nội dung hợp lệ khi số từ > 1400
+    "content_min_valid_words": 1401,
+    # Số lần rend lại tự động khi content chưa đạt ngưỡng
+    "content_auto_rerender_retries": 2,
 }
 
 
@@ -53,6 +57,7 @@ class AppState:
         self.used_featured_images: set = set()
         self.current_phase: str = ""
         self.retry_queue: List[Dict[str, Any]] = []
+        self.skip_post_indices: set = set()
 
     def reset(self):
         self.is_running = True
@@ -70,6 +75,7 @@ class AppState:
         self.used_featured_images = set()
         self.current_phase = ""
         self.retry_queue = []
+        self.skip_post_indices = set()
 
 
 state = AppState()
