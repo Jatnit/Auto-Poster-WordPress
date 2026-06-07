@@ -2292,10 +2292,15 @@ def set_rank_math_keyword(page: Page, keyword: str) -> bool:
 # ===== Image Insertion Reliability Constants (bugfix: image-insertion-reliability-fix) =====
 MAX_RETRY_ROUNDS = 2           # Phase 2 outer retry rounds
 MAX_SLOT_RETRIES = 2           # Per-slot internal retries for flaky sub-steps
-MEDIA_LIB_POLL_TIMEOUT = 5000  # ms total polling attachments
+MEDIA_LIB_POLL_TIMEOUT = 15000  # ms total polling visible attachments
 MEDIA_LIB_POLL_INTERVAL = 500  # ms per check
 MEDIA_MODAL_TIMEOUT = 5000     # ms (giữ nguyên giá trị cũ)
 ADD_MEDIA_BTN_TIMEOUT = 3000   # ms (tăng nhẹ từ 2000ms cũ)
+MEDIA_CLICK_TIMEOUT = 1500     # ms; tránh Playwright chờ 30-60s với element ẩn
+INSERT_VERIFY_TIMEOUT = 5000   # ms; WordPress đôi khi chèn ảnh hơi trễ
+INSERT_VERIFY_INTERVAL = 250   # ms
+INLINE_IMAGE_RANDOM_POOL_SIZE = 50
+INLINE_IMAGE_HEADING_SELECTOR = "h2, h3"
 
 
 def _count_imgs_in_iframe(page: Page) -> int:
@@ -2317,7 +2322,7 @@ def _count_imgs_in_iframe(page: Page) -> int:
 
 
 def _get_h2_elements_in_iframe(page: Page) -> list:
-    """Re-fetch H2 elements an toàn từ TinyMCE iframe.
+    """Re-fetch heading elements an toàn từ TinyMCE iframe.
 
     Sleep 0.3s để DOM settle, tránh stale locator sau modal close.
 
@@ -2325,7 +2330,7 @@ def _get_h2_elements_in_iframe(page: Page) -> list:
     """
     try:
         time.sleep(0.3)
-        return page.frame_locator("#content_ifr").locator("h2").all()
+        return page.frame_locator("#content_ifr").locator(INLINE_IMAGE_HEADING_SELECTOR).all()
     except Exception:
         return []
 
@@ -2341,7 +2346,18 @@ def _img_is_after_h2(page: Page, h2_index: int) -> bool:
     try:
         return page.frame_locator("#content_ifr").locator("body").evaluate(
             """(_, idx) => {
-                const h2s = document.querySelectorAll('h2');
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const allHeadings = Array.from(document.querySelectorAll('h2, h3'));
+                const contactIndex = allHeadings.findIndex((heading) =>
+                    normalize(heading.textContent).includes('thong tin lien he')
+                );
+                const h2s = contactIndex >= 0 ?
+                    allHeadings.slice(0, contactIndex) : allHeadings;
                 if (idx >= h2s.length) return false;
                 const h2 = h2s[idx];
                 let cur = h2.nextElementSibling;
@@ -2356,6 +2372,90 @@ def _img_is_after_h2(page: Page, h2_index: int) -> bool:
         )
     except Exception:
         return False
+
+
+def _get_heading_count_in_iframe(page: Page) -> int:
+    try:
+        return int(
+            page.frame_locator("#content_ifr").locator("body").evaluate(
+                """() => {
+                    const headings = Array.from(document.querySelectorAll('h2, h3'));
+                    const contactIndex = headings.findIndex((heading) =>
+                        /th[oô]ng tin li[eê]n h[eệ]|thong tin lien he/i.test(
+                            (heading.textContent || '').trim()
+                        )
+                    );
+                    return contactIndex >= 0 ? contactIndex : headings.length;
+                }"""
+            )
+        )
+    except Exception:
+        return 0
+
+
+def _get_contact_heading_index(page: Page) -> Optional[int]:
+    try:
+        index = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """() => {
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const headings = Array.from(document.querySelectorAll('h2, h3'));
+                const idx = headings.findIndex((heading) =>
+                    normalize(heading.textContent).includes('thong tin lien he')
+                );
+                return idx >= 0 ? idx : null;
+            }"""
+        )
+        return int(index) if index is not None else None
+    except Exception:
+        return None
+
+
+def _get_safe_heading_count_for_images(page: Page) -> int:
+    return _get_heading_count_in_iframe(page)
+
+
+def _pick_evenly_spaced_indices(total: int, slots: int) -> list:
+    if total <= 0 or slots <= 0:
+        return []
+    if total <= slots:
+        return list(range(total))
+    if slots == 1:
+        return [total // 2]
+
+    picked = []
+    used = set()
+    for pos in range(slots):
+        raw = int((pos * (total - 1) / (slots - 1)) + 0.5)
+        candidates = [raw]
+        for offset in range(1, total):
+            candidates.append(raw - offset)
+            candidates.append(raw + offset)
+        for candidate in candidates:
+            if 0 <= candidate < total and candidate not in used:
+                picked.append(candidate)
+                used.add(candidate)
+                break
+    return sorted(picked)
+
+
+def _select_even_candidates(indices: list, limit: int) -> list:
+    ordered = sorted(set(indices))
+    if limit <= 0 or not ordered:
+        return []
+    if len(ordered) <= limit:
+        return ordered
+    return [ordered[idx] for idx in _pick_evenly_spaced_indices(len(ordered), limit)]
+
+
+def _format_heading_targets(indices: list) -> str:
+    if not indices:
+        return "none"
+    return ", ".join(f"#{idx + 1}" for idx in indices)
 
 
 def _switch_to_visual_mode(page: Page) -> None:
@@ -2375,6 +2475,678 @@ def _switch_to_visual_mode(page: Page) -> None:
         add_log(f"Could not switch to Visual mode: {e}", "warning")
 
 
+def _click_first_selector_resilient(
+    page: Page,
+    selectors: list,
+    label: str,
+    timeout_ms: int = MEDIA_CLICK_TIMEOUT,
+) -> bool:
+    """Click nhanh bằng locator, rồi fallback JS để tránh kẹt vì viewport/overlay."""
+    for selector in selectors:
+        try:
+            target = page.locator(selector).first
+            if not target.is_visible(timeout=timeout_ms):
+                continue
+            try:
+                target.scroll_into_view_if_needed(timeout=timeout_ms)
+            except Exception:
+                pass
+            try:
+                target.click(timeout=timeout_ms)
+                add_log(f"Clicked {label}", "info")
+                return True
+            except Exception:
+                try:
+                    target.click(force=True, timeout=timeout_ms)
+                    add_log(f"Force-clicked {label}", "info")
+                    return True
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    try:
+        clicked_selector = page.evaluate(
+            """(selectors) => {
+                const canClick = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return rect.width > 0 &&
+                        rect.height > 0 &&
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        style.opacity !== '0';
+                };
+                for (const selector of selectors) {
+                    let el = null;
+                    try { el = document.querySelector(selector); } catch (e) {}
+                    if (!el) continue;
+                    if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
+                    if (!canClick(el)) continue;
+                    try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                    el.click();
+                    return selector;
+                }
+                return null;
+            }""",
+            selectors,
+        )
+        if clicked_selector:
+            add_log(f"JS-clicked {label}", "info")
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _select_visible_media_attachment(page: Page, label: str) -> bool:
+    """Select ảnh từ pool Media Library rộng hơn và tránh trùng trong phiên chạy."""
+    try:
+        if not hasattr(state, "used_inline_images"):
+            state.used_inline_images = set()
+
+        result = page.evaluate(
+            """async ({ usedIds, poolSize }) => {
+                const used = new Set((usedIds || []).map(String));
+                const pickIndex = (max) => {
+                    if (max <= 1) return 0;
+                    if (window.crypto && crypto.getRandomValues) {
+                        const bytes = new Uint32Array(1);
+                        crypto.getRandomValues(bytes);
+                        return bytes[0] % max;
+                    }
+                    return Math.floor(Math.random() * max);
+                };
+                const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+                const isVisible = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return rect.width > 1 &&
+                        rect.height > 1 &&
+                        rect.bottom > 0 &&
+                        rect.right > 0 &&
+                        rect.top < window.innerHeight &&
+                        rect.left < window.innerWidth &&
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        style.opacity !== '0';
+                };
+                const normalizeMedia = (data, modelIndex, model) => {
+                    if (!data) return null;
+                    if (data.type && data.type !== 'image') return null;
+                    const sizes = data.sizes || {};
+                    const preferred = sizes.large || sizes.medium_large ||
+                        sizes.medium || sizes.full || null;
+                    const url = (preferred && preferred.url) || data.url || '';
+                    if (!url) return null;
+                    const id = String(data.id || data.ID || url);
+                    return {
+                        id,
+                        url,
+                        alt: data.alt || '',
+                        title: data.title || data.filename || '',
+                        modelIndex,
+                        model
+                    };
+                };
+                const rememberAndSelect = (entry, entries, source, reused) => {
+                    if (!entry) return null;
+                    try {
+                        const frame = window.wp && wp.media && wp.media.frame;
+                        const frameState = frame && frame.state && frame.state();
+                        const selection = frameState && frameState.get &&
+                            frameState.get('selection');
+                        if (selection && entry.model) {
+                            selection.reset([entry.model]);
+                        }
+                    } catch (e) {}
+
+                    try {
+                        const el = Array.from(document.querySelectorAll('.attachment'))
+                            .find((node) => String(node.getAttribute('data-id') || node.dataset.id || '') === entry.id);
+                        if (el) {
+                            try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                            el.click();
+                        }
+                    } catch (e) {}
+
+                    const selected = {
+                        id: entry.id,
+                        url: entry.url,
+                        alt: entry.alt,
+                        title: entry.title,
+                        index: entry.modelIndex,
+                        pool: entries.length,
+                        source,
+                        reused
+                    };
+                    window.__autoPosterSelectedImage = selected;
+                    return { ok: true, selected };
+                };
+
+                try {
+                    const frame = window.wp && wp.media && wp.media.frame;
+                    const frameState = frame && frame.state && frame.state();
+                    const library = frameState && frameState.get &&
+                        frameState.get('library');
+                    if (library && Array.isArray(library.models)) {
+                        const deadline = Date.now() + 12000;
+                        let stagnant = 0;
+                        while (library.models.length < poolSize && Date.now() < deadline) {
+                            let canLoadMore = true;
+                            try {
+                                if (typeof library.hasMore === 'function') {
+                                    canLoadMore = !!library.hasMore();
+                                }
+                            } catch (e) {}
+                            if (!canLoadMore || typeof library.more !== 'function') break;
+
+                            const before = library.models.length;
+                            try {
+                                const req = library.more();
+                                await new Promise((resolve) => {
+                                    if (req && typeof req.always === 'function') {
+                                        req.always(resolve);
+                                    } else if (req && typeof req.then === 'function') {
+                                        req.then(resolve, resolve);
+                                    } else {
+                                        setTimeout(resolve, 700);
+                                    }
+                                });
+                            } catch (e) {
+                                await sleep(700);
+                            }
+
+                            if (library.models.length <= before) {
+                                stagnant += 1;
+                                const scroller = document.querySelector(
+                                    '.attachments-browser .attachments, ' +
+                                    '.media-frame-content, .media-modal-content'
+                                );
+                                if (scroller) scroller.scrollTop = scroller.scrollHeight;
+                                await sleep(500);
+                                if (stagnant >= 2) break;
+                            } else {
+                                stagnant = 0;
+                            }
+                        }
+
+                        const models = library.models.slice(0, Math.min(poolSize, library.models.length));
+                        const entries = models
+                            .map((model, index) => normalizeMedia(
+                                model && model.toJSON && model.toJSON(),
+                                index,
+                                model
+                            ))
+                            .filter(Boolean);
+                        if (entries.length) {
+                            const unused = entries.filter((entry) =>
+                                !used.has(entry.id) && !used.has(entry.url)
+                            );
+                            const pool = unused.length ? unused : entries;
+                            const entry = pool[pickIndex(pool.length)];
+                            return rememberAndSelect(
+                                entry,
+                                entries,
+                                'wp.media',
+                                unused.length === 0
+                            );
+                        }
+                    }
+                } catch (e) {}
+
+                const all = Array.from(document.querySelectorAll(
+                    '.media-modal .attachments .attachment, ' +
+                    '.media-frame .attachments .attachment, ' +
+                    '.attachments li.attachment, li.attachment'
+                )).filter((el) => !el.classList.contains('uploading'));
+
+                let visible = all.filter(isVisible);
+                if (!visible.length) {
+                    const scroller = document.querySelector(
+                        '.attachments-browser .attachments, .media-frame-content, .media-modal-content'
+                    );
+                    if (scroller) scroller.scrollTop = 0;
+                    visible = all.filter(isVisible);
+                }
+                if (!visible.length) {
+                    return { ok: false, reason: 'no_visible_attachments', total: all.length };
+                }
+
+                const entries = visible
+                    .slice(0, Math.min(visible.length, poolSize))
+                    .map((el, index) => {
+                        const id = String(el.getAttribute('data-id') || el.dataset.id || '');
+                        const img = el.querySelector('img');
+                        const url = img && (img.currentSrc || img.src || '');
+                        if (!url && !id) return null;
+                        return {
+                            id: id || url,
+                            url,
+                            alt: img ? (img.alt || '') : '',
+                            title: img ? (img.alt || '') : '',
+                            modelIndex: index,
+                            element: el
+                        };
+                    })
+                    .filter(Boolean);
+                if (!entries.length) {
+                    return { ok: false, reason: 'no_usable_visible_attachments', total: all.length };
+                }
+
+                const unused = entries.filter((entry) =>
+                    !used.has(entry.id) && !used.has(entry.url)
+                );
+                const pool = unused.length ? unused : entries;
+                const localIndex = pickIndex(pool.length);
+                const el = pool[localIndex];
+                try { el.element.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                el.element.click();
+                window.__autoPosterSelectedImage = {
+                    id: el.id,
+                    url: el.url,
+                    alt: el.alt,
+                    title: el.title,
+                    index: el.modelIndex,
+                    pool: entries.length,
+                    source: 'dom-visible',
+                    reused: unused.length === 0
+                };
+                return { ok: true, selected: window.__autoPosterSelectedImage };
+            }""",
+            {
+                "usedIds": list(state.used_inline_images),
+                "poolSize": INLINE_IMAGE_RANDOM_POOL_SIZE,
+            },
+        )
+        selected = result.get("selected") if result else None
+        if result and result.get("ok") and selected:
+            selected_key = str(selected.get("id") or selected.get("url") or "")
+            if selected_key:
+                state.used_inline_images.add(selected_key)
+            add_log(
+                f"Selected image {int(selected.get('index', 0)) + 1} "
+                f"from {selected.get('pool', 0)} pool "
+                f"({selected.get('source', 'media')}, "
+                f"{'reused' if selected.get('reused') else 'unused'}) for {label}",
+                "info",
+            )
+            time.sleep(0.8)
+            return True
+
+        reason = result.get("reason") if result else "no_result"
+        total = result.get("total") if result else 0
+        add_log(f"Select image fail for {label}: {reason} (total={total})", "warning")
+        return False
+    except Exception as e:
+        add_log(f"Select image fail for {label}: {e}", "warning")
+        return False
+
+
+def _get_media_attachment_status(page: Page) -> dict:
+    try:
+        return page.evaluate(
+            """() => {
+                const isVisible = (el) => {
+                    const rect = el.getBoundingClientRect();
+                    const style = window.getComputedStyle(el);
+                    return rect.width > 1 &&
+                        rect.height > 1 &&
+                        rect.bottom > 0 &&
+                        rect.right > 0 &&
+                        rect.top < window.innerHeight &&
+                        rect.left < window.innerWidth &&
+                        style.display !== 'none' &&
+                        style.visibility !== 'hidden' &&
+                        style.opacity !== '0';
+                };
+
+                const all = Array.from(document.querySelectorAll(
+                    '.media-modal .attachments .attachment, ' +
+                    '.media-frame .attachments .attachment, ' +
+                    '.attachments li.attachment, li.attachment'
+                )).filter((el) => !el.classList.contains('uploading'));
+
+                const visible = all.filter(isVisible);
+                const loading = !!document.querySelector(
+                    '.media-frame .spinner.is-active, ' +
+                    '.media-modal .spinner.is-active, ' +
+                    '.attachments-browser .spinner.is-active'
+                );
+                const noItems = !!document.querySelector(
+                    '.media-frame .no-media, .media-modal .no-media, .attachments .no-media'
+                );
+                let libraryCount = 0;
+                try {
+                    const frame = window.wp && wp.media && wp.media.frame;
+                    const frameState = frame && frame.state && frame.state();
+                    const library = frameState && frameState.get &&
+                        frameState.get('library');
+                    libraryCount = library && Array.isArray(library.models) ?
+                        library.models.length : 0;
+                } catch (e) {}
+
+                return {
+                    total: all.length,
+                    visible: visible.length,
+                    libraryCount,
+                    loading,
+                    noItems
+                };
+            }"""
+        ) or {"total": 0, "visible": 0, "libraryCount": 0, "loading": False, "noItems": False}
+    except Exception:
+        return {"total": 0, "visible": 0, "libraryCount": 0, "loading": False, "noItems": False}
+
+
+def _get_selected_media_image(page: Page, fallback_alt: str) -> Optional[dict]:
+    try:
+        image = page.evaluate(
+            """(fallbackAlt) => {
+                const normalize = (data, id) => {
+                    if (!data) return null;
+                    const sizes = data.sizes || {};
+                    const preferred = sizes.large || sizes.medium_large ||
+                        sizes.medium || sizes.full || null;
+                    const url = (preferred && preferred.url) || data.url || '';
+                    if (!url) return null;
+                    return {
+                        id: id || data.id || '',
+                        url,
+                        alt: data.alt || fallbackAlt,
+                        title: data.title || data.filename || fallbackAlt
+                    };
+                };
+
+                if (window.__autoPosterSelectedImage &&
+                    window.__autoPosterSelectedImage.url) {
+                    return {
+                        id: window.__autoPosterSelectedImage.id || '',
+                        url: window.__autoPosterSelectedImage.url,
+                        alt: window.__autoPosterSelectedImage.alt || fallbackAlt,
+                        title: window.__autoPosterSelectedImage.title || fallbackAlt
+                    };
+                }
+
+                try {
+                    const frame = window.wp && wp.media && wp.media.frame;
+                    const selection = frame && frame.state &&
+                        frame.state().get('selection');
+                    const model = selection && selection.first && selection.first();
+                    const data = model && model.toJSON && model.toJSON();
+                    const fromFrame = normalize(data, data && data.id);
+                    if (fromFrame) return fromFrame;
+                } catch (e) {}
+
+                const selected = document.querySelector(
+                    '.attachment.selected, .attachment[aria-checked="true"]'
+                );
+                const id = selected && (
+                    selected.getAttribute('data-id') || selected.dataset.id
+                );
+                try {
+                    if (id && window.wp && wp.media && wp.media.attachment) {
+                        const data = wp.media.attachment(id).toJSON();
+                        const fromAttachment = normalize(data, id);
+                        if (fromAttachment) return fromAttachment;
+                    }
+                } catch (e) {}
+
+                const detailImg = document.querySelector(
+                    '.attachment-details .thumbnail img, ' +
+                    '.attachment-info .thumbnail img, ' +
+                    '.media-sidebar .thumbnail img, ' +
+                    '.attachment.selected img'
+                );
+                const url = detailImg && (detailImg.currentSrc || detailImg.src);
+                if (url) {
+                    return {
+                        id: id || '',
+                        url,
+                        alt: detailImg.alt || fallbackAlt,
+                        title: detailImg.alt || fallbackAlt
+                    };
+                }
+
+                return null;
+            }""",
+            fallback_alt,
+        )
+        if image and image.get("url"):
+            return image
+    except Exception as e:
+        add_log(f"Could not read selected media image: {e}", "warning")
+    return None
+
+
+def _sync_editor_after_direct_insert(page: Page) -> None:
+    try:
+        page.evaluate(
+            """() => {
+                if (window.tinymce) {
+                    const ed = tinymce.get('content');
+                    if (ed) {
+                        try { ed.nodeChanged(); } catch (e) {}
+                        try { ed.save(); } catch (e) {}
+                        try {
+                            const ta = document.getElementById('content');
+                            if (ta) ta.value = ed.getContent({ format: 'html' });
+                        } catch (e) {}
+                    }
+                    try { tinymce.triggerSave(); } catch (e) {}
+                }
+                const ta = document.getElementById('content');
+                if (ta) {
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    ta.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }"""
+        )
+    except Exception:
+        pass
+
+
+def _insert_selected_image_after_h2_direct(
+    page: Page,
+    h2_index: int,
+    image: dict,
+    keyword: str,
+) -> bool:
+    try:
+        result = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(body, args) => {
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const allHeadings = Array.from(body.querySelectorAll('h2, h3'));
+                const contactIndex = allHeadings.findIndex((heading) =>
+                    normalize(heading.textContent).includes('thong tin lien he')
+                );
+                const h2s = contactIndex >= 0 ?
+                    allHeadings.slice(0, contactIndex) : allHeadings;
+                if (args.h2Index >= h2s.length) {
+                    return { ok: false, reason: 'h2_not_found', count: h2s.length };
+                }
+                const doc = body.ownerDocument;
+                const wrapper = doc.createElement('p');
+                const img = doc.createElement('img');
+                img.src = args.url;
+                img.alt = args.alt || args.keyword;
+                img.title = args.title || args.keyword;
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.className = 'aligncenter size-full wp-image-auto-poster';
+                wrapper.appendChild(img);
+                h2s[args.h2Index].insertAdjacentElement('afterend', wrapper);
+                return { ok: true, count: body.querySelectorAll('img').length };
+            }""",
+            {
+                "h2Index": h2_index,
+                "url": image.get("url", ""),
+                "alt": image.get("alt") or keyword,
+                "title": image.get("title") or keyword,
+                "keyword": keyword,
+            },
+        )
+        if result and result.get("ok"):
+            _sync_editor_after_direct_insert(page)
+            add_log(
+                f"Inserted selected image directly under H2 #{h2_index + 1}",
+                "success",
+            )
+            return True
+        reason = result.get("reason") if result else "no_result"
+        add_log(f"Direct insert under H2 #{h2_index + 1} failed: {reason}", "warning")
+    except Exception as e:
+        add_log(f"Direct insert under H2 #{h2_index + 1} failed: {e}", "warning")
+    return False
+
+
+def _insert_selected_image_after_paragraph_direct(
+    page: Page,
+    slot_hint: str,
+    image: dict,
+    keyword: str,
+) -> bool:
+    try:
+        result = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(body, args) => {
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const contactHeading = Array.from(body.querySelectorAll('h2, h3'))
+                    .find((heading) =>
+                        normalize(heading.textContent).includes('thong tin lien he')
+                    );
+                const isBeforeContact = (node) => {
+                    if (!contactHeading) return true;
+                    return !!(node.compareDocumentPosition(contactHeading) &
+                        Node.DOCUMENT_POSITION_FOLLOWING);
+                };
+                const paragraphs = Array.from(body.querySelectorAll('p'))
+                    .filter(isBeforeContact);
+                if (!paragraphs.length) {
+                    return { ok: false, reason: 'no_safe_paragraphs_before_contact' };
+                }
+                let target = paragraphs[0];
+                if (args.slot === 'middle') {
+                    target = paragraphs[Math.floor(paragraphs.length / 2)];
+                } else if (args.slot === 'bottom') {
+                    target = paragraphs[paragraphs.length - 1];
+                }
+                const doc = body.ownerDocument;
+                const wrapper = doc.createElement('p');
+                const img = doc.createElement('img');
+                img.src = args.url;
+                img.alt = args.alt || args.keyword;
+                img.title = args.title || args.keyword;
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                img.className = 'aligncenter size-full wp-image-auto-poster';
+                wrapper.appendChild(img);
+                target.insertAdjacentElement('afterend', wrapper);
+                return { ok: true, count: body.querySelectorAll('img').length };
+            }""",
+            {
+                "slot": slot_hint,
+                "url": image.get("url", ""),
+                "alt": image.get("alt") or keyword,
+                "title": image.get("title") or keyword,
+                "keyword": keyword,
+            },
+        )
+        if result and result.get("ok"):
+            _sync_editor_after_direct_insert(page)
+            add_log(
+                f"Fallback ({slot_hint}): inserted selected image directly",
+                "success",
+            )
+            return True
+        reason = result.get("reason") if result else "no_result"
+        add_log(f"Fallback ({slot_hint}) direct insert failed: {reason}", "warning")
+    except Exception as e:
+        add_log(f"Fallback ({slot_hint}) direct insert failed: {e}", "warning")
+    return False
+
+
+def _switch_to_media_library_tab(page: Page, label: str) -> None:
+    tab_selectors = [
+        ".media-menu-item:has-text('Thư viện Media')",
+        ".media-menu-item:has-text('Thư viện')",
+        ".media-menu-item:has-text('Media Library')",
+        ".media-menu-item:has-text('Library')",
+        ".media-menu-item:has-text('Chọn từ thư viện')",
+        ".media-router a:has-text('Thư viện')",
+        ".media-router a:has-text('Media Library')",
+    ]
+    if _click_first_selector_resilient(
+        page,
+        tab_selectors,
+        f"Media Library tab for {label}",
+        timeout_ms=1000,
+    ):
+        time.sleep(0.5)
+
+
+def _wait_for_visible_media_attachments(
+    page: Page,
+    label: str,
+    timeout_ms: int = MEDIA_LIB_POLL_TIMEOUT,
+) -> bool:
+    deadline = time.time() + (timeout_ms / 1000)
+    last_status = {"total": 0, "visible": 0, "libraryCount": 0, "loading": False, "noItems": False}
+    switched_tab = False
+
+    while time.time() < deadline:
+        if not switched_tab:
+            _switch_to_media_library_tab(page, label)
+            switched_tab = True
+
+        last_status = _get_media_attachment_status(page)
+        if (
+            int(last_status.get("visible", 0)) > 0 or
+            int(last_status.get("libraryCount", 0)) > 0
+        ):
+            return True
+
+        if last_status.get("noItems"):
+            break
+
+        time.sleep(MEDIA_LIB_POLL_INTERVAL / 1000)
+
+    add_log(
+        f"No visible images in media library for {label} sau khi chờ {timeout_ms}ms "
+        f"(total={last_status.get('total', 0)}, "
+        f"visible={last_status.get('visible', 0)}, "
+        f"library={last_status.get('libraryCount', 0)}, "
+        f"loading={last_status.get('loading', False)})",
+        "warning",
+    )
+    return False
+
+
+def _wait_for_img_count_increase(
+    page: Page,
+    count_before: int,
+    timeout_ms: int = INSERT_VERIFY_TIMEOUT,
+) -> int:
+    deadline = time.time() + (timeout_ms / 1000)
+    latest = count_before
+    while time.time() < deadline:
+        latest = _count_imgs_in_iframe(page)
+        if latest > count_before:
+            return latest
+        time.sleep(INSERT_VERIFY_INTERVAL / 1000)
+    return latest
+
+
 def _finalize(page: Page, max_images: int, reason: str) -> bool:
     """Đóng modal, log final count theo DOM, return bool dựa trên DOM count.
 
@@ -2384,7 +3156,13 @@ def _finalize(page: Page, max_images: int, reason: str) -> bool:
     """
     close_all_modals(page)
     final = _count_imgs_in_iframe(page)
-    if final >= max_images:
+    if final > max_images:
+        add_log(
+            f"Total images inserted: {max_images}/{max_images} "
+            f"(DOM currently has {final}; stopped at cap)",
+            "warning",
+        )
+    elif final >= max_images:
         add_log(f"Total images inserted: {final}/{max_images}", "success")
     else:
         add_log(
@@ -2395,7 +3173,12 @@ def _finalize(page: Page, max_images: int, reason: str) -> bool:
     return final > 0
 
 
-def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
+def _try_insert_image_at_h2(
+    page: Page,
+    h2_index: int,
+    keyword: str,
+    max_images: Optional[int] = None,
+) -> bool:
     """Atomic insert một ảnh tại vị trí H2 thứ h2_index (0-based).
 
     Thực hiện sub-flow Add Media → select → alt → link → Insert
@@ -2403,7 +3186,7 @@ def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
     media modal, attachments load) và DOM-based verification ở bước cuối.
 
     Returns:
-        True nếu DOM count <img> tăng đúng 1 sau khi click Insert
+        True nếu DOM count <img> tăng sau khi click Insert
         (verify qua _count_imgs_in_iframe). False ngược lại — caller có thể
         retry vị trí này ở vòng outer retry kế tiếp.
 
@@ -2416,6 +3199,8 @@ def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
             return False
         if state.is_paused and not wait_if_paused():
             return False
+        if max_images is not None and _count_imgs_in_iframe(page) >= max_images:
+            return True
 
         try:
             if attempt > 0:
@@ -2466,11 +3251,12 @@ def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
                     "warning",
                 )
                 continue
-            try:
-                add_btn.click()
-                add_log("Clicked Add Media button", "info")
-            except Exception as e:
-                add_log(f"Click Add Media fail: {e}", "warning")
+            if not _click_first_selector_resilient(
+                page,
+                ["#insert-media-button", ".add_media"],
+                "Add Media button",
+            ):
+                add_log("Click Add Media fail", "warning")
                 continue
 
             # === Step 3: Wait media modal ===
@@ -2486,48 +3272,14 @@ def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
                 close_all_modals(page)
                 continue
 
-            # === Step 3b: Switch to Media Library tab if available ===
-            try:
-                lib_tab = page.locator(
-                    ".media-menu-item:has-text('Thư viện Media'), "
-                    ".media-menu-item:has-text('Media Library')"
-                ).first
-                if lib_tab.is_visible(timeout=1000):
-                    lib_tab.click()
-                    time.sleep(0.5)
-            except Exception:
-                pass
-
-            # === Step 4: Poll attachments load ===
-            images = []
-            poll_start = time.time()
-            while (time.time() - poll_start) * 1000 < MEDIA_LIB_POLL_TIMEOUT:
-                try:
-                    images = page.locator(
-                        ".attachments .attachment, li.attachment"
-                    ).all()
-                    if images:
-                        break
-                except Exception:
-                    images = []
-                time.sleep(MEDIA_LIB_POLL_INTERVAL / 1000)
-            if not images:
-                add_log(
-                    f"No images in media library cho H2 #{h2_index + 1} "
-                    f"(attempt {attempt + 1}) sau khi poll {MEDIA_LIB_POLL_TIMEOUT}ms",
-                    "warning",
-                )
+            # === Step 4: Wait until the media grid has a visible attachment ===
+            media_label = f"H2 #{h2_index + 1} (attempt {attempt + 1})"
+            if not _wait_for_visible_media_attachments(page, media_label):
                 close_all_modals(page)
                 continue
 
-            # === Step 4b: Pick random image trong top 10 ===
-            try:
-                img_idx = random.randint(0, min(len(images) - 1, 9))
-                images[img_idx].click()
-                time.sleep(0.8)
-                add_log(f"Selected image {img_idx + 1}", "info")
-            except Exception as e:
-                add_log(f"Select image fail: {e}", "warning")
+            # === Step 4b: Pick random visible image (JS avoids hidden locator timeout) ===
+            if not _select_visible_media_attachment(page, f"H2 #{h2_index + 1}"):
                 close_all_modals(page)
                 continue
 
@@ -2562,42 +3314,22 @@ def _try_insert_image_at_h2(page: Page, h2_index: int, keyword: str) -> bool:
             except Exception:
                 pass
 
-            # === Step 6: Click Insert + DOM verify ===
-            count_before = _count_imgs_in_iframe(page)
-            insert_selectors = [
-                "button.media-button-insert",
-                "button:has-text('Chèn vào bài viết')",
-                "button:has-text('Insert into post')",
-                ".media-button-insert",
-            ]
-            clicked = False
-            for sel in insert_selectors:
-                try:
-                    btn = page.locator(sel).first
-                    if btn.is_visible(timeout=1000):
-                        btn.click()
-                        clicked = True
-                        break
-                except Exception:
-                    continue
-            if not clicked:
+            # === Step 6: Read selected image URL + insert directly into TinyMCE ===
+            selected_image = _get_selected_media_image(page, keyword)
+            if not selected_image:
                 add_log(
-                    f"Insert button không click được cho H2 #{h2_index + 1}",
+                    f"Không đọc được URL ảnh đã chọn cho H2 #{h2_index + 1}",
                     "warning",
                 )
                 close_all_modals(page)
                 continue
 
-            time.sleep(1.0)
-            count_after = _count_imgs_in_iframe(page)
-
-            if count_after != count_before + 1:
-                add_log(
-                    f"DOM count mismatch sau Insert (before={count_before}, "
-                    f"after={count_after}) — H2 #{h2_index + 1} "
-                    f"(attempt {attempt + 1})",
-                    "warning",
-                )
+            if not _insert_selected_image_after_h2_direct(
+                page,
+                h2_index,
+                selected_image,
+                keyword,
+            ):
                 close_all_modals(page)
                 continue
 
@@ -2683,7 +3415,12 @@ def _find_other_unfilled_h2(page: Page, exclude_indices: set) -> list:
     return result
 
 
-def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bool:
+def _fallback_insert_image_no_h2(
+    page: Page,
+    keyword: str,
+    slot_hint: str,
+    max_images: Optional[int] = None,
+) -> bool:
     """Chèn 1 ảnh khi bài KHÔNG có H2. Position cursor vào paragraph theo slot_hint.
 
     Args:
@@ -2692,13 +3429,15 @@ def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bo
         slot_hint: 'top' (paragraph đầu), 'middle' (paragraph giữa), 'bottom' (paragraph cuối)
 
     Returns:
-        True nếu DOM count <img> tăng đúng 1 sau click Insert; False ngược lại.
+        True nếu DOM count <img> tăng sau click Insert; False ngược lại.
         KHÔNG verify position (không có H2 anchor).
     """
     if not state.is_running:
         return False
     if state.is_paused and not wait_if_paused():
         return False
+    if max_images is not None and _count_imgs_in_iframe(page) >= max_images:
+        return True
 
     try:
         # === Step 1: Position cursor vào paragraph theo slot_hint ===
@@ -2751,11 +3490,12 @@ def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bo
         if not btn_visible:
             add_log(f"Fallback ({slot_hint}): Add Media btn not visible", "warning")
             return False
-        try:
-            add_btn.click()
-            add_log(f"Fallback ({slot_hint}): Clicked Add Media button", "info")
-        except Exception as e:
-            add_log(f"Fallback ({slot_hint}) click Add Media fail: {e}", "warning")
+        if not _click_first_selector_resilient(
+            page,
+            ["#insert-media-button", ".add_media"],
+            f"Fallback ({slot_hint}) Add Media button",
+        ):
+            add_log(f"Fallback ({slot_hint}) click Add Media fail", "warning")
             return False
 
         # === Step 3: Wait media modal ===
@@ -2767,44 +3507,14 @@ def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bo
             close_all_modals(page)
             return False
 
-        # === Step 3b: Switch to Media Library tab ===
-        try:
-            lib_tab = page.locator(
-                ".media-menu-item:has-text('Thư viện Media'), "
-                ".media-menu-item:has-text('Media Library')"
-            ).first
-            if lib_tab.is_visible(timeout=1000):
-                lib_tab.click()
-                time.sleep(0.5)
-        except Exception:
-            pass
-
-        # === Step 4: Poll attachments ===
-        images = []
-        poll_start = time.time()
-        while (time.time() - poll_start) * 1000 < MEDIA_LIB_POLL_TIMEOUT:
-            try:
-                images = page.locator(
-                    ".attachments .attachment, li.attachment"
-                ).all()
-                if images:
-                    break
-            except Exception:
-                images = []
-            time.sleep(MEDIA_LIB_POLL_INTERVAL / 1000)
-        if not images:
-            add_log(f"Fallback ({slot_hint}): no images in media library", "warning")
+        # === Step 4: Wait until the media grid has a visible attachment ===
+        media_label = f"fallback {slot_hint}"
+        if not _wait_for_visible_media_attachments(page, media_label):
             close_all_modals(page)
             return False
 
-        # === Step 4b: Pick random image trong top 10 ===
-        try:
-            img_idx = random.randint(0, min(len(images) - 1, 9))
-            images[img_idx].click()
-            time.sleep(0.8)
-            add_log(f"Fallback ({slot_hint}): selected image {img_idx + 1}", "info")
-        except Exception as e:
-            add_log(f"Fallback ({slot_hint}) select image fail: {e}", "warning")
+        # === Step 4b: Pick random visible image (JS avoids hidden locator timeout) ===
+        if not _select_visible_media_attachment(page, f"fallback {slot_hint}"):
             close_all_modals(page)
             return False
 
@@ -2839,42 +3549,22 @@ def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bo
         except Exception:
             pass
 
-        # === Step 6: Click Insert + DOM verify ===
-        count_before = _count_imgs_in_iframe(page)
-        insert_selectors = [
-            "button.media-button-insert",
-            "button:has-text('Chèn vào bài viết')",
-            "button:has-text('Insert into post')",
-            ".media-button-insert",
-        ]
-        clicked = False
-        for sel in insert_selectors:
-            try:
-                btn = page.locator(sel).first
-                if btn.is_visible(timeout=1000):
-                    btn.click()
-                    clicked = True
-                    break
-            except Exception:
-                continue
-        if not clicked:
-            add_log(f"Fallback ({slot_hint}): insert button không click được", "warning")
+        # === Step 6: Read selected image URL + insert directly into TinyMCE ===
+        selected_image = _get_selected_media_image(page, keyword)
+        if not selected_image:
+            add_log(f"Fallback ({slot_hint}): không đọc được URL ảnh đã chọn", "warning")
             close_all_modals(page)
             return False
 
-        time.sleep(1.0)
-        count_after = _count_imgs_in_iframe(page)
-
-        if count_after != count_before + 1:
-            add_log(
-                f"Fallback ({slot_hint}): DOM count mismatch "
-                f"(before={count_before}, after={count_after})",
-                "warning",
-            )
+        if not _insert_selected_image_after_paragraph_direct(
+            page,
+            slot_hint,
+            selected_image,
+            keyword,
+        ):
             close_all_modals(page)
             return False
 
-        add_log(f"Fallback ({slot_hint}): inserted image successfully", "success")
         close_all_modals(page)
         time.sleep(0.5)
         _switch_to_visual_mode(page)
@@ -2886,11 +3576,276 @@ def _fallback_insert_image_no_h2(page: Page, keyword: str, slot_hint: str) -> bo
         return False
 
 
+def _rebalance_auto_images_to_targets(page: Page, target_indices: list) -> int:
+    if not target_indices:
+        return 0
+    try:
+        result = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(body, targetIndices) => {
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const allHeadings = Array.from(body.querySelectorAll('h2, h3'));
+                const contactIndex = allHeadings.findIndex((heading) =>
+                    normalize(heading.textContent).includes('thong tin lien he')
+                );
+                const headings = contactIndex >= 0 ?
+                    allHeadings.slice(0, contactIndex) : allHeadings;
+                const validTargets = targetIndices.filter((idx) => idx < headings.length);
+                const wrapperFor = (img) => img.closest('p, figure') || img;
+                const contactHeading = contactIndex >= 0 ? allHeadings[contactIndex] : null;
+                const isBeforeContact = (node) => {
+                    if (!contactHeading) return true;
+                    return !!(node.compareDocumentPosition(contactHeading) &
+                        Node.DOCUMENT_POSITION_FOLLOWING);
+                };
+                const imageNearHeading = (idx) => {
+                    const heading = headings[idx];
+                    let cur = heading ? heading.nextElementSibling : null;
+                    for (let i = 0; i < 2 && cur; i++) {
+                        if (cur.matches && cur.matches('img')) return cur;
+                        const img = cur.querySelector && cur.querySelector('img');
+                        if (img) return img;
+                        cur = cur.nextElementSibling;
+                    }
+                    return null;
+                };
+
+                const usedWrappers = new Set();
+                const missing = [];
+                for (const idx of validTargets) {
+                    const img = imageNearHeading(idx);
+                    if (img) {
+                        usedWrappers.add(wrapperFor(img));
+                    } else {
+                        missing.push(idx);
+                    }
+                }
+
+                if (!missing.length) {
+                    return { moved: 0, missing: 0, available: 0 };
+                }
+
+                const autoWrappers = Array.from(
+                    body.querySelectorAll('img.wp-image-auto-poster')
+                )
+                    .map(wrapperFor)
+                    .filter((node, idx, arr) => node && arr.indexOf(node) === idx);
+                const afterContact = autoWrappers.filter((node) => !isBeforeContact(node));
+                const beforeContactSpare = autoWrappers.filter((node) =>
+                    isBeforeContact(node) && !usedWrappers.has(node)
+                );
+                const spare = afterContact.concat(beforeContactSpare);
+
+                let moved = 0;
+                for (const idx of missing) {
+                    const node = spare.shift();
+                    if (!node) break;
+                    headings[idx].insertAdjacentElement('afterend', node);
+                    moved += 1;
+                }
+                return { moved, missing: missing.length, available: autoWrappers.length };
+            }""",
+            target_indices,
+        )
+        moved = int((result or {}).get("moved", 0))
+        if moved:
+            _sync_editor_after_direct_insert(page)
+            add_log(f"Final scan rebalanced {moved} image(s) to target headings", "success")
+        return moved
+    except Exception as e:
+        add_log(f"Final image rebalance failed: {e}", "warning")
+        return 0
+
+
+def _remove_or_move_images_after_contact(page: Page, target_indices: list) -> int:
+    try:
+        result = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(body, targetIndices) => {
+                const normalize = (value) => (value || '')
+                    .normalize('NFD')
+                    .replace(/[\\u0300-\\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+                const headings = Array.from(body.querySelectorAll('h2, h3'));
+                const contactIndex = headings.findIndex((heading) =>
+                    normalize(heading.textContent).includes('thong tin lien he')
+                );
+                if (contactIndex < 0) {
+                    return { moved: 0, removed: 0, after: 0 };
+                }
+                const contactHeading = headings[contactIndex];
+                const safeHeadings = headings.slice(0, contactIndex);
+                const wrapperFor = (img) => img.closest('p, figure') || img;
+                const isAfterContact = (node) => {
+                    return !!(node.compareDocumentPosition(contactHeading) &
+                        Node.DOCUMENT_POSITION_PRECEDING);
+                };
+                const imageNearHeading = (idx) => {
+                    const heading = safeHeadings[idx];
+                    let cur = heading ? heading.nextElementSibling : null;
+                    for (let i = 0; i < 2 && cur; i++) {
+                        if (cur.matches && cur.matches('img')) return cur;
+                        const img = cur.querySelector && cur.querySelector('img');
+                        if (img) return img;
+                        cur = cur.nextElementSibling;
+                    }
+                    return null;
+                };
+                const afterWrappers = Array.from(
+                    body.querySelectorAll('img.wp-image-auto-poster')
+                )
+                    .map(wrapperFor)
+                    .filter((node, idx, arr) =>
+                        node && arr.indexOf(node) === idx && isAfterContact(node)
+                    );
+                let moved = 0;
+                let removed = 0;
+                for (const node of afterWrappers) {
+                    const target = targetIndices.find((idx) =>
+                        idx < safeHeadings.length && !imageNearHeading(idx)
+                    );
+                    if (target !== undefined) {
+                        safeHeadings[target].insertAdjacentElement('afterend', node);
+                        moved += 1;
+                    } else {
+                        node.remove();
+                        removed += 1;
+                    }
+                }
+                return { moved, removed, after: afterWrappers.length };
+            }""",
+            target_indices,
+        ) or {}
+        changed = int(result.get("moved", 0)) + int(result.get("removed", 0))
+        if changed:
+            _sync_editor_after_direct_insert(page)
+            add_log(
+                f"Contact boundary cleanup: moved {result.get('moved', 0)}, "
+                f"removed {result.get('removed', 0)} image(s) after contact section",
+                "success",
+            )
+        return changed
+    except Exception as e:
+        add_log(f"Contact boundary cleanup failed: {e}", "warning")
+        return 0
+
+
+def _final_scan_and_repair_images(
+    page: Page,
+    keyword: str,
+    max_images: int,
+    target_h2_indices: list,
+) -> bool:
+    add_log("Final image scan: checking full article image distribution...", "info")
+    close_all_modals(page)
+    _switch_to_visual_mode(page)
+
+    heading_count = _get_safe_heading_count_for_images(page)
+    valid_targets = [idx for idx in target_h2_indices if idx < heading_count]
+    _remove_or_move_images_after_contact(page, valid_targets)
+    if valid_targets:
+        _rebalance_auto_images_to_targets(page, valid_targets)
+
+    current_count = _count_imgs_in_iframe(page)
+    missing_targets = _find_unfilled_target_h2(page, valid_targets)
+    add_log(
+        f"Final image scan: {current_count}/{max_images} images, "
+        f"targets={_format_heading_targets(valid_targets)}, "
+        f"missing={_format_heading_targets(missing_targets)}",
+        "info",
+    )
+
+    # 1) Bù vào các heading mục tiêu trước, để phân bố đều từ đầu tới cuối.
+    while current_count < max_images and missing_targets:
+        if not state.is_running:
+            return False
+        if state.is_paused and not wait_if_paused():
+            return False
+        remaining = max_images - current_count
+        for h2_idx in _select_even_candidates(missing_targets, remaining):
+            if _count_imgs_in_iframe(page) >= max_images:
+                break
+            _try_insert_image_at_h2(
+                page,
+                h2_idx,
+                keyword,
+                max_images=max_images,
+            )
+        new_count = _count_imgs_in_iframe(page)
+        new_missing = _find_unfilled_target_h2(page, valid_targets)
+        if new_count == current_count and new_missing == missing_targets:
+            break
+        current_count = new_count
+        missing_targets = new_missing
+
+    # 2) Nếu target chính vẫn chưa đủ ảnh, chọn các heading còn trống khác theo phân bố đều.
+    if current_count < max_images:
+        remaining = max_images - current_count
+        other_indices = _find_other_unfilled_h2(page, exclude_indices=set(valid_targets))
+        for h2_idx in _select_even_candidates(other_indices, remaining):
+            if _count_imgs_in_iframe(page) >= max_images:
+                break
+            if not state.is_running:
+                return False
+            if state.is_paused and not wait_if_paused():
+                return False
+            _try_insert_image_at_h2(
+                page,
+                h2_idx,
+                keyword,
+                max_images=max_images,
+            )
+
+    # 3) Nếu bài ít heading hoặc Media Library fail ở heading, fallback paragraph theo 3 vùng.
+    current_count = _count_imgs_in_iframe(page)
+    if current_count < max_images:
+        remaining = max_images - current_count
+        for slot_hint in ("top", "middle", "bottom")[:remaining]:
+            if _count_imgs_in_iframe(page) >= max_images:
+                break
+            if not state.is_running:
+                return False
+            if state.is_paused and not wait_if_paused():
+                return False
+            _fallback_insert_image_no_h2(
+                page,
+                keyword,
+                slot_hint,
+                max_images=max_images,
+            )
+
+    final_count = _count_imgs_in_iframe(page)
+    final_missing = _find_unfilled_target_h2(page, valid_targets)
+    if final_count >= max_images and not final_missing:
+        add_log(
+            f"Final image scan passed: {final_count}/{max_images} images "
+            "with balanced heading targets",
+            "success",
+        )
+    elif final_count >= max_images:
+        add_log(
+            f"Final image scan has enough images ({final_count}/{max_images}) "
+            f"but target gaps remain: {_format_heading_targets(final_missing)}",
+            "warning",
+        )
+    else:
+        add_log(
+            f"Final image scan still short: {final_count}/{max_images} images",
+            "warning",
+        )
+    return final_count > 0
+
+
 def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> bool:
     """Insert images after H2 headings using Visual Editor.
 
-    Inserts up to `max_images` images after H2 at positions 1, 3, 5
-    (indices 0, 2, 4). Sử dụng DOM-based verification (`_count_imgs_in_iframe`)
+    Inserts up to `max_images` images after H2/H3 headings distributed across
+    the whole article. Sử dụng DOM-based verification (`_count_imgs_in_iframe`)
     và per-slot retry (`_try_insert_image_at_h2`). Khi bài không có H2,
     fallback chèn vào sau paragraph top/middle/bottom (`_fallback_insert_image_no_h2`).
 
@@ -2904,14 +3859,20 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
         close_all_modals(page)
         _switch_to_visual_mode(page)
 
-        target_h2_indices = [0, 2, 4]
-        attempted_indices: set = set()
-
         # ----- PHASE 1: Initial pass over target H2 indices -----
         h2_elements = _get_h2_elements_in_iframe(page)
+        safe_heading_count = _get_safe_heading_count_for_images(page)
+        contact_idx = _get_contact_heading_index(page)
+        target_h2_indices = _pick_evenly_spaced_indices(safe_heading_count, max_images)
+        add_log(
+            f"Image heading targets distributed: {_format_heading_targets(target_h2_indices)} "
+            f"of {safe_heading_count} safe heading(s)"
+            f"{' before contact section' if contact_idx is not None else ''}",
+            "info",
+        )
 
         # Early branch: bài không có H2 → fallback paragraph
-        if not h2_elements:
+        if safe_heading_count <= 0:
             add_log("No H2 elements found — using paragraph fallback", "warning")
             for slot_hint in ("top", "middle", "bottom"):
                 if not state.is_running:
@@ -2920,7 +3881,13 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                     return _finalize(page, max_images, "stopped")
                 if _count_imgs_in_iframe(page) >= max_images:
                     break
-                _fallback_insert_image_no_h2(page, keyword, slot_hint)
+                _fallback_insert_image_no_h2(
+                    page,
+                    keyword,
+                    slot_hint,
+                    max_images=max_images,
+                )
+            _final_scan_and_repair_images(page, keyword, max_images, target_h2_indices)
             return _finalize(page, max_images, "no_h2")
 
         # Phase 1 main loop: chèn vào target H2 indices
@@ -2933,17 +3900,20 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
             if state.is_paused and not wait_if_paused():
                 return _finalize(page, max_images, "stopped")
 
-            if target_index >= len(h2_elements):
+            if target_index >= safe_heading_count:
                 add_log(
                     f"H2 #{target_index + 1} not found "
-                    f"(only {len(h2_elements)} H2s) — will fallback later",
+                    f"(only {safe_heading_count} safe H2/H3s) — will fallback later",
                     "info",
                 )
                 continue
 
-            ok = _try_insert_image_at_h2(page, target_index, keyword)
-            if ok:
-                attempted_indices.add(target_index)
+            _try_insert_image_at_h2(
+                page,
+                target_index,
+                keyword,
+                max_images=max_images,
+            )
 
         # ----- PHASE 2: Outer retry rounds với fallback (Clause 2.8) -----
         for round_idx in range(MAX_RETRY_ROUNDS):
@@ -2961,12 +3931,16 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                 "info",
             )
 
-            # 2a) Re-attempt target H2 indices that are still unfilled
+            # 2a) Re-attempt target headings that are still unfilled
             unfilled_targets = _find_unfilled_target_h2(page, target_h2_indices)
 
-            # 2b) Then other H2 indices (1, 3, then ascending)
-            other_indices = _find_other_unfilled_h2(
-                page, exclude_indices=set(target_h2_indices)
+            # 2b) Then other headings, also selected evenly across the article
+            remaining_slots = max_images - _count_imgs_in_iframe(page)
+            other_indices = _select_even_candidates(
+                _find_other_unfilled_h2(
+                    page, exclude_indices=set(target_h2_indices)
+                ),
+                remaining_slots,
             )
 
             candidate_order = unfilled_targets + other_indices
@@ -2977,19 +3951,32 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
                     return _finalize(page, max_images, "stopped")
                 if state.is_paused and not wait_if_paused():
                     return _finalize(page, max_images, "stopped")
-                _try_insert_image_at_h2(page, h2_idx, keyword)
+                _try_insert_image_at_h2(
+                    page,
+                    h2_idx,
+                    keyword,
+                    max_images=max_images,
+                )
 
             # 2c) If still short and H2 list exhausted, paragraph fallback
             if _count_imgs_in_iframe(page) < max_images:
                 remaining = max_images - _count_imgs_in_iframe(page)
-                slot_hints = ("bottom", "middle", "top")[:remaining]
+                slot_hints = ("top", "middle", "bottom")[:remaining]
                 for slot_hint in slot_hints:
                     if not state.is_running:
                         break
                     if state.is_paused and not wait_if_paused():
                         break
-                    _fallback_insert_image_no_h2(page, keyword, slot_hint)
+                    if _count_imgs_in_iframe(page) >= max_images:
+                        break
+                    _fallback_insert_image_no_h2(
+                        page,
+                        keyword,
+                        slot_hint,
+                        max_images=max_images,
+                    )
 
+        _final_scan_and_repair_images(page, keyword, max_images, target_h2_indices)
         return _finalize(page, max_images, "done")
 
     except Exception as e:
@@ -3032,21 +4019,14 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
     try:
         # Wait for media modal
         page.wait_for_selector(".media-modal", timeout=10000)
-        time.sleep(5)  # Wait for images to load
-        
-        # Try to find images
-        images = page.locator(".attachments .attachment, li.attachment").all()
-        
-        if not images:
-            add_log("No images found in media library", "warning")
-            page.locator(".media-modal-close").first.click()
+        if not _wait_for_visible_media_attachments(page, "content body"):
+            close_all_modals(page)
             return False
-        
-        # Select a random image
-        random_image = random.choice(images)
-        random_image.click()
-        time.sleep(1)
-        
+
+        if not _select_visible_media_attachment(page, "content body"):
+            close_all_modals(page)
+            return False
+
         # Set alt text with keyword
         time.sleep(0.5)  # Wait for details panel to load
         alt_selectors = [
@@ -3076,38 +4056,24 @@ def select_random_image_for_content(page: Page, alt_text: str) -> bool:
         if not alt_set:
             add_log("Không thể set alt text", "warning")
         
-        # Click "Chèn vào bài viết" / "Insert into post"
-        insert_buttons = [
-            "button.media-button-insert",
-            "button:has-text('Chèn vào bài viết')",
-            "button:has-text('Insert into post')",
-            ".media-button-insert"
-        ]
-        
-        for selector in insert_buttons:
-            try:
-                btn = page.locator(selector).first
-                if btn.is_visible(timeout=1000):
-                    btn.click()
-                    time.sleep(2)
-                    return True
-            except:
-                continue
+        selected_image = _get_selected_media_image(page, alt_text)
+        if selected_image and _insert_selected_image_after_paragraph_direct(
+            page,
+            "bottom",
+            selected_image,
+            alt_text,
+        ):
+            close_all_modals(page)
+            return True
         
         # Close modal if insert failed
-        try:
-            page.locator(".media-modal-close").first.click()
-        except:
-            pass
+        close_all_modals(page)
         
         return False
         
     except Exception as e:
         add_log(f"Error selecting image for content: {e}", "warning")
-        try:
-            page.locator(".media-modal-close").first.click()
-        except:
-            pass
+        close_all_modals(page)
         return False
 
 def select_first_category(page: Page) -> bool:
@@ -3707,14 +4673,12 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
         # For scheduling in Classic Editor
         if is_schedule and publish_date:
             # Click "Chỉnh sửa" next to "Xuất bản ngay lập tức" to open date picker
-            edit_date_link = page.locator(".edit-timestamp, a.edit-timestamp, #timestamp a").first
-            try:
-                edit_date_link.scroll_into_view_if_needed(timeout=2000)
-            except Exception:
-                pass
-            
-            if edit_date_link.is_visible(timeout=2000):
-                edit_date_link.click()
+            if _click_first_selector_resilient(
+                page,
+                [".edit-timestamp", "a.edit-timestamp", "#timestamp a"],
+                "timestamp edit link",
+                timeout_ms=1500,
+            ):
                 time.sleep(0.5)
                 
                 # Fill in date fields
@@ -3743,11 +4707,17 @@ def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: dateti
                 if minute_input.is_visible(timeout=2000):
                     minute_input.fill("00")
                 
-                # Click OK button to confirm date
-                ok_btn = page.locator("a.save-timestamp, .save-timestamp").first
-                if ok_btn.is_visible(timeout=2000):
-                    ok_btn.click()
+                # Click OK button to confirm date. Classic Editor can report this
+                # button visible but outside viewport, so use the resilient helper.
+                if _click_first_selector_resilient(
+                    page,
+                    ["a.save-timestamp", ".save-timestamp"],
+                    "timestamp OK button",
+                    timeout_ms=1500,
+                ):
                     time.sleep(0.5)
+                else:
+                    add_log("Could not confirm timestamp OK button", "warning")
         
         # Click Publish/Schedule button - in Classic Editor it's just #publish
         add_log("Preparing to publish...", "info")
@@ -4674,9 +5644,18 @@ def ollama_status():
         "status": "running" if is_running else "stopped"
     })
 
+def clear_terminal_for_run():
+    """Clear terminal once before printing the startup banner."""
+    try:
+        command = "cls" if os.name == "nt" else "clear"
+        os.system(command)
+    except Exception:
+        pass
+
 if __name__ == '__main__':
     # Create templates folder if not exists
     os.makedirs('templates', exist_ok=True)
+    clear_terminal_for_run()
     
     print("""
     ╔══════════════════════════════════════════════════════════╗
