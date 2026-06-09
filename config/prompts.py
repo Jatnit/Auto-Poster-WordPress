@@ -101,6 +101,46 @@ def clean_gemini_content(content: str, log_func=None) -> str:
     first_heading_match = re.search(r'<h[12][^>]*>', content, re.IGNORECASE)
     if first_heading_match:
         content = content[first_heading_match.start():]
+
+    generated_media_removed = 0
+
+    def remove_media_markup(pattern: str, text: str) -> str:
+        nonlocal generated_media_removed
+        matches = re.findall(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        generated_media_removed += len(matches)
+        return re.sub(pattern, '', text, flags=re.IGNORECASE | re.DOTALL)
+
+    def remove_media_figure(match: re.Match) -> str:
+        nonlocal generated_media_removed
+        block = match.group(0)
+        if re.search(r'<(?:img|svg|picture)\b', block, flags=re.IGNORECASE):
+            generated_media_removed += 1
+            return ''
+        return block
+
+    # Gemini/Web-sourced snippets can include linked logos or preview images.
+    # Only WordPress Media Library images inserted later by the app are valid.
+    content = remove_media_markup(r'<picture\b[^>]*>.*?</picture>', content)
+    content = re.sub(
+        r'<figure\b[^>]*>.*?</figure>',
+        remove_media_figure,
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    content = remove_media_markup(r'<a\b[^>]*>\s*<img\b[^>]*>\s*</a>', content)
+    content = remove_media_markup(r'<img\b[^>]*>', content)
+    content = remove_media_markup(r'<svg\b[^>]*>.*?</svg>', content)
+    content = re.sub(
+        r'<p\b[^>]*>\s*(?:<a\b[^>]*>\s*</a>\s*)?</p>',
+        '',
+        content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if generated_media_removed and log_func:
+        log_func(
+            f"Removed {generated_media_removed} generated/logo media block(s) from content",
+            "info",
+        )
     
     last_link_pos = -1
     website_patterns = [

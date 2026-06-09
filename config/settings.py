@@ -56,6 +56,7 @@ class AppState:
         self.content_list: List[Dict[str, Any]] = []
         self.used_featured_images: set = set()
         self.used_inline_images: set = set()
+        self.used_inline_image_count: int = 0
         self.current_phase: str = ""
         self.retry_queue: List[Dict[str, Any]] = []
         self.skip_post_indices: set = set()
@@ -75,6 +76,7 @@ class AppState:
         self.current_keyword = ""
         self.used_featured_images = set()
         self.used_inline_images = set()
+        self.used_inline_image_count = 0
         self.current_phase = ""
         self.retry_queue = []
         self.skip_post_indices = set()

@@ -2218,6 +2218,7 @@ def set_post_content(page: Page, content: str) -> bool:
                 add_log(f"JavaScript method failed: {e}", "warning")
 
         if content_added:
+            _remove_non_auto_images_from_editor(page, "after content set")
             return True
         else:
             add_log("Failed to add content - all methods failed", "error")
@@ -2299,22 +2300,34 @@ ADD_MEDIA_BTN_TIMEOUT = 3000   # ms (tăng nhẹ từ 2000ms cũ)
 MEDIA_CLICK_TIMEOUT = 1500     # ms; tránh Playwright chờ 30-60s với element ẩn
 INSERT_VERIFY_TIMEOUT = 5000   # ms; WordPress đôi khi chèn ảnh hơi trễ
 INSERT_VERIFY_INTERVAL = 250   # ms
-INLINE_IMAGE_RANDOM_POOL_SIZE = 50
+INLINE_IMAGE_RANDOM_POOL_MIN_SIZE = 50
+INLINE_IMAGE_RANDOM_POOL_BUFFER = 10
+INLINE_IMAGE_RANDOM_POOL_MAX_SIZE = 500
 INLINE_IMAGE_HEADING_SELECTOR = "h2, h3"
 
 
+def _get_inline_image_random_pool_size(images_per_post: int = 3) -> int:
+    """Pool đủ rộng để random không trùng trên toàn phiên đăng."""
+    needed = max(0, len(getattr(state, "topics", [])) * images_per_post)
+    desired = max(INLINE_IMAGE_RANDOM_POOL_MIN_SIZE, needed + INLINE_IMAGE_RANDOM_POOL_BUFFER)
+    return min(desired, INLINE_IMAGE_RANDOM_POOL_MAX_SIZE)
+
+
 def _count_imgs_in_iframe(page: Page) -> int:
-    """Đếm số <img> hiện hữu trong TinyMCE iframe (#content_ifr).
+    """Đếm số ảnh hợp lệ do app tự chèn trong TinyMCE iframe (#content_ifr).
 
     Dùng JS evaluate để tránh stale locator giữa các iteration —
     1 round-trip duy nhất, nhanh hơn locator.count().
+
+    Lưu ý: chỉ tính `img.wp-image-auto-poster`. Ảnh logo/link preview do
+    content AI kéo vào không được xem là hợp lệ để tránh pass giả.
 
     Returns 0 nếu iframe chưa sẵn sàng (best-effort, không raise).
     """
     try:
         return int(
             page.frame_locator("#content_ifr").locator("body").evaluate(
-                "() => document.querySelectorAll('img').length"
+                "() => document.querySelectorAll('img.wp-image-auto-poster').length"
             )
         )
     except Exception:
@@ -2336,10 +2349,10 @@ def _get_h2_elements_in_iframe(page: Page) -> list:
 
 
 def _img_is_after_h2(page: Page, h2_index: int) -> bool:
-    """Verify ảnh nằm dưới H2 thứ h2_index thông qua DOM sibling check.
+    """Verify ảnh auto hợp lệ nằm dưới H2 thứ h2_index qua DOM sibling check.
 
     Duyệt tối đa 2 sibling kế tiếp của H2 (TinyMCE thường wrap <img> trong <p>),
-    trả True nếu thấy <img> trực tiếp hoặc descendant trong sibling đó.
+    trả True nếu thấy ảnh có class `wp-image-auto-poster`.
 
     Returns False nếu h2_index out of range hoặc lỗi evaluate.
     """
@@ -2362,8 +2375,8 @@ def _img_is_after_h2(page: Page, h2_index: int) -> bool:
                 const h2 = h2s[idx];
                 let cur = h2.nextElementSibling;
                 for (let i = 0; i < 2 && cur; i++) {
-                    if (cur.tagName === 'IMG') return true;
-                    if (cur.querySelector && cur.querySelector('img')) return true;
+                    if (cur.matches && cur.matches('img.wp-image-auto-poster')) return true;
+                    if (cur.querySelector && cur.querySelector('img.wp-image-auto-poster')) return true;
                     cur = cur.nextElementSibling;
                 }
                 return false;
@@ -2441,6 +2454,32 @@ def _pick_evenly_spaced_indices(total: int, slots: int) -> list:
                 used.add(candidate)
                 break
     return sorted(picked)
+
+
+def _get_inset_heading_candidates(total: int) -> list:
+    """Candidate H2/H3 indices for inline images, avoiding article edges.
+
+    Khi có từ 3 heading an toàn trở lên, bỏ qua heading đầu và cuối để ảnh
+    không nằm quá sát mở bài hoặc sát phần cuối/liên hệ. Nếu bài quá ít heading
+    thì dùng những heading hiện có để flow vẫn có cơ hội chèn ảnh.
+    """
+    if total <= 0:
+        return []
+    if total <= 2:
+        return list(range(total))
+    return list(range(1, total - 1))
+
+
+def _pick_inset_evenly_spaced_indices(total: int, slots: int) -> list:
+    candidates = _get_inset_heading_candidates(total)
+    if slots <= 0 or not candidates:
+        return []
+    if len(candidates) <= slots:
+        return candidates
+    return [
+        candidates[idx]
+        for idx in _pick_evenly_spaced_indices(len(candidates), slots)
+    ]
 
 
 def _select_even_candidates(indices: list, limit: int) -> list:
@@ -2545,6 +2584,9 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
     try:
         if not hasattr(state, "used_inline_images"):
             state.used_inline_images = set()
+        if not hasattr(state, "used_inline_image_count"):
+            state.used_inline_image_count = 0
+        pool_size = _get_inline_image_random_pool_size()
 
         result = page.evaluate(
             """async ({ usedIds, poolSize }) => {
@@ -2553,7 +2595,11 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                     if (max <= 1) return 0;
                     if (window.crypto && crypto.getRandomValues) {
                         const bytes = new Uint32Array(1);
-                        crypto.getRandomValues(bytes);
+                        const maxUint = 0xffffffff;
+                        const limit = maxUint - (maxUint % max);
+                        do {
+                            crypto.getRandomValues(bytes);
+                        } while (bytes[0] >= limit);
                         return bytes[0] % max;
                     }
                     return Math.floor(Math.random() * max);
@@ -2590,7 +2636,7 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                         model
                     };
                 };
-                const rememberAndSelect = (entry, entries, source, reused) => {
+                const rememberAndSelect = (entry, entries, source) => {
                     if (!entry) return null;
                     try {
                         const frame = window.wp && wp.media && wp.media.frame;
@@ -2618,21 +2664,21 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                         title: entry.title,
                         index: entry.modelIndex,
                         pool: entries.length,
-                        source,
-                        reused
+                        source
                     };
                     window.__autoPosterSelectedImage = selected;
                     return { ok: true, selected };
                 };
 
-                try {
-                    const frame = window.wp && wp.media && wp.media.frame;
-                    const frameState = frame && frame.state && frame.state();
-                    const library = frameState && frameState.get &&
-                        frameState.get('library');
-                    if (library && Array.isArray(library.models)) {
-                        const deadline = Date.now() + 12000;
-                        let stagnant = 0;
+	                try {
+	                    const frame = window.wp && wp.media && wp.media.frame;
+	                    const frameState = frame && frame.state && frame.state();
+	                    const library = frameState && frameState.get &&
+	                        frameState.get('library');
+	                    if (library && Array.isArray(library.models)) {
+	                        const loadTimeout = Math.max(12000, Math.min(30000, poolSize * 120));
+	                        const deadline = Date.now() + loadTimeout;
+	                        let stagnant = 0;
                         while (library.models.length < poolSize && Date.now() < deadline) {
                             let canLoadMore = true;
                             try {
@@ -2680,20 +2726,27 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                                 model
                             ))
                             .filter(Boolean);
-                        if (entries.length) {
-                            const unused = entries.filter((entry) =>
-                                !used.has(entry.id) && !used.has(entry.url)
-                            );
-                            const pool = unused.length ? unused : entries;
-                            const entry = pool[pickIndex(pool.length)];
-                            return rememberAndSelect(
-                                entry,
-                                entries,
-                                'wp.media',
-                                unused.length === 0
-                            );
-                        }
-                    }
+	                        if (entries.length) {
+	                            const unused = entries.filter((entry) =>
+	                                !used.has(entry.id) && !used.has(entry.url)
+	                            );
+	                            if (!unused.length) {
+	                                return {
+	                                    ok: false,
+	                                    reason: 'no_unused_images_in_wp_media_pool',
+	                                    pool: entries.length,
+	                                    used: used.size
+	                                };
+	                            }
+	                            const pool = unused;
+	                            const entry = pool[pickIndex(pool.length)];
+	                            return rememberAndSelect(
+	                                entry,
+	                                entries,
+	                                'wp.media'
+	                            );
+	                        }
+	                    }
                 } catch (e) {}
 
                 const all = Array.from(document.querySelectorAll(
@@ -2735,12 +2788,20 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                     return { ok: false, reason: 'no_usable_visible_attachments', total: all.length };
                 }
 
-                const unused = entries.filter((entry) =>
-                    !used.has(entry.id) && !used.has(entry.url)
-                );
-                const pool = unused.length ? unused : entries;
-                const localIndex = pickIndex(pool.length);
-                const el = pool[localIndex];
+	                const unused = entries.filter((entry) =>
+	                    !used.has(entry.id) && !used.has(entry.url)
+	                );
+	                if (!unused.length) {
+	                    return {
+	                        ok: false,
+	                        reason: 'no_unused_images_in_visible_pool',
+	                        pool: entries.length,
+	                        used: used.size
+	                    };
+	                }
+	                const pool = unused;
+	                const localIndex = pickIndex(pool.length);
+	                const el = pool[localIndex];
                 try { el.element.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
                 el.element.click();
                 window.__autoPosterSelectedImage = {
@@ -2748,36 +2809,43 @@ def _select_visible_media_attachment(page: Page, label: str) -> bool:
                     url: el.url,
                     alt: el.alt,
                     title: el.title,
-                    index: el.modelIndex,
-                    pool: entries.length,
-                    source: 'dom-visible',
-                    reused: unused.length === 0
-                };
-                return { ok: true, selected: window.__autoPosterSelectedImage };
-            }""",
+		                    index: el.modelIndex,
+		                    pool: entries.length,
+		                    source: 'dom-visible'
+		                };
+	                return { ok: true, selected: window.__autoPosterSelectedImage };
+	            }""",
             {
                 "usedIds": list(state.used_inline_images),
-                "poolSize": INLINE_IMAGE_RANDOM_POOL_SIZE,
+                "poolSize": pool_size,
             },
         )
         selected = result.get("selected") if result else None
         if result and result.get("ok") and selected:
-            selected_key = str(selected.get("id") or selected.get("url") or "")
-            if selected_key:
-                state.used_inline_images.add(selected_key)
+            selected_id = str(selected.get("id") or "")
+            selected_url = str(selected.get("url") or "")
+            if selected_id:
+                state.used_inline_images.add(selected_id)
+            if selected_url:
+                state.used_inline_images.add(selected_url)
+            state.used_inline_image_count += 1
             add_log(
-                f"Selected image {int(selected.get('index', 0)) + 1} "
-                f"from {selected.get('pool', 0)} pool "
-                f"({selected.get('source', 'media')}, "
-                f"{'reused' if selected.get('reused') else 'unused'}) for {label}",
+                f"Selected unique inline image #{state.used_inline_image_count}: "
+                f"media item {int(selected.get('index', 0)) + 1} "
+                f"from {selected.get('pool', 0)}/{pool_size} pool "
+                f"({selected.get('source', 'media')}) for {label}",
                 "info",
             )
             time.sleep(0.8)
             return True
 
         reason = result.get("reason") if result else "no_result"
-        total = result.get("total") if result else 0
-        add_log(f"Select image fail for {label}: {reason} (total={total})", "warning")
+        total = (result.get("total") or result.get("pool") or 0) if result else 0
+        add_log(
+            f"Select image fail for {label}: {reason} "
+            f"(pool={total}/{pool_size}, selected unique images={state.used_inline_image_count})",
+            "warning",
+        )
         return False
     except Exception as e:
         add_log(f"Select image fail for {label}: {e}", "warning")
@@ -2947,6 +3015,71 @@ def _sync_editor_after_direct_insert(page: Page) -> None:
         pass
 
 
+def _remove_non_auto_images_from_editor(page: Page, reason: str = "scan") -> int:
+    """Remove generated/logo images so only app-inserted images count as valid."""
+    try:
+        result = page.frame_locator("#content_ifr").locator("body").evaluate(
+            """(body) => {
+                const autoSelector = 'img.wp-image-auto-poster';
+                let removed = 0;
+
+                const removeNode = (node) => {
+                    if (!node || !node.parentNode) return false;
+                    node.remove();
+                    removed += 1;
+                    return true;
+                };
+
+                const nonAutoImages = Array.from(body.querySelectorAll('img'))
+                    .filter((img) => !img.classList.contains('wp-image-auto-poster'));
+                for (const img of nonAutoImages) {
+                    const mediaWrapper = img.closest('picture, figure');
+                    if (mediaWrapper && !mediaWrapper.querySelector(autoSelector)) {
+                        removeNode(mediaWrapper);
+                    } else {
+                        removeNode(img);
+                    }
+                }
+
+                for (const svg of Array.from(body.querySelectorAll('svg'))) {
+                    const mediaWrapper = svg.closest('picture, figure');
+                    if (mediaWrapper && !mediaWrapper.querySelector(autoSelector)) {
+                        removeNode(mediaWrapper);
+                    } else {
+                        removeNode(svg);
+                    }
+                }
+
+                // Clean up empty wrappers/anchors left behind after logo removal.
+                for (const node of Array.from(body.querySelectorAll('p, figure, picture, a'))) {
+                    if (!node.parentNode || node.querySelector(autoSelector)) continue;
+                    const text = (node.textContent || '').replace(/\\u00a0/g, ' ').trim();
+                    const hasMedia = node.querySelector('img, svg, picture, figure');
+                    if (!text && !hasMedia) {
+                        node.remove();
+                    }
+                }
+
+                return {
+                    removed,
+                    valid: body.querySelectorAll(autoSelector).length,
+                    all: body.querySelectorAll('img').length
+                };
+            }"""
+        ) or {}
+        removed = int(result.get("removed", 0))
+        if removed:
+            _sync_editor_after_direct_insert(page)
+            add_log(
+                f"Removed {removed} non-auto/logo image(s) from editor ({reason}); "
+                f"valid auto images={result.get('valid', 0)}",
+                "warning",
+            )
+        return removed
+    except Exception:
+        return 0
+
+
 def _insert_selected_image_after_h2_direct(
     page: Page,
     h2_index: int,
@@ -2982,7 +3115,7 @@ def _insert_selected_image_after_h2_direct(
                 img.className = 'aligncenter size-full wp-image-auto-poster';
                 wrapper.appendChild(img);
                 h2s[args.h2Index].insertAdjacentElement('afterend', wrapper);
-                return { ok: true, count: body.querySelectorAll('img').length };
+                return { ok: true, count: body.querySelectorAll('img.wp-image-auto-poster').length };
             }""",
             {
                 "h2Index": h2_index,
@@ -3052,7 +3185,7 @@ def _insert_selected_image_after_paragraph_direct(
                 img.className = 'aligncenter size-full wp-image-auto-poster';
                 wrapper.appendChild(img);
                 target.insertAdjacentElement('afterend', wrapper);
-                return { ok: true, count: body.querySelectorAll('img').length };
+                return { ok: true, count: body.querySelectorAll('img.wp-image-auto-poster').length };
             }""",
             {
                 "slot": slot_hint,
@@ -3155,6 +3288,7 @@ def _finalize(page: Page, max_images: int, reason: str) -> bool:
     `reason` chỉ dùng cho log diagnostic ("done", "no_h2", "stopped", ...).
     """
     close_all_modals(page)
+    _remove_non_auto_images_from_editor(page, f"finalize {reason}")
     final = _count_imgs_in_iframe(page)
     if final > max_images:
         add_log(
@@ -3186,7 +3320,7 @@ def _try_insert_image_at_h2(
     media modal, attachments load) và DOM-based verification ở bước cuối.
 
     Returns:
-        True nếu DOM count <img> tăng sau khi click Insert
+        True nếu DOM count ảnh auto hợp lệ tăng sau khi click Insert
         (verify qua _count_imgs_in_iframe). False ngược lại — caller có thể
         retry vị trí này ở vòng outer retry kế tiếp.
 
@@ -3404,10 +3538,10 @@ def _find_other_unfilled_h2(page: Page, exclude_indices: set) -> list:
     Returns:
         list[int] các index H2 còn trống ngoài exclude_indices, ascending.
     """
-    h2_elements = _get_h2_elements_in_iframe(page)
-    n = len(h2_elements)
+    n = _get_safe_heading_count_for_images(page)
+    candidates = _get_inset_heading_candidates(n)
     result = []
-    for idx in range(n):
+    for idx in candidates:
         if idx in exclude_indices:
             continue
         if not _img_is_after_h2(page, idx):
@@ -3429,7 +3563,7 @@ def _fallback_insert_image_no_h2(
         slot_hint: 'top' (paragraph đầu), 'middle' (paragraph giữa), 'bottom' (paragraph cuối)
 
     Returns:
-        True nếu DOM count <img> tăng sau click Insert; False ngược lại.
+        True nếu DOM count ảnh auto hợp lệ tăng sau click Insert; False ngược lại.
         KHÔNG verify position (không có H2 anchor).
     """
     if not state.is_running:
@@ -3606,8 +3740,8 @@ def _rebalance_auto_images_to_targets(page: Page, target_indices: list) -> int:
                     const heading = headings[idx];
                     let cur = heading ? heading.nextElementSibling : null;
                     for (let i = 0; i < 2 && cur; i++) {
-                        if (cur.matches && cur.matches('img')) return cur;
-                        const img = cur.querySelector && cur.querySelector('img');
+                        if (cur.matches && cur.matches('img.wp-image-auto-poster')) return cur;
+                        const img = cur.querySelector && cur.querySelector('img.wp-image-auto-poster');
                         if (img) return img;
                         cur = cur.nextElementSibling;
                     }
@@ -3689,8 +3823,8 @@ def _remove_or_move_images_after_contact(page: Page, target_indices: list) -> in
                     const heading = safeHeadings[idx];
                     let cur = heading ? heading.nextElementSibling : null;
                     for (let i = 0; i < 2 && cur; i++) {
-                        if (cur.matches && cur.matches('img')) return cur;
-                        const img = cur.querySelector && cur.querySelector('img');
+                        if (cur.matches && cur.matches('img.wp-image-auto-poster')) return cur;
+                        const img = cur.querySelector && cur.querySelector('img.wp-image-auto-poster');
                         if (img) return img;
                         cur = cur.nextElementSibling;
                     }
@@ -3744,6 +3878,7 @@ def _final_scan_and_repair_images(
     add_log("Final image scan: checking full article image distribution...", "info")
     close_all_modals(page)
     _switch_to_visual_mode(page)
+    _remove_non_auto_images_from_editor(page, "final scan")
 
     heading_count = _get_safe_heading_count_for_images(page)
     valid_targets = [idx for idx in target_h2_indices if idx < heading_count]
@@ -3819,6 +3954,68 @@ def _final_scan_and_repair_images(
                 max_images=max_images,
             )
 
+    # 4) Strict final repair: cleanup + re-check valid auto images only.
+    # This catches cases where linked logos made the article look "image-complete"
+    # earlier, or where WordPress/TinyMCE failed to persist one insertion.
+    for repair_round in range(2):
+        _remove_non_auto_images_from_editor(page, f"strict final repair {repair_round + 1}")
+        _remove_or_move_images_after_contact(page, valid_targets)
+        if valid_targets:
+            _rebalance_auto_images_to_targets(page, valid_targets)
+
+        current_count = _count_imgs_in_iframe(page)
+        if current_count >= max_images:
+            break
+
+        before_round = current_count
+        add_log(
+            f"Strict image repair {repair_round + 1}/2: "
+            f"valid auto images {current_count}/{max_images}, retrying safe slots",
+            "info",
+        )
+
+        remaining = max_images - current_count
+        repair_candidates = _find_unfilled_target_h2(page, valid_targets)
+        if not repair_candidates:
+            repair_candidates = _find_other_unfilled_h2(
+                page,
+                exclude_indices=set(valid_targets),
+            )
+
+        for h2_idx in _select_even_candidates(repair_candidates, remaining):
+            if _count_imgs_in_iframe(page) >= max_images:
+                break
+            if not state.is_running:
+                return False
+            if state.is_paused and not wait_if_paused():
+                return False
+            _try_insert_image_at_h2(
+                page,
+                h2_idx,
+                keyword,
+                max_images=max_images,
+            )
+
+        current_count = _count_imgs_in_iframe(page)
+        if current_count < max_images:
+            remaining = max_images - current_count
+            for slot_hint in ("top", "middle", "bottom")[:remaining]:
+                if _count_imgs_in_iframe(page) >= max_images:
+                    break
+                if not state.is_running:
+                    return False
+                if state.is_paused and not wait_if_paused():
+                    return False
+                _fallback_insert_image_no_h2(
+                    page,
+                    keyword,
+                    slot_hint,
+                    max_images=max_images,
+                )
+
+        if _count_imgs_in_iframe(page) <= before_round:
+            break
+
     final_count = _count_imgs_in_iframe(page)
     final_missing = _find_unfilled_target_h2(page, valid_targets)
     if final_count >= max_images and not final_missing:
@@ -3858,14 +4055,19 @@ def insert_images_after_h2(page: Page, keyword: str, max_images: int = 3) -> boo
         add_log("Đang chèn hình vào bài viết...", "info")
         close_all_modals(page)
         _switch_to_visual_mode(page)
+        _remove_non_auto_images_from_editor(page, "before image insert")
 
         # ----- PHASE 1: Initial pass over target H2 indices -----
         h2_elements = _get_h2_elements_in_iframe(page)
         safe_heading_count = _get_safe_heading_count_for_images(page)
         contact_idx = _get_contact_heading_index(page)
-        target_h2_indices = _pick_evenly_spaced_indices(safe_heading_count, max_images)
+        target_h2_indices = _pick_inset_evenly_spaced_indices(
+            safe_heading_count,
+            max_images,
+        )
         add_log(
-            f"Image heading targets distributed: {_format_heading_targets(target_h2_indices)} "
+            f"Image heading targets distributed with edge spacing: "
+            f"{_format_heading_targets(target_h2_indices)} "
             f"of {safe_heading_count} safe heading(s)"
             f"{' before contact section' if contact_idx is not None else ''}",
             "info",
@@ -4640,6 +4842,8 @@ def set_featured_image(page: Page, keyword: str) -> bool:
 
 def publish_or_schedule_post(page: Page, is_schedule: bool, publish_date: datetime = None) -> bool:
     try:
+        _remove_non_auto_images_from_editor(page, "pre-publish")
+
         # Pre-publish sync: ép TinyMCE flush nội dung iframe → textarea trước
         # khi submit form. Classic Editor tự gọi triggerSave() lúc submit, nhưng
         # nếu iframe đang Visual mode mà chưa fully init, hoặc user vừa edit
@@ -5003,9 +5207,26 @@ def run_automation():
     state.logs = []
     state.retry_queue = []
     state.skip_post_indices = set()
+    state.used_featured_images = set()
+    state.used_inline_images = set()
+    state.used_inline_image_count = 0
     state.current_phase = "initializing"
     
     add_log("Starting WordPress Auto Poster...", "info")
+    if state.config.get("auto_insert_inline_images", True):
+        expected_inline_images = len(state.topics) * 3
+        inline_pool_size = _get_inline_image_random_pool_size()
+        add_log(
+            f"Inline image random no-repeat: target {expected_inline_images} unique "
+            f"image(s), scanning up to {inline_pool_size} media item(s)",
+            "info",
+        )
+        if expected_inline_images > inline_pool_size:
+            add_log(
+                f"Inline image target exceeds scan cap ({expected_inline_images}>{inline_pool_size}); "
+                "increase media pool cap if every post must have unique images.",
+                "warning",
+            )
     
     provider = state.config.get("ai_provider", "ollama")
     total_topics = len(state.topics)
