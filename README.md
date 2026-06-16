@@ -201,20 +201,35 @@ Mật độ từ khóa không vượt quá 3%.
 
 ```
 Auto-Poster-WordPress/
-├── .venv/                    # Virtual environment
-├── ai_providers/             # AI provider modules
-│   ├── __init__.py
-│   ├── ollama.py            # Ollama integration
-│   └── gemini_api.py        # Gemini API integration
-├── config/                   # Configuration & prompts
-│   ├── __init__.py
-│   ├── settings.py          # State, config loader, logging
-│   └── prompts.py           # Prompt templates + content cleaner
-├── templates/
-│   └── index.html           # Web interface (Matrix theme)
-├── app.py                   # Flask web server + automation logic
-├── requirements.txt         # Python dependencies
-└── README.md                # Documentation
+├── app.py                         # Entry point mỏng: wiring runtime + chạy Flask
+├── src/wp_auto_poster/            # Core package sau refactor
+│   ├── automation/                # Runner và logic lịch đăng
+│   ├── content/                   # Cleanup, validate, HTML convert, provider router
+│   ├── providers/                 # Ollama, Gemini API provider implementations
+│   ├── state/                     # AppState, config store, preset store
+│   ├── utils/                     # Logging/helper dùng chung
+│   ├── web/                       # Flask app factory + route registration
+│   └── wordpress/                 # Browser, editor, media, taxonomy, publish workflows
+├── ai_providers/                  # Compatibility facade cho provider import cũ
+├── config/                        # Compatibility facade cho settings/prompts cũ
+├── templates/index.html           # Markup giao diện
+├── static/css/app.css             # Style giao diện
+├── static/js/                     # JS chia theo feature
+│   ├── core.js
+│   ├── checklist.js
+│   ├── dialogs.js
+│   ├── presets.js
+│   ├── content-list.js
+│   ├── config.js
+│   ├── topics.js
+│   ├── schedule.js
+│   └── automation.js
+├── tests/                         # Unit/integration tests
+├── docs/                          # Architecture, setup, troubleshooting, ADR
+├── scripts/check.sh               # Compile + pytest check
+├── pyproject.toml                 # Pytest/pythonpath config
+├── requirements.txt               # Python dependencies
+└── README.md                      # Documentation
 ```
 
 ---
@@ -243,7 +258,7 @@ Auto-Poster-WordPress/
    ├── Tạo bài viết mới
    ├── Thêm tiêu đề, nội dung
    ├── Set Rank Math keyword
-   ├── Chèn 3 hình ảnh vào content (sau H2 #1, #3, #5)
+   ├── Chèn 3 hình ảnh vào content, phân bố đều dưới H2/H3 an toàn
    ├── Thêm tags
    ├── Chọn category
    └── Xuất bản/Lên lịch
@@ -316,6 +331,7 @@ python3 app.py
 | `.venv\Scripts\activate`          | Kích hoạt venv (Windows)     |
 | `deactivate`                      | Thoát virtual environment    |
 | `python app.py`                   | Chạy web server              |
+| `./scripts/check.sh`              | Compile + chạy pytest        |
 | `Ctrl + C`                        | Dừng web server              |
 | `pip install -r requirements.txt` | Cài đặt dependencies         |
 | `pip freeze > requirements.txt`   | Xuất dependencies            |
@@ -326,16 +342,20 @@ python3 app.py
 
 ### Thêm AI Provider mới
 
-1. Tạo file trong `ai_providers/`
-2. Implement function `generate_content_<provider>(title, keyword)`
-3. Import và expose trong `ai_providers/__init__.py`
-4. Thêm vào `generate_content()` trong `app.py`
+1. Tạo module provider trong `src/wp_auto_poster/providers/`.
+2. Implement function provider thuần, nhận `config` và `log_func` khi cần.
+3. Expose provider qua router ở `src/wp_auto_poster/content/generation.py`.
+4. Nếu cần tương thích import cũ, thêm facade trong `ai_providers/`.
+5. Thêm unit test cho provider/router trước khi nối vào UI.
 
-### Thêm WordPress function mới
+### Thêm WordPress workflow mới
 
-1. Thêm function vào `app.py`
-2. Implement với parameter `page: Page` và gọi `add_log(...)` để log
-3. Gọi từ `create_single_post()` hoặc `run_automation()` tùy vị trí phù hợp
+1. Chọn đúng module trong `src/wp_auto_poster/wordpress/`:
+   `editor.py`, `media.py`, `inline_images.py`, `taxonomy.py`, `publisher.py`, hoặc `post_workflow.py`.
+2. Truyền dependency qua runtime/dataclass thay vì import global `state` trực tiếp.
+3. Giữ wrapper trong `app.py` nếu endpoint/flow cũ đang gọi tên hàm đó.
+4. Thêm test trong `tests/unit/` cho helper hoặc workflow mới.
+5. Chạy `./scripts/check.sh` trước khi commit/push.
 
 ---
 
