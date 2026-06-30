@@ -44,6 +44,7 @@ class HiddenLocator:
 def test_publish_or_schedule_post_clicks_publish_and_detects_success(monkeypatch):
     runtime, logs = make_runtime()
     cleanup_calls = []
+    sleep_calls = []
 
     class FakePage:
         url = "https://example.test/wp-admin/post.php?post=1&action=edit"
@@ -58,7 +59,7 @@ def test_publish_or_schedule_post_clicks_publish_and_detects_success(monkeypatch
                 return SuccessMessage()
             return HiddenLocator()
 
-    monkeypatch.setattr(publisher_module.time, "sleep", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(publisher_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
     monkeypatch.setattr(
         publisher_module,
         "remove_non_auto_images_from_editor",
@@ -68,4 +69,6 @@ def test_publish_or_schedule_post_clicks_publish_and_detects_success(monkeypatch
     assert publish_or_schedule_post(FakePage(), False, None, runtime)
     assert cleanup_calls == ["pre-publish"]
     assert ("Clicked publish button", "info") in logs
+    assert ("Success message detected; chờ thêm 3 giây để chắc chắn...", "info") in logs
+    assert 3 in sleep_calls
     assert ("Published successfully!", "success") in logs

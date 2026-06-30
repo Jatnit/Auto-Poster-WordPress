@@ -12,6 +12,36 @@ from wp_auto_poster.wordpress.media import remove_non_auto_images_from_editor
 
 LogFunc = Callable[[str, str], None]
 
+PUBLISH_SUCCESS_SELECTORS = [
+    "#message.updated",
+    ".notice-success",
+    "#message.notice",
+    ".updated.notice",
+    "div.updated",
+]
+
+PUBLISH_SUCCESS_TEXTS = [
+    "published",
+    "post published",
+    "đã đăng",
+    "da dang",
+    "đã được đăng",
+    "da duoc dang",
+    "đăng thành công",
+    "dang thanh cong",
+]
+
+SCHEDULE_SUCCESS_TEXTS = [
+    "scheduled",
+    "post scheduled",
+    "đã lên lịch",
+    "da len lich",
+    "đã được lên lịch",
+    "da duoc len lich",
+    "lên lịch thành công",
+    "len lich thanh cong",
+]
+
 
 @dataclass
 class PublisherRuntime:
@@ -34,6 +64,122 @@ class PublisherRuntime:
             log_func=self.log_func,
             timeout_ms=timeout_ms,
         )
+
+
+def _wait_for_submit_load(page: Any, runtime: PublisherRuntime) -> None:
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
+    except Exception:
+        pass
+
+    try:
+        page.wait_for_load_state("networkidle", timeout=15000)
+    except Exception:
+        runtime.log("Trang có thể vẫn còn request nền, tiếp tục kiểm tra trạng thái đăng...", "info")
+
+
+def _locator_text(locator: Any) -> str:
+    for method_name in ("inner_text", "text_content"):
+        try:
+            method = getattr(locator, method_name)
+            return method(timeout=500) or ""
+        except Exception:
+            continue
+    return ""
+
+
+def _success_text_match(text: str, is_schedule: bool) -> bool:
+    normalized = text.strip().lower()
+    if not normalized:
+        return True
+
+    success_texts = SCHEDULE_SUCCESS_TEXTS if is_schedule else PUBLISH_SUCCESS_TEXTS
+    return any(needle in normalized for needle in success_texts)
+
+
+def _visible_success_message(page: Any, is_schedule: bool, timeout_ms: int = 500) -> bool:
+    for selector in PUBLISH_SUCCESS_SELECTORS:
+        try:
+            message = page.locator(selector).first
+            if message.is_visible(timeout=timeout_ms) and _success_text_match(
+                _locator_text(message),
+                is_schedule,
+            ):
+                return True
+        except Exception:
+            continue
+
+    text_selectors = (
+        [
+            "text=/published/i",
+            "text=/đã đăng/i",
+            "text=/đăng thành công/i",
+            "text=/post published/i",
+        ]
+        if not is_schedule
+        else [
+            "text=/scheduled/i",
+            "text=/đã lên lịch/i",
+            "text=/lên lịch thành công/i",
+            "text=/post scheduled/i",
+        ]
+    )
+    for selector in text_selectors:
+        try:
+            if page.locator(selector).first.is_visible(timeout=timeout_ms):
+                return True
+        except Exception:
+            continue
+
+    return False
+
+
+def _post_saved_fallback(page: Any, runtime: PublisherRuntime) -> bool:
+    current_url = page.url
+    if "post.php" in current_url and "action=edit" in current_url:
+        runtime.log("Post saved - now on edit page", "info")
+        return True
+
+    if "message=" in current_url:
+        runtime.log("Post saved - message in URL", "info")
+        return True
+
+    try:
+        view_post = page.locator("a:has-text('View post'), a:has-text('Xem bài viết')").first
+        if view_post.is_visible(timeout=1000):
+            runtime.log("View post link found", "info")
+            return True
+    except Exception:
+        pass
+
+    if "post=" in current_url:
+        runtime.log("Post ID found in URL", "info")
+        return True
+
+    return False
+
+
+def _wait_for_publish_success(page: Any, is_schedule: bool, runtime: PublisherRuntime) -> bool:
+    _wait_for_submit_load(page, runtime)
+
+    deadline = time.monotonic() + 45
+    fallback_seen_at: Optional[float] = None
+    while time.monotonic() < deadline:
+        if _visible_success_message(page, is_schedule):
+            runtime.log("Success message detected; chờ thêm 3 giây để chắc chắn...", "info")
+            time.sleep(3)
+            return True
+
+        if fallback_seen_at is None and _post_saved_fallback(page, runtime):
+            fallback_seen_at = time.monotonic()
+            runtime.log("Đã thấy dấu hiệu lưu bài; tiếp tục chờ thông báo thành công...", "info")
+
+        if fallback_seen_at is not None and time.monotonic() - fallback_seen_at >= 10:
+            return True
+
+        time.sleep(0.5)
+
+    return fallback_seen_at is not None
 
 
 def publish_or_schedule_post(
@@ -181,62 +327,10 @@ def publish_or_schedule_post(
             runtime.log("Không thể click nút Publish", "error")
             return False
         
-        # Wait for page to reload - this is critical
+        # Wait for page to reload and confirm WordPress has finished saving.
         runtime.log("Đang lưu bài viết...", "info")
-        time.sleep(4)
-        
-        # Multiple ways to check for success
-        success_detected = False
-        
-        # Method 1: Check for success message
-        try:
-            success_selectors = [
-                "#message.updated",
-                ".notice-success", 
-                "#message.notice",
-                ".updated.notice",
-                "div.updated"
-            ]
-            for selector in success_selectors:
-                success_msg = page.locator(selector).first
-                if success_msg.is_visible(timeout=2000):
-                    success_detected = True
-                    runtime.log("Success message detected", "info")
-                    break
-        except:
-            pass
-        
-        # Method 2: Check URL for post.php (means we're on edit page of saved post)
-        if not success_detected:
-            current_url = page.url
-            if "post.php" in current_url and "action=edit" in current_url:
-                success_detected = True
-                runtime.log("Post saved - now on edit page", "info")
-        
-        # Method 3: Check URL for message parameter
-        if not success_detected:
-            current_url = page.url
-            if "message=" in current_url:
-                success_detected = True
-                runtime.log("Post saved - message in URL", "info")
-        
-        # Method 4: Check if View Post link exists
-        if not success_detected:
-            try:
-                view_post = page.locator("a:has-text('View post'), a:has-text('Xem bài viết')").first
-                if view_post.is_visible(timeout=2000):
-                    success_detected = True
-                    runtime.log("View post link found", "info")
-            except:
-                pass
-        
-        # Method 5: Check if post ID exists in URL (meaning post was created)
-        if not success_detected:
-            current_url = page.url
-            if "post=" in current_url:
-                success_detected = True
-                runtime.log("Post ID found in URL", "info")
-        
+        success_detected = _wait_for_publish_success(page, is_schedule, runtime)
+
         if success_detected:
             action = "Scheduled" if is_schedule else "Published"
             runtime.log(f"{action} successfully!", "success")

@@ -7,8 +7,16 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from wp_auto_poster.wordpress.browser import close_all_modals
+from wp_auto_poster.wordpress.media import (
+    switch_to_media_library_tab,
+    wait_for_visible_media_attachments,
+)
 
 LogFunc = Callable[[str, str], None]
+
+FEATURED_IMAGE_POOL_SIZE = 50
+FEATURED_MEDIA_POLL_TIMEOUT_MS = 20000
+FEATURED_MEDIA_POLL_INTERVAL_MS = 500
 
 
 @dataclass
@@ -123,65 +131,210 @@ def open_featured_image_modal(page, runtime: FeaturedImageRuntime) -> bool:
 
 
 def switch_featured_media_library_tab(page, runtime: FeaturedImageRuntime) -> None:
-    try:
-        media_lib_tab = page.locator(
-            ".media-menu-item:has-text('Thư viện Media'), "
-            ".media-menu-item:has-text('Media Library'), "
-            ".media-menu-item:has-text('Chọn từ thư viện')"
-        ).first
-        if media_lib_tab.is_visible(timeout=1000):
-            media_lib_tab.click()
-            time.sleep(2)
-            runtime.log("Switched to Media Library", "info")
-    except Exception:
-        pass
+    switch_to_media_library_tab(page, "featured image", log_func=runtime.log_func)
 
 
 def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
     runtime.ensure_tracking()
     try:
         result = page.evaluate(
-            """(usedIndices) => {
-                const attachments = document.querySelectorAll('.attachments .attachment, li.attachment, .attachment');
-                if (attachments.length === 0) return { success: false, error: 'no_images' };
-
-                const availableIndices = [];
-                for (let i = 0; i < Math.min(attachments.length, 30); i++) {
-                    if (!usedIndices.includes(i)) {
-                        availableIndices.push(i);
+            """async ({ usedIds, poolSize }) => {
+                const used = new Set((usedIds || []).map(String));
+                const pickIndex = (max) => {
+                    if (max <= 1) return 0;
+                    if (window.crypto && crypto.getRandomValues) {
+                        const bytes = new Uint32Array(1);
+                        const maxUint = 0xffffffff;
+                        const limit = maxUint - (maxUint % max);
+                        do {
+                            crypto.getRandomValues(bytes);
+                        } while (bytes[0] >= limit);
+                        return bytes[0] % max;
                     }
-                }
+                    return Math.floor(Math.random() * max);
+                };
+                const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+                const normalizeMedia = (data, modelIndex, model) => {
+                    if (!data) return null;
+                    if (data.type && data.type !== 'image') return null;
+                    const sizes = data.sizes || {};
+                    const preferred = sizes.large || sizes.medium_large ||
+                        sizes.medium || sizes.full || null;
+                    const url = (preferred && preferred.url) || data.url || '';
+                    if (!url) return null;
+                    const id = String(data.id || data.ID || url);
+                    return {
+                        id,
+                        url,
+                        alt: data.alt || '',
+                        title: data.title || data.filename || '',
+                        modelIndex,
+                        model
+                    };
+                };
+                const selectEntry = (entry, entries, source) => {
+                    if (!entry) return null;
+                    try {
+                        const frame = window.wp && wp.media && wp.media.frame;
+                        const frameState = frame && frame.state && frame.state();
+                        const selection = frameState && frameState.get &&
+                            frameState.get('selection');
+                        if (selection && entry.model) {
+                            selection.reset([entry.model]);
+                        }
+                    } catch (e) {}
 
-                const indicesToUse = availableIndices.length > 0 ? availableIndices :
-                    Array.from({length: Math.min(attachments.length, 30)}, (_, i) => i);
+                    try {
+                        const el = Array.from(document.querySelectorAll('.attachment'))
+                            .find((node) => String(node.getAttribute('data-id') || node.dataset.id || '') === entry.id);
+                        if (el) {
+                            try { el.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                            el.click();
+                        }
+                    } catch (e) {}
 
-                const randomIndex = indicesToUse[Math.floor(Math.random() * indicesToUse.length)];
-                const img = attachments[randomIndex];
+                    const selected = {
+                        id: entry.id,
+                        url: entry.url,
+                        alt: entry.alt,
+                        title: entry.title,
+                        index: entry.modelIndex,
+                        pool: entries.length,
+                        source
+                    };
+                    window.__autoPosterSelectedFeaturedImage = selected;
+                    return { success: true, selected };
+                };
 
-                if (img) {
-                    img.click();
-                    return { success: true, index: randomIndex, total: attachments.length, available: indicesToUse.length };
-                }
-                return { success: false, error: 'click_failed' };
+                try {
+                    const frame = window.wp && wp.media && wp.media.frame;
+                    const frameState = frame && frame.state && frame.state();
+                    const library = frameState && frameState.get &&
+                        frameState.get('library');
+                    if (library && Array.isArray(library.models)) {
+                        const loadTimeout = Math.max(12000, Math.min(30000, poolSize * 120));
+                        const deadline = Date.now() + loadTimeout;
+                        let stagnant = 0;
+                        while (library.models.length < poolSize && Date.now() < deadline) {
+                            let canLoadMore = true;
+                            try {
+                                if (typeof library.hasMore === 'function') {
+                                    canLoadMore = !!library.hasMore();
+                                }
+                            } catch (e) {}
+                            if (!canLoadMore || typeof library.more !== 'function') break;
+
+                            const before = library.models.length;
+                            try {
+                                const req = library.more();
+                                await new Promise((resolve) => {
+                                    if (req && typeof req.always === 'function') {
+                                        req.always(resolve);
+                                    } else if (req && typeof req.then === 'function') {
+                                        req.then(resolve, resolve);
+                                    } else {
+                                        setTimeout(resolve, 700);
+                                    }
+                                });
+                            } catch (e) {
+                                await sleep(700);
+                            }
+
+                            if (library.models.length <= before) {
+                                stagnant += 1;
+                                const scroller = document.querySelector(
+                                    '.attachments-browser .attachments, ' +
+                                    '.media-frame-content, .media-modal-content'
+                                );
+                                if (scroller) scroller.scrollTop = scroller.scrollHeight;
+                                await sleep(500);
+                                if (stagnant >= 2) break;
+                            } else {
+                                stagnant = 0;
+                            }
+                        }
+
+                        const models = library.models.slice(0, Math.min(poolSize, library.models.length));
+                        const entries = models
+                            .map((model, index) => normalizeMedia(
+                                model && model.toJSON && model.toJSON(),
+                                index,
+                                model
+                            ))
+                            .filter(Boolean);
+                        if (entries.length) {
+                            const unused = entries.filter((entry) =>
+                                !used.has(entry.id) && !used.has(entry.url)
+                            );
+                            const pool = unused.length ? unused : entries;
+                            const entry = pool[pickIndex(pool.length)];
+                            return selectEntry(entry, entries, 'wp.media');
+                        }
+                    }
+                } catch (e) {}
+
+                const attachments = Array.from(document.querySelectorAll(
+                    '.media-modal .attachments .attachment, ' +
+                    '.media-frame .attachments .attachment, ' +
+                    '.attachments li.attachment, li.attachment'
+                )).filter((el) => !el.classList.contains('uploading'));
+                if (!attachments.length) return { success: false, error: 'no_images' };
+
+                const entries = attachments
+                    .slice(0, Math.min(attachments.length, poolSize))
+                    .map((el, index) => {
+                        const id = String(el.getAttribute('data-id') || el.dataset.id || '');
+                        const img = el.querySelector('img');
+                        const url = img && (img.currentSrc || img.src || '');
+                        if (!url && !id) return null;
+                        return {
+                            id: id || url,
+                            url,
+                            alt: img ? (img.alt || '') : '',
+                            title: img ? (img.alt || '') : '',
+                            modelIndex: index,
+                            element: el
+                        };
+                    })
+                    .filter(Boolean);
+                if (!entries.length) return { success: false, error: 'no_usable_images' };
+
+                const unused = entries.filter((entry) =>
+                    !used.has(entry.id) && !used.has(entry.url)
+                );
+                const pool = unused.length ? unused : entries;
+                const entry = pool[pickIndex(pool.length)];
+                try { entry.element.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
+                entry.element.click();
+                return selectEntry(entry, entries, 'dom-visible');
             }""",
-            list(runtime.state.used_featured_images),
+            {
+                "usedIds": list(runtime.state.used_featured_images),
+                "poolSize": FEATURED_IMAGE_POOL_SIZE,
+            },
         )
 
-        if result.get("success"):
-            selected_idx = result.get("index", 0)
-            runtime.state.used_featured_images.add(selected_idx)
+        selected = result.get("selected") if result else None
+        if result and result.get("success") and selected:
+            selected_id = str(selected.get("id") or "")
+            selected_url = str(selected.get("url") or "")
+            if selected_id:
+                runtime.state.used_featured_images.add(selected_id)
+            if selected_url:
+                runtime.state.used_featured_images.add(selected_url)
             runtime.log(
-                f"Selected image #{selected_idx + 1} via JS "
-                f"({result.get('available')} available of {result.get('total')})",
+                f"Selected featured image #{int(selected.get('index', 0)) + 1} "
+                f"from {selected.get('pool', 0)}/{FEATURED_IMAGE_POOL_SIZE} pool "
+                f"({selected.get('source', 'media')})",
                 "info",
             )
-            time.sleep(1)
+            time.sleep(0.8)
             return True
 
-        runtime.log(f"Could not select image: {result.get('error')}", "warning")
+        runtime.log(f"Could not select featured image: {result.get('error')}", "warning")
         return False
     except Exception as e:
-        runtime.log(f"Error selecting image via JS: {e}", "warning")
+        runtime.log(f"Error selecting featured image via JS: {e}", "warning")
         return False
 
 
@@ -216,30 +369,106 @@ def click_set_featured_image_button(page, runtime: FeaturedImageRuntime) -> bool
         ".media-button-select",
     ]
 
-    for selector in button_selectors:
-        try:
-            button = page.locator(selector).first
-            if button.is_visible(timeout=1000):
-                button.click()
-                runtime.log("Featured image set!", "success")
-                time.sleep(1)
-                return True
-        except Exception:
-            continue
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        for selector in button_selectors:
+            try:
+                button = page.locator(selector).first
+                if button.is_visible(timeout=500) and button.is_enabled(timeout=300):
+                    button.click(timeout=1500)
+                    runtime.log("Featured image set!", "success")
+                    time.sleep(1)
+                    return True
+            except Exception:
+                continue
+        time.sleep(0.3)
 
     try:
-        page.evaluate(
+        clicked = page.evaluate(
             """() => {
                 const btn = document.querySelector('.media-button-select') ||
                            document.querySelector('button.button-primary');
-                if (btn) btn.click();
+                if (!btn || btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
+                    return false;
+                }
+                btn.click();
+                return true;
             }"""
         )
-        runtime.log("Featured image set via JS!", "success")
-        time.sleep(1)
-        return True
+        if clicked:
+            runtime.log("Featured image set via JS!", "success")
+            time.sleep(1)
+            return True
     except Exception:
-        return False
+        pass
+
+    try:
+        result = page.evaluate(
+            """() => {
+                const selected = window.__autoPosterSelectedFeaturedImage || {};
+                const id = String(selected.id || '').trim();
+                if (!/^\\d+$/.test(id)) {
+                    return { ok: false, reason: 'missing_numeric_attachment_id', id };
+                }
+
+                let input = document.querySelector('#_thumbnail_id, input[name="_thumbnail_id"]');
+                if (!input) {
+                    const form = document.querySelector('form#post, form[name="post"]') ||
+                        document.querySelector('form');
+                    if (!form) {
+                        return { ok: false, reason: 'post_form_not_found', id };
+                    }
+                    input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.id = '_thumbnail_id';
+                    input.name = '_thumbnail_id';
+                    form.appendChild(input);
+                }
+
+                input.value = id;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+
+                try {
+                    if (window.wp && wp.media && wp.media.featuredImage &&
+                            typeof wp.media.featuredImage.set === 'function') {
+                        wp.media.featuredImage.set(id);
+                    }
+                } catch (e) {}
+
+                try {
+                    const url = selected.url || '';
+                    const postImageBox = document.querySelector('#postimagediv .inside');
+                    const setLink = document.querySelector('#set-post-thumbnail');
+                    if (postImageBox && setLink && url && !setLink.querySelector('img')) {
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = selected.alt || selected.title || '';
+                        img.style.maxWidth = '100%';
+                        setLink.textContent = '';
+                        setLink.appendChild(img);
+                    }
+                } catch (e) {}
+
+                return { ok: true, id };
+            }"""
+        )
+        if result and result.get("ok"):
+            runtime.log(
+                f"Featured image set via _thumbnail_id fallback: {result.get('id')}",
+                "success",
+            )
+            time.sleep(0.5)
+            return True
+        if result:
+            runtime.log(
+                f"Featured image fallback failed: {result.get('reason')} ({result.get('id', '')})",
+                "warning",
+            )
+    except Exception as e:
+        runtime.log(f"Featured image fallback failed: {e}", "warning")
+
+    return False
 
 
 def set_featured_image(page, keyword: str, runtime: FeaturedImageRuntime) -> bool:
@@ -253,7 +482,16 @@ def set_featured_image(page, keyword: str, runtime: FeaturedImageRuntime) -> boo
 
         time.sleep(3)
         switch_featured_media_library_tab(page, runtime)
-        time.sleep(2)
+
+        if not wait_for_visible_media_attachments(
+            page,
+            "featured image",
+            FEATURED_MEDIA_POLL_TIMEOUT_MS,
+            FEATURED_MEDIA_POLL_INTERVAL_MS,
+            log_func=runtime.log_func,
+        ):
+            close_all_modals(page)
+            return False
 
         if not select_featured_attachment(page, runtime):
             close_all_modals(page)
