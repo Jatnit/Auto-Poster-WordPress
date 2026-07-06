@@ -29,6 +29,14 @@ def test_featured_runtime_initializes_used_image_tracking():
     assert state.used_featured_images == set()
 
 
+def test_featured_image_pool_scales_with_topic_count():
+    state = State()
+    state.topics = [{} for _ in range(75)]
+    runtime, _ = make_runtime(state)
+
+    assert runtime.featured_image_pool_size() == 85
+
+
 def test_select_featured_attachment_tracks_used_index(monkeypatch):
     runtime, logs = make_runtime()
 
@@ -52,6 +60,32 @@ def test_select_featured_attachment_tracks_used_index(monkeypatch):
     assert select_featured_attachment(FakePage(), runtime)
     assert runtime.state.used_featured_images == {"44", "https://example.test/44.jpg"}
     assert ("Selected featured image #5 from 42/50 pool (wp.media)", "info") in logs
+
+
+def test_select_featured_attachment_refuses_duplicate_when_pool_is_exhausted(monkeypatch):
+    state = State()
+    state.used_featured_images = {"44", "https://example.test/44.jpg"}
+    runtime, logs = make_runtime(state)
+
+    class FakePage:
+        def evaluate(self, script, payload):
+            assert "unused.length ? unused : entries" not in script
+            assert set(payload["usedIds"]) == {"44", "https://example.test/44.jpg"}
+            return {
+                "success": False,
+                "error": "no_unused_featured_images_in_wp_media_pool",
+                "pool": 1,
+                "used": 2,
+            }
+
+    monkeypatch.setattr(featured_module.time, "sleep", lambda *_args, **_kwargs: None)
+
+    assert not select_featured_attachment(FakePage(), runtime)
+    assert runtime.state.used_featured_images == {"44", "https://example.test/44.jpg"}
+    assert (
+        "Could not select featured image: no_unused_featured_images_in_wp_media_pool",
+        "warning",
+    ) in logs
 
 
 def test_click_set_featured_image_button_uses_bounded_click(monkeypatch):

@@ -15,6 +15,8 @@ from wp_auto_poster.wordpress.media import (
 LogFunc = Callable[[str, str], None]
 
 FEATURED_IMAGE_POOL_SIZE = 50
+FEATURED_IMAGE_POOL_BUFFER = 10
+FEATURED_IMAGE_POOL_MAX_SIZE = 500
 FEATURED_MEDIA_POLL_TIMEOUT_MS = 20000
 FEATURED_MEDIA_POLL_INTERVAL_MS = 500
 
@@ -30,6 +32,11 @@ class FeaturedImageRuntime:
     def ensure_tracking(self) -> None:
         if not hasattr(self.state, "used_featured_images"):
             self.state.used_featured_images = set()
+
+    def featured_image_pool_size(self) -> int:
+        topic_count = len(getattr(self.state, "topics", []))
+        desired = max(FEATURED_IMAGE_POOL_SIZE, topic_count + FEATURED_IMAGE_POOL_BUFFER)
+        return min(desired, FEATURED_IMAGE_POOL_MAX_SIZE)
 
 
 def open_featured_image_modal(page, runtime: FeaturedImageRuntime) -> bool:
@@ -137,6 +144,7 @@ def switch_featured_media_library_tab(page, runtime: FeaturedImageRuntime) -> No
 def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
     runtime.ensure_tracking()
     try:
+        pool_size = runtime.featured_image_pool_size()
         result = page.evaluate(
             """async ({ usedIds, poolSize }) => {
                 const used = new Set((usedIds || []).map(String));
@@ -266,7 +274,15 @@ def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
                             const unused = entries.filter((entry) =>
                                 !used.has(entry.id) && !used.has(entry.url)
                             );
-                            const pool = unused.length ? unused : entries;
+                            if (!unused.length) {
+                                return {
+                                    success: false,
+                                    error: 'no_unused_featured_images_in_wp_media_pool',
+                                    pool: entries.length,
+                                    used: used.size
+                                };
+                            }
+                            const pool = unused;
                             const entry = pool[pickIndex(pool.length)];
                             return selectEntry(entry, entries, 'wp.media');
                         }
@@ -302,7 +318,15 @@ def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
                 const unused = entries.filter((entry) =>
                     !used.has(entry.id) && !used.has(entry.url)
                 );
-                const pool = unused.length ? unused : entries;
+                if (!unused.length) {
+                    return {
+                        success: false,
+                        error: 'no_unused_featured_images_in_visible_pool',
+                        pool: entries.length,
+                        used: used.size
+                    };
+                }
+                const pool = unused;
                 const entry = pool[pickIndex(pool.length)];
                 try { entry.element.scrollIntoView({ block: 'center', inline: 'center' }); } catch (e) {}
                 entry.element.click();
@@ -310,7 +334,7 @@ def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
             }""",
             {
                 "usedIds": list(runtime.state.used_featured_images),
-                "poolSize": FEATURED_IMAGE_POOL_SIZE,
+                "poolSize": pool_size,
             },
         )
 
@@ -324,7 +348,7 @@ def select_featured_attachment(page, runtime: FeaturedImageRuntime) -> bool:
                 runtime.state.used_featured_images.add(selected_url)
             runtime.log(
                 f"Selected featured image #{int(selected.get('index', 0)) + 1} "
-                f"from {selected.get('pool', 0)}/{FEATURED_IMAGE_POOL_SIZE} pool "
+                f"from {selected.get('pool', 0)}/{pool_size} pool "
                 f"({selected.get('source', 'media')})",
                 "info",
             )
