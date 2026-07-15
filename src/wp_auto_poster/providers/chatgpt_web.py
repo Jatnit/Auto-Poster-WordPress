@@ -77,6 +77,11 @@ _CHATGPT_ERROR_PHRASES = [
     "too many requests",
 ]
 
+RESPONSE_POLL_INTERVAL_SECONDS = 3
+RESPONSE_READY_STABLE_SECONDS = 18
+RESPONSE_STUCK_STABLE_SECONDS = 45
+RESPONSE_FINAL_BUFFER_SECONDS = 5
+
 
 def _chatgpt_find_input(page) -> Optional[object]:
     """Tìm ô nhập prompt ChatGPT (ProseMirror contenteditable)."""
@@ -147,20 +152,22 @@ def _chatgpt_is_streaming(page) -> bool:
     return False
 
 
-def _wait_for_chatgpt_response(page, max_wait: int = 240) -> str:
+def _wait_for_chatgpt_response(page, max_wait: int = 360, min_words: int = 1) -> str:
     """Chờ ChatGPT hoàn tất stream tương tự Gemini.
 
     - Mỗi 3s extract response, đếm từ.
-    - Khi hết indicator streaming và word count ổn định ≥ 6s → coi xong.
+    - Chỉ coi xong khi response đã đạt ngưỡng từ tối thiểu và ổn định.
     - Timeout cứng `max_wait`.
     """
     add_log("Đang chờ ChatGPT trả lời...", "info")
     time.sleep(3)
 
     last_word_count = 0
+    last_text_len = 0
     stable_since = 0
     waited = 0
     last_html = ""
+    min_words = max(1, int(min_words or 1))
 
     while waited < max_wait:
         if not state.is_running:
@@ -172,39 +179,53 @@ def _wait_for_chatgpt_response(page, max_wait: int = 240) -> str:
         current_html = _chatgpt_extract_response(page)
         if current_html:
             last_html = current_html
-            current_words = len(_gemini_response_text(current_html).split())
+            current_text = _gemini_response_text(current_html)
+            current_words = len(current_text.split())
+            current_text_len = len(current_text)
         else:
             current_words = 0
+            current_text_len = 0
 
         streaming = _chatgpt_is_streaming(page)
 
-        if current_words > last_word_count:
+        if current_words > last_word_count or current_text_len > last_text_len:
             last_word_count = current_words
+            last_text_len = current_text_len
             stable_since = 0
         else:
-            stable_since += 3
+            stable_since += RESPONSE_POLL_INTERVAL_SECONDS
 
-        if not streaming and current_words > 0 and stable_since >= 6:
-            add_log(
-                f"ChatGPT đã hoàn tất: {current_words} từ", "info"
-            )
+        enough_words = current_words >= min_words
+        if enough_words and (
+            (not streaming and stable_since >= RESPONSE_READY_STABLE_SECONDS)
+            or stable_since >= RESPONSE_STUCK_STABLE_SECONDS
+        ):
+            add_log(f"ChatGPT có vẻ đã xong ({current_words}/{min_words} từ), kiểm tra thêm...", "info")
+            time.sleep(RESPONSE_FINAL_BUFFER_SECONDS)
+            final_html = _chatgpt_extract_response(page) or last_html
+            final_words = len(_gemini_response_text(final_html).split()) if final_html else current_words
+            if final_words > current_words:
+                last_html = final_html
+                last_word_count = final_words
+                stable_since = 0
+                add_log(f"ChatGPT vẫn đang ra thêm chữ ({final_words}/{min_words} từ), tiếp tục chờ...", "info")
+                continue
+            add_log(f"ChatGPT đã hoàn tất: {final_words} từ", "info")
             break
 
-        if current_words > 0 and stable_since >= 18:
-            add_log(
-                f"Response ổn định {stable_since}s — coi như hoàn tất "
-                f"({current_words} từ)",
-                "info",
-            )
-            break
-
-        time.sleep(3)
-        waited += 3
+        time.sleep(RESPONSE_POLL_INTERVAL_SECONDS)
+        waited += RESPONSE_POLL_INTERVAL_SECONDS
         if waited % 15 == 0:
-            add_log(
-                f"Vẫn đang chờ ChatGPT... ({waited}s, {current_words} từ)",
-                "info",
-            )
+            if current_words and current_words < min_words:
+                add_log(
+                    f"Vẫn đang chờ ChatGPT... ({waited}s, {current_words}/{min_words} từ)",
+                    "info",
+                )
+            else:
+                add_log(
+                    f"Vẫn đang chờ ChatGPT... ({waited}s, {current_words} từ)",
+                    "info",
+                )
 
     if waited >= max_wait:
         add_log(f"Timeout {max_wait}s khi chờ ChatGPT", "warning")
@@ -231,7 +252,12 @@ def _validate_chatgpt_response(content: Optional[str], min_words: int) -> tuple:
     return True, "OK", word_count
 
 
-def _send_prompt_to_chatgpt_once(page, prompt: str, fresh_page: bool = False) -> Optional[str]:
+def _send_prompt_to_chatgpt_once(
+    page,
+    prompt: str,
+    fresh_page: bool = False,
+    min_words: int = 300,
+) -> Optional[str]:
     """Gửi 1 prompt tới ChatGPT, không retry."""
     try:
         if fresh_page:
@@ -286,7 +312,12 @@ def _send_prompt_to_chatgpt_once(page, prompt: str, fresh_page: bool = False) ->
             page.keyboard.press("Enter")
             add_log("Đã gửi prompt qua Enter", "info")
 
-        response_html = _wait_for_chatgpt_response(page, max_wait=240)
+        max_wait = max(360, min(900, int(min_words or 300) // 2))
+        response_html = _wait_for_chatgpt_response(
+            page,
+            max_wait=max_wait,
+            min_words=min_words,
+        )
         if not response_html:
             add_log("Không trích xuất được phản hồi ChatGPT", "error")
             return None
@@ -322,7 +353,10 @@ def send_prompt_to_chatgpt_web(
             time.sleep(3)
 
         response = _send_prompt_to_chatgpt_once(
-            page, prompt, fresh_page=(attempt > 1)
+            page,
+            prompt,
+            fresh_page=(attempt > 1),
+            min_words=min_words,
         )
         is_valid, reason, word_count = _validate_chatgpt_response(response, min_words)
         if is_valid:

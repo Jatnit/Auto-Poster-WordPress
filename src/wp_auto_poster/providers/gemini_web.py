@@ -85,6 +85,11 @@ _GEMINI_ERROR_PHRASES = [
 # khỏi gemini_max_prompt_retries hiện có để dễ tune).
 GEMINI_CANVAS_MAX_RETRIES = 2
 
+RESPONSE_POLL_INTERVAL_SECONDS = 3
+RESPONSE_READY_STABLE_SECONDS = 18
+RESPONSE_STUCK_STABLE_SECONDS = 45
+RESPONSE_FINAL_BUFFER_SECONDS = 5
+
 # Cụm phrase điển hình xuất hiện khi inline response chỉ là mô tả Canvas.
 # So sánh case-insensitive với text đã strip HTML.
 #
@@ -417,12 +422,11 @@ def _extract_gemini_response(page) -> str:
     return ""
 
 
-def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
+def _wait_for_gemini_response(page, max_wait: int = 360, min_words: int = 1) -> str:
     """
     Chờ Gemini trả lời xong theo chiến thuật:
     - Mỗi 3s extract response hiện tại và đếm từ
-    - Nếu word count không tăng trong 15s liên tiếp -> coi như đã xong
-    - Hoặc khi không còn loading indicator cũng dừng
+    - Chỉ coi xong khi đã đạt min_words và response ổn định đủ lâu
     - Timeout tối đa max_wait giây
 
     Returns HTML của response (có thể rỗng nếu timeout).
@@ -431,9 +435,11 @@ def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
     time.sleep(3)  # Chờ response bắt đầu streaming
 
     last_word_count = 0
+    last_text_len = 0
     stable_since = 0  # giây đã qua mà word count không tăng
     waited = 0
     last_html = ""
+    min_words = max(1, int(min_words or 1))
 
     while waited < max_wait:
         if not state.is_running:
@@ -448,9 +454,12 @@ def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
         current_html = _extract_gemini_response(page)
         if current_html:
             last_html = current_html
-            current_words = len(_gemini_response_text(current_html).split())
+            current_text = _gemini_response_text(current_html)
+            current_words = len(current_text.split())
+            current_text_len = len(current_text)
         else:
             current_words = 0
+            current_text_len = 0
 
         # Check loading indicator
         any_loading = False
@@ -468,34 +477,43 @@ def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
         except:
             pass
 
-        # Điều kiện kết thúc: không còn loading VÀ word count không tăng trong 6s
-        if current_words > last_word_count:
+        if current_words > last_word_count or current_text_len > last_text_len:
             last_word_count = current_words
+            last_text_len = current_text_len
             stable_since = 0
         else:
-            stable_since += 3
+            stable_since += RESPONSE_POLL_INTERVAL_SECONDS
 
-        if not any_loading and current_words > 0 and stable_since >= 6:
-            add_log(
-                f"Gemini đã hoàn tất: {current_words} từ (ổn định {stable_since}s)",
-                "info",
-            )
+        enough_words = current_words >= min_words
+        if enough_words and (
+            (not any_loading and stable_since >= RESPONSE_READY_STABLE_SECONDS)
+            or stable_since >= RESPONSE_STUCK_STABLE_SECONDS
+        ):
+            add_log(f"Gemini có vẻ đã xong ({current_words}/{min_words} từ), kiểm tra thêm...", "info")
+            time.sleep(RESPONSE_FINAL_BUFFER_SECONDS)
+            final_html = _extract_gemini_response(page) or last_html
+            final_words = len(_gemini_response_text(final_html).split()) if final_html else current_words
+            if final_words > current_words:
+                last_html = final_html
+                last_word_count = final_words
+                stable_since = 0
+                add_log(f"Gemini vẫn đang ra thêm chữ ({final_words}/{min_words} từ), tiếp tục chờ...", "info")
+                continue
+            add_log(f"Gemini đã hoàn tất: {final_words} từ", "info")
             break
 
-        # Stable lâu nhưng có text -> cũng coi là xong (phòng khi loading indicator bị stuck)
-        if current_words > 0 and stable_since >= 18:
-            add_log(
-                f"Response đã ổn định {stable_since}s -> coi như hoàn tất ({current_words} từ)",
-                "info",
-            )
-            break
-
-        time.sleep(3)
-        waited += 3
+        time.sleep(RESPONSE_POLL_INTERVAL_SECONDS)
+        waited += RESPONSE_POLL_INTERVAL_SECONDS
         if waited % 15 == 0:
-            add_log(
-                f"Vẫn đang chờ... ({waited}s, đã có {current_words} từ)", "info"
-            )
+            if current_words and current_words < min_words:
+                add_log(
+                    f"Vẫn đang chờ... ({waited}s, đã có {current_words}/{min_words} từ)",
+                    "info",
+                )
+            else:
+                add_log(
+                    f"Vẫn đang chờ... ({waited}s, đã có {current_words} từ)", "info"
+                )
 
     if waited >= max_wait:
         add_log(f"Timeout {max_wait}s khi chờ Gemini", "warning")
@@ -504,7 +522,12 @@ def _wait_for_gemini_response(page, max_wait: int = 240) -> str:
     return _extract_gemini_response(page) or last_html
 
 
-def _send_prompt_once(page, prompt: str, fresh_page: bool = True) -> Optional[str]:
+def _send_prompt_once(
+    page,
+    prompt: str,
+    fresh_page: bool = True,
+    min_words: int = 300,
+) -> Optional[str]:
     """Gửi prompt 1 lần (không retry). Trả về HTML response hoặc None nếu lỗi."""
     try:
         if fresh_page:
@@ -568,7 +591,12 @@ def _send_prompt_once(page, prompt: str, fresh_page: bool = True) -> Optional[st
             add_log("Đã gửi prompt qua phím Enter", "info")
 
         # Chờ & trích response (logic tăng cường)
-        response_html = _wait_for_gemini_response(page, max_wait=240)
+        max_wait = max(360, min(900, int(min_words or 300) // 2))
+        response_html = _wait_for_gemini_response(
+            page,
+            max_wait=max_wait,
+            min_words=min_words,
+        )
         if not response_html:
             add_log("Không thể trích xuất phản hồi Gemini", "error")
             return None
@@ -644,7 +672,12 @@ def send_prompt_to_gemini_web(
             time.sleep(3)
 
         # Lần đầu không cần reload (đã navigate), từ lần 2 trở đi reload để reset state
-        response = _send_prompt_once(page, current_prompt, fresh_page=(attempt > 1))
+        response = _send_prompt_once(
+            page,
+            current_prompt,
+            fresh_page=(attempt > 1),
+            min_words=min_words,
+        )
 
         is_valid, reason, word_count = _validate_gemini_response(
             response, min_words, page=page
