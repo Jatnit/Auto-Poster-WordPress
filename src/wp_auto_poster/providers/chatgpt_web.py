@@ -10,7 +10,14 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from config.prompts import CONTACT_SECTION, PROMPT_PART1, PROMPT_PART2, clean_gemini_content
+from wp_auto_poster.content.prompts import (
+    PROMPT_PART1,
+    PROMPT_PART2,
+    clean_gemini_content,
+    format_contact_section,
+    format_prompt,
+)
+from wp_auto_poster.wordpress.browser_launch import screenshot_path
 from wp_auto_poster.content.validation import strip_html_text as _strip_html_text_core
 
 LogFunc = Callable[[str, str], None]
@@ -269,7 +276,7 @@ def _send_prompt_to_chatgpt_once(
         if not input_area:
             add_log("Không tìm thấy ô nhập ChatGPT", "error")
             try:
-                page.screenshot(path="/tmp/chatgpt_error.png")
+                page.screenshot(path=screenshot_path("chatgpt_error"))
             except Exception:
                 pass
             return None
@@ -469,7 +476,7 @@ def generate_content_chatgpt_web(page, title: str, keyword: str) -> Optional[str
                 return None
 
             add_log("Đang tạo nội dung với prompt tùy chỉnh (ChatGPT)...", "info")
-            prompt = custom_prompt.format(title=title, keyword=keyword)
+            prompt = format_prompt(custom_prompt, title, keyword, state.config)
             content = send_prompt_to_chatgpt_web(page, prompt, min_words=min_words_full)
 
             if not content:
@@ -483,7 +490,7 @@ def generate_content_chatgpt_web(page, title: str, keyword: str) -> Optional[str
                 return None
 
             add_log("Đang tạo Phần 1/2 với ChatGPT...", "info")
-            prompt1 = PROMPT_PART1.format(title=title, keyword=keyword)
+            prompt1 = format_prompt(PROMPT_PART1, title, keyword, state.config)
             part1 = send_prompt_to_chatgpt_web(page, prompt1, min_words=min_words_part)
             if not part1:
                 add_log("Không thể tạo Phần 1 (ChatGPT)", "error")
@@ -495,14 +502,14 @@ def generate_content_chatgpt_web(page, title: str, keyword: str) -> Optional[str
 
             time.sleep(3)
             add_log("Đang tạo Phần 2/2 với ChatGPT...", "info")
-            prompt2 = PROMPT_PART2.format(title=title, keyword=keyword)
+            prompt2 = format_prompt(PROMPT_PART2, title, keyword, state.config)
             part2 = send_prompt_to_chatgpt_web(page, prompt2, min_words=min_words_part)
             if not part2:
                 add_log("Không thể tạo Phần 2 (ChatGPT)", "error")
                 return None
             add_log(f"Phần 2: {len(_gemini_response_text(part2).split())} từ", "info")
 
-            contact = CONTACT_SECTION.format(keyword=keyword)
+            contact = format_contact_section(keyword, state.config)
             content = part1 + "\n\n" + part2 + "\n\n" + contact
 
         # Tận dụng cleaner sẵn có — cùng heuristic cắt intro/outro hoạt động OK

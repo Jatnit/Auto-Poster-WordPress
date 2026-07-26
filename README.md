@@ -32,7 +32,7 @@
 | 📅 **Scheduling**         | Lên lịch đăng bài theo ngày (tùy chỉnh số bài/ngày)  |
 | 🏷️ **SEO Ready**          | Tích hợp Rank Math SEO keywords                      |
 | 🏷️ **Auto Tags**          | Tự động thêm tags cho mỗi bài viết                   |
-| 🖼️ **Auto Images**        | Tự động chèn 3 hình ảnh vào nội dung (H2 #1, #3, #5) |
+| 🖼️ **Auto Images**        | Tự động chèn 3 hình ảnh, phân bố đều dưới H2/H3 an toàn |
 | 🎨 **Matrix UI**          | Giao diện web Matrix Hacker style                    |
 | 📊 **Real-time Progress** | Theo dõi tiến trình trực tiếp                        |
 | ⏸️ **Pause/Resume**       | Tạm dừng và tiếp tục bất cứ lúc nào                  |
@@ -77,6 +77,10 @@ source .venv/bin/activate
 ### 4. Cài đặt dependencies
 
 ```bash
+# Khuyến nghị: cài dạng package (bỏ được các hack sys.path)
+pip install -e ".[dev]"
+
+# Hoặc chỉ runtime
 pip install -r requirements.txt
 ```
 
@@ -88,9 +92,11 @@ playwright install chromium
 
 ### 6. (Tùy chọn) Cài đặt Brave Browser
 
-Nếu muốn sử dụng Brave Browser để tránh lỗi đăng nhập Google:
+Ứng dụng tự dò trình duyệt theo hệ điều hành, ưu tiên Brave rồi tới Chrome.
+Nếu không tìm thấy, nó dùng Chromium đi kèm Playwright. Muốn chỉ định thủ công
+thì đặt `browser_executable_path` trong `app_config.json`.
 
-- Tải tại: https://brave.com/download/
+Dùng Brave giúp hạn chế lỗi đăng nhập Google — tải tại: https://brave.com/download/
 
 ---
 
@@ -173,12 +179,35 @@ Ctrl + C
 | Delay giữa các bài  | Thời gian chờ giữa các bài (giây) | `65`                            |
 | Headless Mode       | Ẩn/hiện browser khi chạy          | `off`                           |
 
+> **Về mật khẩu:** server không bao giờ trả mật khẩu về trình duyệt. Khi đã lưu,
+> ô mật khẩu hiển thị trống với ghi chú "(đã lưu — để trống nếu không đổi)".
+> Để trống rồi bấm Lưu sẽ **giữ nguyên** mật khẩu cũ; chỉ nhập giá trị mới khi
+> muốn thay đổi. `app_config.json` và `wp_site_presets.json` được ghi với quyền
+> `0600` và không bao giờ được commit.
+
+### Cấu hình nâng cao (sửa trực tiếp trong `app_config.json`)
+
+| Khóa                      | Mặc định         | Mô tả                                                              |
+| ------------------------- | ---------------- | ------------------------------------------------------------------ |
+| `company_name`            | tên công ty mặc định | Thay `{company}` trong prompt template dựng sẵn.               |
+| `contact_section_html`    | `""`             | Ghi đè khối liên hệ chèn cuối bài. Để trống = dùng khối mặc định.   |
+| `browser_executable_path` | tự dò            | Chỉ định trình duyệt thủ công.                                      |
+| `browser_user_data_dir`   | tự chọn          | Thư mục profile lưu session đăng nhập.                              |
+| `browser_slow_mo`         | `100`            | Độ trễ (ms) mỗi thao tác Playwright. Giảm để chạy nhanh hơn.        |
+| `gemini_model`            | `gemini-2.0-flash` | Model dùng cho provider Gemini API.                               |
+
 ### Prompt Template
 
-Tùy chỉnh prompt template trong phần cấu hình. Sử dụng:
+Tùy chỉnh prompt template trong phần cấu hình. Placeholder hỗ trợ:
 
-- `{title}` - Tiêu đề bài viết
-- `{keyword}` - Từ khóa SEO
+- `{title}` — Tiêu đề bài viết
+- `{keyword}` — Từ khóa SEO
+- `{company}` — Lấy từ `company_name`
+- `{year}` — Năm hiện tại (tự động)
+
+Prompt tùy chỉnh phải chứa **cả** `{title}` và `{keyword}` thì mới được dùng;
+thiếu một trong hai thì hệ thống quay về template 2 phần dựng sẵn. Placeholder
+lạ được giữ nguyên thay vì gây lỗi.
 
 **Ví dụ:**
 
@@ -188,6 +217,11 @@ Từ khóa SEO "{keyword}". Từ khóa in đậm.
 Bài viết trên 1500 từ, có các tiêu đề H2/H3.
 Mật độ từ khóa không vượt quá 3%.
 ```
+
+> **Lưu ý khi dùng nhiều site:** prompt tùy chỉnh được lưu theo từng preset.
+> Nếu một site không có prompt riêng, hệ thống dùng template mặc định — vốn
+> mang tên công ty trong `company_name` và khối liên hệ mặc định. Hãy đặt
+> `company_name` và `contact_section_html` cho từng site để tránh lẫn thông tin.
 
 ### Lưu cấu hình nhiều website
 
@@ -204,13 +238,12 @@ Auto-Poster-WordPress/
 ├── app.py                         # Entry point mỏng: wiring runtime + chạy Flask
 ├── src/wp_auto_poster/            # Core package sau refactor
 │   ├── automation/                # Runner và logic lịch đăng
-│   ├── content/                   # Cleanup, validate, HTML convert, provider router
-│   ├── providers/                 # Ollama, Gemini API provider implementations
-│   ├── state/                     # AppState, config store, preset store
+│   ├── content/                   # Prompts, cleanup, validate, HTML convert, router
+│   ├── providers/                 # Ollama, Gemini API/Web, ChatGPT Web
+│   ├── state/                     # AppState, config store, preset store, redaction
 │   ├── utils/                     # Logging/helper dùng chung
 │   ├── web/                       # Flask app factory + route registration
-│   └── wordpress/                 # Browser, editor, media, taxonomy, publish workflows
-├── ai_providers/                  # Compatibility facade cho provider import cũ
+│   └── wordpress/                 # Auth, browser, editor, media, taxonomy, publish
 ├── config/                        # Compatibility facade cho settings/prompts cũ
 ├── templates/index.html           # Markup giao diện
 ├── static/css/app.css             # Style giao diện
@@ -224,11 +257,12 @@ Auto-Poster-WordPress/
 │   ├── topics.js
 │   ├── schedule.js
 │   └── automation.js
-├── tests/                         # Unit/integration tests
+├── tests/unit/                    # Unit tests
 ├── docs/                          # Architecture, setup, troubleshooting, ADR
-├── scripts/check.sh               # Compile + pytest check
-├── pyproject.toml                 # Pytest/pythonpath config
-├── requirements.txt               # Python dependencies
+├── scripts/check.sh               # Compile + lint + pytest
+├── pyproject.toml                 # Package metadata, pytest, ruff
+├── requirements.txt               # Runtime dependencies
+├── requirements-dev.txt           # Dev dependencies (pytest, ruff)
 └── README.md                      # Documentation
 ```
 
@@ -325,16 +359,26 @@ python3 app.py
 
 ## 🔧 Các lệnh thường dùng
 
-| Lệnh                              | Mô tả                        |
-| --------------------------------- | ---------------------------- |
-| `source .venv/bin/activate`       | Kích hoạt venv (macOS/Linux) |
-| `.venv\Scripts\activate`          | Kích hoạt venv (Windows)     |
-| `deactivate`                      | Thoát virtual environment    |
-| `python app.py`                   | Chạy web server              |
-| `./scripts/check.sh`              | Compile + chạy pytest        |
-| `Ctrl + C`                        | Dừng web server              |
-| `pip install -r requirements.txt` | Cài đặt dependencies         |
-| `pip freeze > requirements.txt`   | Xuất dependencies            |
+| Lệnh                        | Mô tả                             |
+| --------------------------- | --------------------------------- |
+| `source .venv/bin/activate` | Kích hoạt venv (macOS/Linux)      |
+| `.venv\Scripts\activate`    | Kích hoạt venv (Windows)          |
+| `deactivate`                | Thoát virtual environment         |
+| `python app.py`             | Chạy web server                   |
+| `WP_PORT=5002 python app.py`| Chạy ở cổng khác                  |
+| `./scripts/check.sh`        | Compile + lint + pytest           |
+| `pytest`                    | Chỉ chạy test                     |
+| `ruff check .`              | Chỉ chạy lint                     |
+| `Ctrl + C`                  | Dừng web server                   |
+| `pip install -e ".[dev]"`   | Cài package + dev dependencies    |
+
+### Biến môi trường
+
+| Biến       | Mặc định    | Mô tả                                                    |
+| ---------- | ----------- | -------------------------------------------------------- |
+| `WP_HOST`  | `127.0.0.1` | Địa chỉ bind. Host lạ bị trả 403 (chống DNS rebinding).  |
+| `WP_PORT`  | `5001`      | Cổng web interface.                                       |
+| `WP_DEBUG` | `0`         | `1` để bật Werkzeug debugger. Auto-reloader luôn tắt.     |
 
 ---
 
@@ -345,7 +389,8 @@ python3 app.py
 1. Tạo module provider trong `src/wp_auto_poster/providers/`.
 2. Implement function provider thuần, nhận `config` và `log_func` khi cần.
 3. Expose provider qua router ở `src/wp_auto_poster/content/generation.py`.
-4. Nếu cần tương thích import cũ, thêm facade trong `ai_providers/`.
+4. Nếu provider nhận prompt tùy chỉnh, dùng `get_custom_prompt(config)` để tôn
+   trọng `gemini_prompt` của từng site (đừng hardcode template mặc định).
 5. Thêm unit test cho provider/router trước khi nối vào UI.
 
 ### Thêm WordPress workflow mới

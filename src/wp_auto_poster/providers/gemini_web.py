@@ -6,11 +6,22 @@ This module keeps the legacy browser automation behavior but moves it out of
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
-from config.prompts import CONTACT_SECTION, PROMPT_PART1, PROMPT_PART2, clean_gemini_content
+from wp_auto_poster.content.html_convert import (
+    markdown_to_html_minimal as _markdown_to_html_minimal_core,
+)
+from wp_auto_poster.content.prompts import (
+    PROMPT_PART1,
+    PROMPT_PART2,
+    clean_gemini_content,
+    format_contact_section,
+    format_prompt,
+)
+from wp_auto_poster.wordpress.browser_launch import screenshot_path
 from wp_auto_poster.content.validation import strip_html_text as _strip_html_text_core
 
 LogFunc = Callable[[str, str], None]
@@ -60,11 +71,6 @@ def _gemini_response_text(html_or_text: str) -> str:
     """Strip HTML tags để đếm từ thật (không tính thẻ)."""
     return _strip_html_text_core(html_or_text)
 
-import re
-
-from wp_auto_poster.content.html_convert import (
-    markdown_to_html_minimal as _markdown_to_html_minimal_core,
-)
 
 # GEMINI WEB CONTENT GENERATION (Browser-based, free, no API key)
 
@@ -374,7 +380,7 @@ def _find_input_area(page):
             if el.is_visible(timeout=3000):
                 add_log(f"Tìm thấy ô nhập: {selector}", "info")
                 return el
-        except:
+        except Exception:
             continue
     # Fallback: bất kỳ contenteditable nào
     try:
@@ -382,7 +388,7 @@ def _find_input_area(page):
         if el.is_visible(timeout=5000):
             add_log("Tìm thấy phần tử contenteditable (fallback)", "info")
             return el
-    except:
+    except Exception:
         pass
     return None
 
@@ -417,7 +423,7 @@ def _extract_gemini_response(page) -> str:
                 html = last_response.inner_html()
                 if html and len(html) > 100:
                     return html
-        except:
+        except Exception:
             continue
     return ""
 
@@ -472,9 +478,9 @@ def _wait_for_gemini_response(page, max_wait: int = 360, min_words: int = 1) -> 
                     if indicator.is_visible(timeout=300):
                         any_loading = True
                         break
-                except:
+                except Exception:
                     continue
-        except:
+        except Exception:
             pass
 
         if current_words > last_word_count or current_text_len > last_text_len:
@@ -539,9 +545,9 @@ def _send_prompt_once(
         if not input_area:
             add_log("Không tìm thấy ô nhập Gemini", "error")
             try:
-                page.screenshot(path="/tmp/gemini_error.png")
-                add_log("Đã lưu screenshot tại /tmp/gemini_error.png", "info")
-            except:
+                page.screenshot(path=screenshot_path("gemini_error"))
+                add_log(f"Đã lưu screenshot tại {screenshot_path('gemini_error')}", "info")
+            except Exception:
                 pass
             return None
 
@@ -557,7 +563,7 @@ def _send_prompt_once(
         try:
             input_area.fill(clean_prompt)
             add_log("Đã nhập prompt qua fill()", "info")
-        except:
+        except Exception:
             add_log("Đang gõ bằng bàn phím...", "info")
             page.keyboard.press("Meta+A")
             page.keyboard.press("Backspace")
@@ -583,7 +589,7 @@ def _send_prompt_once(
                     sent = True
                     add_log("Đã gửi prompt tới Gemini", "info")
                     break
-            except:
+            except Exception:
                 continue
 
         if not sent:
@@ -735,7 +741,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
                     needs_login = True
                 elif page.locator("a[href*='accounts.google'], button:has-text('Sign in'), button:has-text('Đăng nhập')").first.is_visible(timeout=3000):
                     needs_login = True
-            except:
+            except Exception:
                 pass
 
             if needs_login:
@@ -774,7 +780,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
         if not _find_input_area(page):
             add_log("Gemini chưa sẵn sàng ô nhập prompt", "error")
             return None
-        
+
         # Get custom prompt from config, or use default
         custom_prompt = state.config.get("gemini_prompt", "")
 
@@ -792,7 +798,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
 
             # Use custom single prompt
             add_log("Đang tạo nội dung với prompt tùy chỉnh...", "info")
-            prompt = custom_prompt.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            prompt = format_prompt(custom_prompt, title, keyword, state.config) + _anti_canvas_suffix()
             content = send_prompt_to_gemini_web(page, prompt, min_words=min_words_full)
 
             if not content:
@@ -812,7 +818,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
                     return None
 
             add_log("Đang tạo Phần 1/2 với Gemini Chat...", "info")
-            prompt1 = PROMPT_PART1.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            prompt1 = format_prompt(PROMPT_PART1, title, keyword, state.config) + _anti_canvas_suffix()
             part1 = send_prompt_to_gemini_web(page, prompt1, min_words=min_words_part)
 
             if not part1:
@@ -832,7 +838,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
             time.sleep(3)
 
             add_log("Đang tạo Phần 2/2 với Gemini Chat...", "info")
-            prompt2 = PROMPT_PART2.format(title=title, keyword=keyword) + _anti_canvas_suffix()
+            prompt2 = format_prompt(PROMPT_PART2, title, keyword, state.config) + _anti_canvas_suffix()
             part2 = send_prompt_to_gemini_web(page, prompt2, min_words=min_words_part)
 
             if not part2:
@@ -843,7 +849,7 @@ def generate_content_gemini_web(page, title: str, keyword: str) -> Optional[str]
             add_log(f"Phần 2: {word_count_2} từ", "info")
 
             # Combine parts
-            contact = CONTACT_SECTION.format(keyword=keyword)
+            contact = format_contact_section(keyword, state.config)
             content = part1 + "\n\n" + part2 + "\n\n" + contact
 
         # Clean content - remove intro and outro text from Gemini

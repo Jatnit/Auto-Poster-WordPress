@@ -87,18 +87,18 @@
       async function renderLogsWithTypewriter(logs, logsContainer) {
         if (!logs || logs.length === 0) return;
 
-        // Check if we have new logs
-        const newLogCount = logs.length;
-        const hasNewLogs = newLogCount > lastLogCount;
+        // The server already returns only entries newer than lastLogSeq, so
+        // everything received here is new. Guard against out-of-order polls.
+        const newLogs = logs.filter(
+          (log) => typeof log.seq !== "number" || log.seq > lastRenderedLogSeq,
+        );
+        if (newLogs.length === 0) return;
 
-        if (!hasNewLogs) {
-          // No new logs, just update existing
-          return;
+        const highestSeq = newLogs[newLogs.length - 1].seq;
+        if (typeof highestSeq === "number") {
+          lastRenderedLogSeq = highestSeq;
         }
-
-        // Get new logs only
-        const newLogs = logs.slice(lastLogCount);
-        lastLogCount = newLogCount;
+        lastLogCount += newLogs.length;
 
         // Add new log entries with typewriter effect
         for (const log of newLogs) {
@@ -122,12 +122,15 @@
       // Reset log tracking when starting new session
       function resetLogTracking() {
         lastLogCount = 0;
+        lastLogSeq = 0;
+        lastRenderedLogSeq = 0;
         typedLogIndices.clear();
       }
 
       function resetChecklistState() {
         checklistRows = [];
         checklistProcessedLogCount = 0;
+        checklistProcessedLogSeq = 0;
         activeContentPost = null;
         activeWpPost = null;
         currentPhase = "";
@@ -263,8 +266,18 @@
 
       function processChecklistLogs(logs = []) {
         if (!logs || logs.length === 0) return;
-        const newLogs = logs.slice(checklistProcessedLogCount);
+        // The payload already contains only unseen entries; de-duplicate by
+        // sequence id rather than by array offset.
+        const newLogs = logs.filter(
+          (log) =>
+            typeof log.seq !== "number" || log.seq > checklistProcessedLogSeq,
+        );
         if (newLogs.length === 0) return;
+
+        const highestSeq = newLogs[newLogs.length - 1].seq;
+        if (typeof highestSeq === "number") {
+          checklistProcessedLogSeq = highestSeq;
+        }
 
         for (const log of newLogs) {
           const message = log.message || "";
@@ -414,7 +427,7 @@
           }
         }
 
-        checklistProcessedLogCount = logs.length;
+        checklistProcessedLogCount += newLogs.length;
       }
 
       function syncChecklistFromContentStatus(contentList = []) {

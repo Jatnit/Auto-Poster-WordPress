@@ -27,6 +27,15 @@ Core refactor status: complete.
 9. Done: Split frontend CSS/JS by feature.
 10. Done: Final documentation and cleanup.
 
+### Follow-up: hardening pass (2026-07-26)
+
+A separate remediation pass covered the defects the refactor did not address —
+secret exposure, thread-safety, index drift, status-payload growth, the
+inverted `src/` -> `config/` dependency, dead code, the discontinued Gemini
+SDK, and macOS-only browser launch. See [improvement-plan.md](improvement-plan.md)
+for the plan and [decisions/0002-security-and-hardening.md](decisions/0002-security-and-hardening.md)
+for the rationale.
+
 ## Progress
 
 | Phase | Status | Notes |

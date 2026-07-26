@@ -1,0 +1,5 @@
+# WP Auto Poster - development dependencies
+# Install with: pip install -r requirements.txt -r requirements-dev.txt
+
+pytest~=8.4     # verified 8.4.2
+ruff~=0.15      # verified 0.15.16

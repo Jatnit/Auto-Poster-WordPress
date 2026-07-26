@@ -81,7 +81,7 @@ def test_chatgpt_web_calls_browser_provider_callback():
     assert logs == []
 
 
-def test_unknown_provider_uses_gemini_api_fallback():
+def test_gemini_provider_routes_to_gemini_api():
     logs, log = make_logger()
 
     result = generate_content(
@@ -90,8 +90,44 @@ def test_unknown_provider_uses_gemini_api_fallback():
         "keyword",
         {"gemini_api_key": "secret"},
         log,
-        gemini_api_func=lambda title, keyword, api_key, log_func: f"{title}|{keyword}|{api_key}",
+        gemini_api_func=lambda title, keyword, api_key, log_func, config=None: f"{title}|{keyword}|{api_key}",
     )
 
     assert result == "Title|keyword|secret"
     assert logs == []
+
+
+def test_gemini_api_alias_routes_to_gemini_api():
+    logs, log = make_logger()
+
+    result = generate_content(
+        "gemini_api",
+        "Title",
+        "keyword",
+        {"gemini_api_key": "secret"},
+        log,
+        gemini_api_func=lambda title, keyword, api_key, log_func, config=None: "ok",
+    )
+
+    assert result == "ok"
+    assert logs == []
+
+
+def test_unknown_provider_errors_instead_of_falling_through():
+    """A typo in ai_provider must not silently bill the Gemini API."""
+    logs, log = make_logger()
+    called = []
+
+    result = generate_content(
+        "gemni_web",  # typo
+        "Title",
+        "keyword",
+        {"gemini_api_key": "secret"},
+        log,
+        gemini_api_func=lambda *args, **kwargs: called.append(1),
+    )
+
+    assert result is None
+    assert called == []
+    assert logs and logs[-1][1] == "error"
+    assert "gemni_web" in logs[-1][0]

@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import re
-import subprocess
 import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from flask import jsonify, render_template, request
+
+from wp_auto_poster.state.redaction import (
+    merge_config_update,
+    redact_config,
+    redact_preset,
+)
+from wp_auto_poster.utils.logging import logs_since
 
 LogFunc = Callable[[str, str], None]
 
@@ -37,19 +43,33 @@ def register_routes(app, runtime: RouteRuntime) -> None:
 
     @app.route('/api/status')
     def get_status():
-        # Return content_list without full content for performance
-        content_list_summary = [
-            {
-                "post_index": c.get("post_index", 0),
-                "title": c["title"],
-                "keyword": c["keyword"],
-                "word_count": c["word_count"],
-                "status": c.get("status", "success"),
-                "error_reason": c.get("error_reason", ""),
-                "attempts": c.get("attempts", 1),
-            }
-            for c in runtime.state.content_list
-        ]
+        try:
+            since = int(request.args.get("since", 0))
+        except (TypeError, ValueError):
+            since = 0
+
+        with runtime.state.mutation():
+            # Return content_list without full content for performance
+            content_list_summary = [
+                {
+                    "post_index": c.get("post_index", 0),
+                    "title": c["title"],
+                    "keyword": c["keyword"],
+                    "word_count": c["word_count"],
+                    "status": c.get("status", "success"),
+                    "error_reason": c.get("error_reason", ""),
+                    "attempts": c.get("attempts", 1),
+                }
+                for c in runtime.state.content_list
+            ]
+            logs = logs_since(runtime.state, since)
+            log_seq = getattr(runtime.state, "log_seq", len(logs))
+
+        # Probing Ollama costs a blocking HTTP round-trip; skip it entirely
+        # unless Ollama is the selected provider.
+        provider = runtime.state.config.get("ai_provider", "ollama")
+        ollama_available = runtime.check_ollama() if provider == "ollama" else False
+
         return jsonify({
             "is_running": runtime.state.is_running,
             "is_paused": runtime.state.is_paused,
@@ -58,9 +78,10 @@ def register_routes(app, runtime: RouteRuntime) -> None:
             "progress": runtime.state.progress,
             "successful_posts": runtime.state.successful_posts,
             "failed_posts": runtime.state.failed_posts,
-            "logs": runtime.state.logs,
+            "logs": logs,
+            "log_seq": log_seq,
             "gemini_available": runtime.gemini_available,
-            "ollama_available": runtime.check_ollama(),
+            "ollama_available": ollama_available,
             "playwright_available": runtime.playwright_available,
             "current_phase": runtime.state.current_phase,
             "retry_queue_count": len(runtime.state.retry_queue),
@@ -71,7 +92,7 @@ def register_routes(app, runtime: RouteRuntime) -> None:
     @app.route('/api/config', methods=['GET', 'POST'])
     def handle_config():
         if request.method == 'POST':
-            data = request.json
+            data = dict(request.json or {})
             if "content_min_valid_words" in data:
                 try:
                     data["content_min_valid_words"] = max(1, int(data["content_min_valid_words"]))
@@ -82,17 +103,40 @@ def register_routes(app, runtime: RouteRuntime) -> None:
                     data["content_auto_rerender_retries"] = max(0, int(data["content_auto_rerender_retries"]))
                 except (TypeError, ValueError):
                     data["content_auto_rerender_retries"] = 2
+            # An empty secret means "keep the stored value" so the UI can render
+            # a blank password field without wiping saved credentials.
+            data = merge_config_update(runtime.state.config, data)
             runtime.state.config.update(data)
             if runtime.save_app_config(runtime.state.config):
-                return jsonify({"success": True})
+                redacted = redact_config(runtime.state.config)
+                return jsonify({"success": True, "data": redacted, **{
+                    key: redacted[key] for key in redacted if key.endswith("_set")
+                }})
             return jsonify({"success": False, "message": "Could not save config"}), 500
-        return jsonify(runtime.state.config)
+        return jsonify(redact_config(runtime.state.config))
+
+    #: Phases where topic/content indices are locked to a live posting plan.
+    POSTING_PHASES = ("creating_posts", "retry_post_queue")
+
+    def _structural_edit_blocked() -> bool:
+        """True while the runner is publishing and indices must not shift."""
+        return (
+            runtime.state.is_running
+            and (runtime.state.current_phase or "") in POSTING_PHASES
+        )
 
     @app.route('/api/topics', methods=['GET', 'POST'])
     def handle_topics():
         if request.method == 'POST':
-            runtime.state.topics = request.json.get('topics', [])
-            return jsonify({"success": True, "count": len(runtime.state.topics)})
+            if _structural_edit_blocked():
+                return jsonify({
+                    "success": False,
+                    "message": "Đang đăng bài — không thể thay đổi danh sách tiêu đề lúc này",
+                }), 409
+            with runtime.state.mutation():
+                runtime.state.topics = request.json.get('topics', [])
+                count = len(runtime.state.topics)
+            return jsonify({"success": True, "count": count})
         return jsonify(runtime.state.topics)
 
     @app.route('/api/presets', methods=['GET'])
@@ -100,24 +144,56 @@ def register_routes(app, runtime: RouteRuntime) -> None:
         presets = runtime.load_site_presets()
         return jsonify({"success": True, "presets": list(presets.keys())})
 
+    @app.route('/api/presets/<name>/apply', methods=['POST'])
+    def apply_preset(name):
+        """Copy a preset into the live config server-side.
+
+        Secrets never travel to the browser: the preset password is merged
+        into ``state.config`` here, so the UI only has to refresh the
+        non-sensitive fields afterwards.
+        """
+        presets = runtime.load_site_presets()
+        if name not in presets:
+            return jsonify({"success": False, "message": "Preset not found"}), 404
+
+        runtime.state.config.update(presets[name])
+        if not runtime.save_app_config(runtime.state.config):
+            return jsonify({"success": False, "message": "Could not save config"}), 500
+
+        runtime.add_log(f"Đã áp dụng cấu hình site: {name}", "info")
+        return jsonify({
+            "success": True,
+            "message": f"Đã tải cấu hình: {name}",
+            "data": redact_config(runtime.state.config),
+        })
+
     @app.route('/api/presets/<name>', methods=['GET', 'PUT', 'DELETE'])
     def manage_preset(name):
         presets = runtime.load_site_presets()
-    
+
         if request.method == 'GET':
             if name in presets:
-                return jsonify({"success": True, "data": presets[name]})
+                return jsonify({"success": True, "data": redact_preset(presets[name])})
             return jsonify({"success": False, "message": "Preset not found"})
-    
+
         elif request.method == 'PUT':
-            data = request.json
+            data = request.json or {}
             try:
                 content_min_valid_words = max(1, int(data.get("content_min_valid_words", 1401)))
             except (TypeError, ValueError):
                 content_min_valid_words = 1401
+            # A blank incoming password means "keep what is stored". Fall back
+            # to the preset's own password first, then to the live config, so
+            # that "save current settings as a new preset" captures the
+            # password the user is actually working with.
+            existing = presets.get(name, {})
+            fallback = existing if existing.get("wp_password") else runtime.state.config
+            merged_secrets = merge_config_update(fallback, {
+                "wp_password": data.get("wp_password", ""),
+            })
             presets[name] = {
                 "wp_username": data.get("wp_username", ""),
-                "wp_password": data.get("wp_password", ""),
+                "wp_password": merged_secrets.get("wp_password", ""),
                 "wp_login_url": data.get("wp_login_url", ""),
                 "wp_admin_url": data.get("wp_admin_url", ""),
                 "category_name": data.get("category_name", "Tin tức"),
@@ -132,13 +208,42 @@ def register_routes(app, runtime: RouteRuntime) -> None:
             if runtime.save_site_presets(presets):
                 return jsonify({"success": True, "message": f"Preset '{name}' saved"})
             return jsonify({"success": False, "message": "Could not save preset"})
-    
+
         elif request.method == 'DELETE':
             if name in presets:
                 del presets[name]
                 if runtime.save_site_presets(presets):
                     return jsonify({"success": True, "message": f"Preset '{name}' deleted"})
             return jsonify({"success": False, "message": "Preset not found"})
+
+    def _reindex_post_indices_after_delete(removed_post_index: int) -> None:
+        """Shift every post-index reference down after a post is removed.
+
+        ``content_list``, ``skip_post_indices`` and ``retry_queue`` all key off
+        ``post_index``. Re-indexing only ``content_list`` (the previous
+        behaviour) left the other two pointing at the wrong article.
+        Callers must already hold ``state.lock``.
+        """
+        for item in runtime.state.content_list:
+            item_post_index = int(item.get("post_index", -1))
+            if item_post_index > removed_post_index:
+                item["post_index"] = item_post_index - 1
+
+        runtime.state.skip_post_indices = {
+            idx - 1 if idx > removed_post_index else idx
+            for idx in runtime.state.skip_post_indices
+            if idx != removed_post_index
+        }
+
+        remaining_queue = []
+        for item in runtime.state.retry_queue:
+            queued_index = int(item.get("post_index", -1))
+            if queued_index == removed_post_index:
+                continue
+            if queued_index > removed_post_index:
+                item = {**item, "post_index": queued_index - 1}
+            remaining_queue.append(item)
+        runtime.state.retry_queue = remaining_queue
 
     @app.route('/api/content/<int:index>')
     def get_content(index):
@@ -151,60 +256,69 @@ def register_routes(app, runtime: RouteRuntime) -> None:
 
     @app.route('/api/content/<int:index>', methods=['PUT'])
     def update_content(index):
-        if 0 <= index < len(runtime.state.content_list):
-            data = request.json
-            if 'content' in data:
-                new_content = data['content']
-                # Recalculate word count
-                text_only = re.sub(r'<[^>]*>', ' ', new_content)
-                word_count = len(text_only.split())
-            
-                runtime.state.content_list[index]['content'] = new_content
-                runtime.state.content_list[index]['word_count'] = word_count
-                min_valid_words = runtime.get_min_valid_words()
-                if word_count < min_valid_words:
-                    runtime.state.content_list[index]['status'] = "failed"
-                    runtime.state.content_list[index]['error_reason'] = (
-                        f"chỉ có {word_count}/{min_valid_words} từ (cập nhật thủ công)"
-                    )
-                else:
-                    runtime.state.content_list[index]['status'] = "success"
-                    runtime.state.content_list[index]['error_reason'] = ""
-                runtime.state.content_list[index]['attempts'] = runtime.state.content_list[index].get('attempts', 1)
-            
-                # Also update generated_contents for WordPress posting
-                post_index = int(runtime.state.content_list[index].get("post_index", index))
-                if 0 <= post_index < len(runtime.state.generated_contents):
-                    runtime.state.generated_contents[post_index] = new_content
-            
-                runtime.add_log(f"Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
-                return jsonify({"success": True, "word_count": word_count})
-        return jsonify({"success": False, "message": "Content not found"})
+        data = request.get_json(silent=True) or {}
+        if 'content' not in data:
+            return jsonify({"success": False, "message": "Content not found"})
+
+        with runtime.state.mutation():
+            if not (0 <= index < len(runtime.state.content_list)):
+                return jsonify({"success": False, "message": "Content not found"})
+
+            new_content = data['content']
+            # Recalculate word count
+            text_only = re.sub(r'<[^>]*>', ' ', new_content)
+            word_count = len(text_only.split())
+
+            row = runtime.state.content_list[index]
+            row['content'] = new_content
+            row['word_count'] = word_count
+            min_valid_words = runtime.get_min_valid_words()
+            if word_count < min_valid_words:
+                row['status'] = "failed"
+                row['error_reason'] = (
+                    f"chỉ có {word_count}/{min_valid_words} từ (cập nhật thủ công)"
+                )
+            else:
+                row['status'] = "success"
+                row['error_reason'] = ""
+            row['attempts'] = row.get('attempts', 1)
+
+            # Also update generated_contents for WordPress posting
+            post_index = int(row.get("post_index", index))
+            if 0 <= post_index < len(runtime.state.generated_contents):
+                runtime.state.generated_contents[post_index] = new_content
+
+        runtime.add_log(f"Content #{index + 1} đã được cập nhật ({word_count} từ)", "info")
+        return jsonify({"success": True, "word_count": word_count})
 
     @app.route('/api/content/<int:index>', methods=['DELETE'])
     def delete_content(index):
-        if 0 <= index < len(runtime.state.content_list):
+        if _structural_edit_blocked():
+            return jsonify({
+                "success": False,
+                "message": "Đang đăng bài — không thể xóa nội dung lúc này",
+            }), 409
+
+        with runtime.state.mutation():
+            if not (0 <= index < len(runtime.state.content_list)):
+                return jsonify({"success": False, "message": "Content not found"})
+
             row = runtime.state.content_list[index]
             deleted_title = row['title']
             post_index = int(row.get("post_index", index))
             del runtime.state.content_list[index]
-        
+
             # Also remove from generated_contents/topics by real post index
             if 0 <= post_index < len(runtime.state.generated_contents):
                 del runtime.state.generated_contents[post_index]
-        
+
             if 0 <= post_index < len(runtime.state.topics):
                 del runtime.state.topics[post_index]
 
-            # Re-index content rows after deletion
-            for item in runtime.state.content_list:
-                item_post_index = int(item.get("post_index", -1))
-                if item_post_index > post_index:
-                    item["post_index"] = item_post_index - 1
-        
-            runtime.add_log(f"Đã xóa: {deleted_title}", "warning")
-            return jsonify({"success": True})
-        return jsonify({"success": False, "message": "Content not found"})
+            _reindex_post_indices_after_delete(post_index)
+
+        runtime.add_log(f"Đã xóa: {deleted_title}", "warning")
+        return jsonify({"success": True})
 
 
     def _handle_rerender_request(content_row_index: int, skip_post: bool):
@@ -287,40 +401,37 @@ def register_routes(app, runtime: RouteRuntime) -> None:
     def start_automation():
         if runtime.state.is_running:
             return jsonify({"success": False, "message": "Already running"})
-    
+
         if not runtime.state.topics:
             return jsonify({"success": False, "message": "No topics configured"})
-    
+
         provider = runtime.state.config.get("ai_provider", "ollama")
-    
+
         if provider == "ollama":
             if not runtime.check_ollama():
                 return jsonify({"success": False, "message": "Ollama is not running! Please start Ollama first (run: ollama serve)"})
         elif provider == "gemini":
             if not runtime.state.config.get("gemini_api_key"):
                 return jsonify({"success": False, "message": "Gemini API key not configured"})
-    
+
         if not runtime.state.config.get("wp_username"):
             return jsonify({"success": False, "message": "WordPress credentials not configured"})
-    
+
         data = request.get_json() or {}
         runtime.state.config["schedule_start_date"] = data.get("schedule_start_date", "")
         runtime.state.config["schedule_end_date"] = data.get("schedule_end_date", "")
-    
+
         runtime.state.reset()
-    
+
         thread = threading.Thread(target=runtime.run_automation)
         thread.daemon = True
         thread.start()
-    
+
         return jsonify({"success": True, "message": "Started"})
 
     @app.route('/api/stop', methods=['POST'])
     def stop_automation():
-        runtime.state.is_running = False
-        runtime.state.is_paused = False
-        runtime.state.pause_reason = ""
-        runtime.state.current_phase = "stopped"
+        runtime.state.request_stop()
         runtime.add_log("Đã dừng bởi người dùng", "warning")
         return jsonify({"success": True})
 
@@ -352,7 +463,7 @@ def register_routes(app, runtime: RouteRuntime) -> None:
                 text=True,
                 timeout=30
             )
-        
+
             if result.returncode == 0:
                 # Wait a moment for service to start
                 time.sleep(3)
@@ -362,7 +473,7 @@ def register_routes(app, runtime: RouteRuntime) -> None:
                     return jsonify({"success": False, "message": "Ollama started but not responding yet. Please wait a moment."})
             else:
                 return jsonify({"success": False, "message": f"Failed to start Ollama: {result.stderr}"})
-            
+
         except subprocess.TimeoutExpired:
             return jsonify({"success": False, "message": "Timeout starting Ollama service"})
         except Exception as e:
@@ -378,13 +489,13 @@ def register_routes(app, runtime: RouteRuntime) -> None:
                 text=True,
                 timeout=30
             )
-        
+
             if result.returncode == 0:
                 time.sleep(2)
                 return jsonify({"success": True, "message": "Ollama service stopped"})
             else:
                 return jsonify({"success": False, "message": f"Failed to stop Ollama: {result.stderr}"})
-            
+
         except subprocess.TimeoutExpired:
             return jsonify({"success": False, "message": "Timeout stopping Ollama service"})
         except Exception as e:

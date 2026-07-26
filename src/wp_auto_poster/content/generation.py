@@ -59,4 +59,16 @@ def generate_content(
             return None
         return chatgpt_web_func(page, title, keyword)
 
-    return gemini_api_func(title, keyword, str(config.get("gemini_api_key", "")), log_func)
+    if selected in ("gemini", "gemini_api"):
+        return gemini_api_func(
+            title,
+            keyword,
+            str(config.get("gemini_api_key", "")),
+            log_func,
+            config=config,
+        )
+
+    # Unknown providers used to fall through to the Gemini API silently, which
+    # turned a typo in the config into a confusing "missing API key" error.
+    log_func(f"AI provider không hợp lệ: {selected!r}", "error")
+    return None

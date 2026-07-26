@@ -1,3 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wp-auto-poster"
+version = "1.0.0"
+description = "Generate SEO content with AI providers and publish scheduled posts to WordPress"
+requires-python = ">=3.9"
+dependencies = [
+    "flask~=3.1",
+    "flask-cors~=6.0",
+    "playwright~=1.57",
+    # Used directly by the Ollama provider. Previously only present as a
+    # transitive dependency of google-generativeai, which is being removed.
+    "requests~=2.32",
+    # Successor to google-generativeai, which Google has discontinued.
+    "google-genai~=1.47",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest~=8.4",
+    "ruff~=0.15",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
@@ -7,3 +36,20 @@ addopts = "-q"
 line-length = 100
 target-version = "py39"
 extend-exclude = [".venv", ".agent", ".ruff_cache"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP"]
+ignore = [
+    "E501",   # line length is handled by the formatter, not enforced here
+    # The project targets Python 3.9, where PEP 585/604 spellings are not
+    # available at runtime (dataclass annotations are evaluated eagerly).
+    "UP006",  # typing.Dict/List -> dict/list
+    "UP007",  # Union[X, Y] -> X | Y
+    "UP035",  # deprecated typing imports
+    "UP045",  # Optional[X] -> X | None
+]
+
+[tool.ruff.lint.per-file-ignores]
+# app.py must prepend src/ to sys.path before importing the package, so its
+# imports legitimately follow executable code. No other module may do this.
+"app.py" = ["E402"]

@@ -1,3 +1,18 @@
+      // ============================================================================
+      // SECRET FIELDS
+      // Secrets (WordPress password, Gemini API key) are never sent back by the
+      // server. The input stays empty when a value is already stored; leaving it
+      // empty on save means "keep the stored secret".
+      // ============================================================================
+      const SECRET_PLACEHOLDER = "(đã lưu — để trống nếu không đổi)";
+
+      function applySecretFieldState(inputId, isSet) {
+        const el = document.getElementById(inputId);
+        if (!el) return;
+        el.value = "";
+        el.placeholder = isSet ? SECRET_PLACEHOLDER : "";
+      }
+
       // Save configuration
       async function saveConfig() {
         const providerEl = document.getElementById("aiProviderSelect");
@@ -48,7 +63,17 @@
           const result = await response.json();
           if (response.ok && result.success) {
             showToast("Cấu hình đã được lưu!", "success");
-            localStorage.setItem("wp_auto_config", JSON.stringify(config));
+            // Never persist secrets in localStorage — any extension or XSS
+            // on this origin can read it.
+            const { wp_password, gemini_api_key, ...safeConfig } = config;
+            localStorage.setItem(
+              "wp_auto_config",
+              JSON.stringify(safeConfig),
+            );
+            applySecretFieldState(
+              "wpPassword",
+              Boolean(wp_password) || Boolean(result.wp_password_set),
+            );
           } else {
             showToast(result.message || "Không thể lưu cấu hình", "error");
           }
@@ -78,8 +103,7 @@
 
           document.getElementById("wpUsername").value =
             config.wp_username || "";
-          document.getElementById("wpPassword").value =
-            config.wp_password || "";
+          // Password intentionally not restored from localStorage.
           document.getElementById("wpLoginUrl").value =
             config.wp_login_url || "";
           document.getElementById("wpAdminUrl").value =
@@ -119,8 +143,8 @@
 
           document.getElementById("wpUsername").value =
             config.wp_username || document.getElementById("wpUsername").value;
-          document.getElementById("wpPassword").value =
-            config.wp_password || document.getElementById("wpPassword").value;
+          // The server reports only whether a password is stored, never its value.
+          applySecretFieldState("wpPassword", config.wp_password_set === true);
           document.getElementById("wpLoginUrl").value =
             config.wp_login_url || document.getElementById("wpLoginUrl").value;
           document.getElementById("wpAdminUrl").value =

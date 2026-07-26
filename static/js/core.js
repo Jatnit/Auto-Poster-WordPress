@@ -74,8 +74,48 @@
           }
         }
 
-        // Animate
-        setInterval(draw, 33);
+        // Animate. Driven by requestAnimationFrame so the browser suspends it
+        // when the tab is hidden — the machine is busy running Playwright at
+        // the same time, and a permanent 30fps canvas loop is not free.
+        const FRAME_INTERVAL_MS = 33;
+        let lastFrame = 0;
+        let rafId = null;
+
+        function isVisible() {
+          return (
+            !document.hidden &&
+            window.getComputedStyle(canvas).display !== "none"
+          );
+        }
+
+        function frame(timestamp) {
+          rafId = requestAnimationFrame(frame);
+          if (!isVisible()) return;
+          if (timestamp - lastFrame < FRAME_INTERVAL_MS) return;
+          lastFrame = timestamp;
+          draw();
+        }
+
+        function start() {
+          if (rafId === null) {
+            lastFrame = 0;
+            rafId = requestAnimationFrame(frame);
+          }
+        }
+
+        function stop() {
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
+        }
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.hidden) stop();
+          else start();
+        });
+
+        start();
       }
 
       // Topics storage
@@ -84,6 +124,11 @@
       let statusInterval = null;
       let checklistRows = [];
       let checklistProcessedLogCount = 0;
+      // Log cursors. The server returns only entries newer than lastLogSeq;
+      // the two "processed" cursors de-duplicate within each consumer.
+      let lastLogSeq = 0;
+      let lastRenderedLogSeq = 0;
+      let checklistProcessedLogSeq = 0;
       let activeContentPost = null;
       let activeWpPost = null;
       let currentPhase = "";

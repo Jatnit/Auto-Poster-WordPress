@@ -49,9 +49,14 @@ Thumbs.db
 *.log
 *.tmp
 
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+
 # Screenshots
 *.png
 !templates/*.png
+screenshots/
 
 # Config files with sensitive data
 config.json

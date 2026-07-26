@@ -1,15 +1,21 @@
-# WordPress Auto Poster Dependencies
+# WP Auto Poster - runtime dependencies
 # Install with: pip install -r requirements.txt
+# (or, preferred: pip install -e ".[dev]")
+#
+# Compatible-release pins (~=) allow patch updates but block breaking majors.
+# Versions verified working: see the comment on each line.
 
-# Google Generative AI (Gemini API)
-google-generativeai>=0.3.0
+# Flask web interface
+flask~=3.1          # verified 3.1.2
+flask-cors~=6.0     # verified 6.0.2
 
 # Playwright for browser automation
-playwright>=1.40.0
+playwright~=1.57    # verified 1.57.0
 
-# Flask for web interface
-flask>=2.3.0
-flask-cors>=4.0.0
+# Used directly by the Ollama provider (providers/ollama.py).
+# Declared explicitly because it used to arrive only as a transitive
+# dependency of google-generativeai, which has been removed.
+requests~=2.32      # verified 2.32.5
 
-# Testing
-pytest>=8.0.0
+# Gemini API provider. Replaces google-generativeai, which Google discontinued.
+google-genai~=1.47  # verified 1.47.0

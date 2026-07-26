@@ -121,9 +121,14 @@
       // Update status
       async function updateStatus() {
         try {
-          const response = await fetch("/api/status");
+          // Only ask for log entries newer than what we already hold, so the
+          // payload stays small no matter how long the run has been going.
+          const response = await fetch(`/api/status?since=${lastLogSeq}`);
           const status = await response.json();
           currentPhase = status.current_phase || "";
+          if (typeof status.log_seq === "number") {
+            lastLogSeq = status.log_seq;
+          }
 
           // Update progress
           document.getElementById("progressBar").style.width =

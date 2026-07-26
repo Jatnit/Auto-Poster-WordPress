@@ -1,12 +1,6 @@
 """Backward-compatible settings facade for the refactored state package."""
 
-import os
-import sys
 from typing import Any, Dict
-
-SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
-if SRC_DIR not in sys.path:
-    sys.path.insert(0, SRC_DIR)
 
 from wp_auto_poster.state.app_state import AppState, DEFAULT_CONFIG
 from wp_auto_poster.state.config_store import (

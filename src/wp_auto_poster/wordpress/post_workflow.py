@@ -40,9 +40,9 @@ def create_single_post(
 ) -> bool:
     title = topic["title"]
     keyword = topic["keyword"]
-    
+
     runtime.log(f"Đang tạo bài {index + 1}: {title}", "info")
-    
+
     try:
         schedule = calculate_publish_schedule(
             index=index,
@@ -62,25 +62,25 @@ def create_single_post(
             f"(Ngày {days_offset + 1}, Slot {slot_in_day + 1}/{posts_today})",
             "info",
         )
-        
+
         if not runtime.state.is_running:
             return False
         if runtime.state.is_paused:
             if not runtime.wait_if_paused():
                 return False
-        
+
         if not runtime.navigate_to_new_post(page):
             return False
-        
+
         if not runtime.set_post_title(page, title):
             return False
-        
+
         if not runtime.state.is_running:
             return False
         if runtime.state.is_paused:
             if not runtime.wait_if_paused():
                 return False
-        
+
         if not runtime.set_post_content(page, content):
             runtime.log("Content may not have been added properly", "warning")
 
@@ -94,13 +94,13 @@ def create_single_post(
             runtime.set_rank_math_keyword(page, keyword)
         else:
             runtime.log("Skip SEO keyword (auto_set_seo_keyword = OFF)", "info")
-        
+
         if not runtime.state.is_running:
             return False
         if runtime.state.is_paused:
             if not runtime.wait_if_paused():
                 return False
-        
+
         if auto_insert_inline_images:
             runtime.insert_images_after_h2(page, keyword, max_images=3)
         else:
@@ -121,22 +121,22 @@ def create_single_post(
             runtime.add_post_tags(page, tags)
         elif not auto_add_tags_cfg:
             runtime.log("Skip tags (auto_add_tags = OFF)", "info")
-        
+
         if not runtime.state.is_running:
             return False
         if runtime.state.is_paused:
             if not runtime.wait_if_paused():
                 return False
-        
+
         if has_schedule:
             if not runtime.publish_or_schedule_post(page, True, publish_date):
                 return False
         else:
             if not runtime.publish_or_schedule_post(page, is_schedule, publish_date if is_schedule else None):
                 return False
-        
+
         return True
-        
+
     except Exception as e:
         runtime.log(f"Error creating post: {e}", "error")
         return False

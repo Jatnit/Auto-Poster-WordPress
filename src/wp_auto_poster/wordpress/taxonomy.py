@@ -215,7 +215,7 @@ def select_first_category(page: Any, runtime: TaxonomyRuntime) -> bool:
 
 def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
     """Add tags to WordPress post (Classic Editor).
-    
+
     Args:
         page: Playwright page object
         tags: Comma-separated tags string
@@ -224,18 +224,18 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
         if not tags or not tags.strip():
             runtime.log("No tags to add", "info")
             return True
-        
+
         runtime.log(f"Adding tags: {tags[:50]}...", "info")
-        
+
         # Scroll to Tags section
         try:
             tags_box = page.locator("#tagsdiv-post_tag, #tagsdiv, .tagsdiv").first
             if tags_box.is_visible(timeout=2000):
                 tags_box.scroll_into_view_if_needed()
                 time.sleep(0.5)
-        except:
+        except Exception:
             pass
-        
+
         # Find the tags input field
         tag_input_selectors = [
             "#new-tag-post_tag",
@@ -244,7 +244,7 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
             "input[name='newtag[post_tag]']",
             ".tagsdiv input[type='text']"
         ]
-        
+
         tag_input = None
         for selector in tag_input_selectors:
             try:
@@ -253,20 +253,20 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
                     tag_input = input_el
                     runtime.log(f"Found tags input: {selector}", "info")
                     break
-            except:
+            except Exception:
                 continue
-        
+
         if not tag_input:
             runtime.log("Could not find tags input field", "warning")
             return False
-        
+
         # Clear and fill the tags input
         tag_input.click()
         tag_input.fill("")
         time.sleep(0.2)
         tag_input.fill(tags.strip())
         time.sleep(0.3)
-        
+
         # Click the "Add" / "Thêm" button
         add_button_selectors = [
             "input.tagadd",
@@ -276,7 +276,7 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
             "input[value='Add']",
             ".tagsdiv input[type='button']"
         ]
-        
+
         for selector in add_button_selectors:
             try:
                 btn = page.locator(selector).first
@@ -284,19 +284,19 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
                     btn.click()
                     runtime.log("Clicked Add tags button", "success")
                     time.sleep(0.5)
-                    
+
                     # Verify tags were added by checking tag cloud
                     try:
                         tag_cloud = page.locator(".tagchecklist, .the-tags").first
                         if tag_cloud.is_visible(timeout=1000):
                             runtime.log("Tags added successfully", "success")
-                    except:
+                    except Exception:
                         pass
-                    
+
                     return True
-            except:
+            except Exception:
                 continue
-        
+
         # Try JavaScript fallback to click the add button
         try:
             page.evaluate("""
@@ -308,12 +308,12 @@ def add_post_tags(page: Any, tags: str, runtime: TaxonomyRuntime) -> bool:
             runtime.log("Clicked Add tags button via JS", "success")
             time.sleep(0.5)
             return True
-        except:
+        except Exception:
             pass
-        
+
         runtime.log("Could not find Add tags button", "warning")
         return False
-        
+
     except Exception as e:
         runtime.log(f"Error adding tags: {e}", "warning")
         return False

@@ -23,7 +23,14 @@ class EditorRuntime:
 
 def navigate_to_new_post(page: Any, runtime: EditorRuntime) -> bool:
     try:
-        target_url = join_url(runtime.config["wp_admin_url"], "post-new.php")
+        admin_url = runtime.config.get("wp_admin_url", "")
+        if not admin_url:
+            runtime.log(
+                "Chưa cấu hình WordPress Admin URL — không thể mở trang tạo bài",
+                "error",
+            )
+            return False
+        target_url = join_url(admin_url, "post-new.php")
         if not safe_navigate(
             page,
             target_url,

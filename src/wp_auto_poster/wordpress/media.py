@@ -967,7 +967,7 @@ def insert_selected_image_after_h2_direct(
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
                     .toLowerCase()
-                    .replace(/\s+/g, ' ')
+                    .replace(/\\s+/g, ' ')
                     .trim();
                 const allHeadings = Array.from(body.querySelectorAll('h2, h3'));
                 const contactIndex = allHeadings.findIndex((heading) =>
@@ -1024,7 +1024,7 @@ def insert_selected_image_after_paragraph_direct(
                     .normalize('NFD')
                     .replace(/[\u0300-\u036f]/g, '')
                     .toLowerCase()
-                    .replace(/\s+/g, ' ')
+                    .replace(/\\s+/g, ' ')
                     .trim();
                 const contactHeading = Array.from(body.querySelectorAll('h2, h3'))
                     .find((heading) =>

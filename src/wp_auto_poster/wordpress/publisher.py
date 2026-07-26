@@ -231,33 +231,33 @@ def publish_or_schedule_post(
                 timeout_ms=1500,
             ):
                 time.sleep(0.5)
-                
+
                 # Fill in date fields
                 # Month dropdown
                 month_select = page.locator("#mm, select[name='mm']").first
                 if month_select.is_visible(timeout=2000):
                     month_select.select_option(str(publish_date.month).zfill(2))
-                
+
                 # Day input
                 day_input = page.locator("#jj, input[name='jj']").first
                 if day_input.is_visible(timeout=2000):
                     day_input.fill(str(publish_date.day))
-                
+
                 # Year input
                 year_input = page.locator("#aa, input[name='aa']").first
                 if year_input.is_visible(timeout=2000):
                     year_input.fill(str(publish_date.year))
-                
+
                 # Hour input
                 hour_input = page.locator("#hh, input[name='hh']").first
                 if hour_input.is_visible(timeout=2000):
                     hour_input.fill(str(publish_date.hour).zfill(2))
-                
+
                 # Minute input
                 minute_input = page.locator("#mn, input[name='mn']").first
                 if minute_input.is_visible(timeout=2000):
                     minute_input.fill("00")
-                
+
                 # Click OK button to confirm date. Classic Editor can report this
                 # button visible but outside viewport, so use the resilient helper.
                 if runtime.click_first_selector_resilient(
@@ -269,7 +269,7 @@ def publish_or_schedule_post(
                     time.sleep(0.5)
                 else:
                     runtime.log("Could not confirm timestamp OK button", "warning")
-        
+
         # Click Publish/Schedule button - in Classic Editor it's just #publish
         runtime.log("Preparing to publish...", "info")
 
@@ -326,7 +326,7 @@ def publish_or_schedule_post(
         if not clicked:
             runtime.log("Không thể click nút Publish", "error")
             return False
-        
+
         # Wait for page to reload and confirm WordPress has finished saving.
         runtime.log("Đang lưu bài viết...", "info")
         success_detected = _wait_for_publish_success(page, is_schedule, runtime)
@@ -339,7 +339,7 @@ def publish_or_schedule_post(
             runtime.log("Could not confirm publish status, but continuing...", "warning")
             # Return True anyway since the click happened
             return True
-        
+
     except Exception as e:
         runtime.log(f"Error publishing: {e}", "error")
         return False

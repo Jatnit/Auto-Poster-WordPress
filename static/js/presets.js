@@ -28,16 +28,18 @@
         if (!name) return;
 
         try {
+          // Applying happens server-side so the preset password never reaches
+          // the browser. The response is the redacted live config.
           const response = await fetch(
-            `/api/presets/${encodeURIComponent(name)}`,
+            `/api/presets/${encodeURIComponent(name)}/apply`,
+            { method: "POST" },
           );
           const result = await response.json();
           if (result.success) {
             const data = result.data;
             document.getElementById("wpUsername").value =
               data.wp_username || "";
-            document.getElementById("wpPassword").value =
-              data.wp_password || "";
+            applySecretFieldState("wpPassword", data.wp_password_set === true);
             document.getElementById("wpLoginUrl").value =
               data.wp_login_url || "";
             document.getElementById("wpAdminUrl").value =
@@ -60,7 +62,9 @@
               document.getElementById("geminiPrompt").value =
                 data.gemini_prompt;
             }
-            showToast(`Đã tải cấu hình: ${name}`, "success");
+            showToast(result.message || `Đã tải cấu hình: ${name}`, "success");
+          } else {
+            showToast(result.message || "Không thể tải cấu hình", "error");
           }
         } catch (e) {
           showToast("Không thể tải cấu hình", "error");
