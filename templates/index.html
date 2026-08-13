@@ -31,6 +31,10 @@
           </div>
         </div>
         <div class="status-badge">
+          <a class="theme-toggle-btn header-nav-btn" href="{{ url_for('content_seo') }}">
+            <i class="fas fa-clipboard-check"></i>
+            <span>SEO checker</span>
+          </a>
           <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()">
             <i class="fas fa-sun toggle-icon" id="themeIcon"></i>
             <span id="themeLabel">Light</span>
@@ -195,6 +199,23 @@ Website: https://suachuathangmay247.com
            TOPICS CARD (right column)
            ============================================================ -->
       <div class="workspace">
+      <div class="card fade-in seo-nav-card">
+        <div class="card-body seo-nav-card-body">
+          <div>
+            <div class="seo-nav-title">
+              <i class="fas fa-clipboard-check"></i>
+              Tạo content + SEO checker
+            </div>
+            <div class="seo-nav-subtitle">
+              Mở trang riêng để tạo content và kiểm Basic SEO, Additional, Title Readability.
+            </div>
+          </div>
+          <a class="btn btn-primary btn-large" href="{{ url_for('content_seo') }}">
+            <i class="fas fa-arrow-right"></i> Mở trang kiểm SEO
+          </a>
+        </div>
+      </div>
+
       <div class="card fade-in">
         <div class="card-header">
           <i class="fas fa-list-alt"></i>

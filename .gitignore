@@ -52,6 +52,17 @@ Thumbs.db
 # Tooling caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+
+# Coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # Screenshots
 *.png
@@ -61,6 +72,8 @@ screenshots/
 # Config files with sensitive data
 config.json
 .env
+.env.local
+.env.*.local
 wp_site_presets.json
 READTOME.md
 
@@ -68,4 +81,9 @@ READTOME.md
 playwright-report/
 test-results/
 app_config.json
+browser_data/
 
+# Local runtime state
+*.db
+*.sqlite
+*.sqlite3

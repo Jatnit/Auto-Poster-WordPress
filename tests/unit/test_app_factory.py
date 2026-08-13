@@ -45,6 +45,7 @@ def test_create_app_registers_core_routes():
     rules = {rule.rule for rule in app.url_map.iter_rules()}
     assert "/api/status" in rules
     assert "/api/start" in rules
+    assert "/content-seo" in rules
 
 
 def _make_app():

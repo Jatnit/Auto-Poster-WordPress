@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tạo content + SEO checker</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="header-content">
+        <div class="logo">
+          <div class="logo-icon"><i class="fas fa-clipboard-check"></i></div>
+          <div class="logo-text">
+            <h1>Tạo content + SEO checker</h1>
+            <span>Content Lab</span>
+            <small class="logo-version">Rank Math style checks</small>
+          </div>
+        </div>
+        <div class="status-badge">
+          <a class="theme-toggle-btn header-nav-btn" href="{{ url_for('index') }}">
+            <i class="fas fa-table-columns"></i>
+            <span>Dashboard</span>
+          </a>
+          <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleSeoLabTheme()">
+            <i class="fas fa-sun toggle-icon" id="themeIcon"></i>
+            <span id="themeLabel">Light</span>
+          </button>
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">STANDBY</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="seo-lab-container">
+      <section class="seo-lab-column">
+        <div class="card fade-in">
+          <div class="card-header">
+            <i class="fas fa-wand-magic-sparkles"></i>
+            <h2>Tạo content</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Từ khóa SEO chung</label>
+              <input type="text" class="form-input" id="labSharedKeyword" placeholder="Nhập focus keyword..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tags chung</label>
+              <input type="text" class="form-input" id="labSharedTags" placeholder="tag 1, tag 2, tag 3..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Danh sách tiêu đề</label>
+              <textarea class="form-input" id="labBulkTitles" rows="7" placeholder="Mỗi dòng là một tiêu đề..."></textarea>
+            </div>
+            <div class="seo-lab-actions">
+              <button class="btn btn-primary" onclick="addSeoLabTitles()">
+                <i class="fas fa-plus-circle"></i> Thêm vào list
+              </button>
+              <button class="btn btn-secondary" onclick="clearSeoLabTopics()">
+                <i class="fas fa-trash"></i> Xóa list
+              </button>
+            </div>
+
+            <div class="topics-container seo-lab-topic-list" id="seoLabTopics"></div>
+
+            <div class="seo-lab-actions seo-lab-actions-sticky">
+              <button class="btn btn-primary btn-large" id="labStartBtn" onclick="startSeoLabAutomation()">
+                <i class="fas fa-play"></i> Bắt đầu tạo theo cấu hình hiện tại
+              </button>
+              <button class="btn btn-danger btn-large" id="labStopBtn" onclick="stopSeoLabAutomation()" style="display: none;">
+                <i class="fas fa-stop"></i> Dừng
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card fade-in">
+          <div class="card-header">
+            <i class="fas fa-gauge-high"></i>
+            <h2>Tiến trình & content đã tạo</h2>
+          </div>
+          <div class="card-body">
+            <div class="progress-stats seo-lab-stats">
+              <div class="stat-card">
+                <div class="stat-value info" id="labTotalTopics">0</div>
+                <div class="stat-label">Tổng bài</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value success" id="labSuccessfulPosts">0</div>
+                <div class="stat-label">Thành công</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value error" id="labFailedPosts">0</div>
+                <div class="stat-label">Thất bại</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-value warning" id="labProgressPercent">0%</div>
+                <div class="stat-label">Hoàn thành</div>
+              </div>
+            </div>
+            <div class="progress-bar-container">
+              <div class="progress-header">
+                <span class="progress-task" id="labCurrentTask">Sẵn sàng</span>
+                <span class="progress-percent" id="labProgressValue">0%</span>
+              </div>
+              <div class="progress-bar">
+                <div class="progress-fill" id="labProgressBar" style="width: 0%;"></div>
+              </div>
+            </div>
+            <div class="content-list-container seo-lab-content-list" id="seoLabContentList"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="seo-lab-column seo-lab-checker-column">
+        <div class="card fade-in seo-checker-card">
+          <div class="card-header" style="justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <i class="fas fa-magnifying-glass-chart"></i>
+              <h2>SEO test box</h2>
+            </div>
+            <button class="btn btn-secondary" onclick="runSeoChecks()">
+              <i class="fas fa-rotate"></i> Kiểm tra lại
+            </button>
+          </div>
+          <div class="card-body seo-checker-body">
+            <div class="seo-input-grid">
+              <div class="form-group">
+                <label class="form-label">Focus Keyword</label>
+                <input type="text" class="form-input seo-check-input" id="seoFocusKeyword" placeholder="VD: cung cấp nhân sự sự kiện tphcm" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">SEO Title</label>
+                <input type="text" class="form-input seo-check-input" id="seoTitle" placeholder="Tiêu đề SEO..." />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Meta Description</label>
+                <textarea class="form-input seo-check-input" id="seoMetaDescription" rows="3" placeholder="Meta description..."></textarea>
+              </div>
+              <div class="form-group">
+                <label class="form-label">URL / Slug</label>
+                <input type="text" class="form-input seo-check-input" id="seoUrl" placeholder="https://domain.com/slug-bai-viet" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Domain site để phân biệt link nội bộ</label>
+                <input type="text" class="form-input seo-check-input" id="seoSiteDomain" placeholder="https://example.com" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Keyword/URL đã từng dùng</label>
+                <textarea class="form-input seo-check-input" id="seoUsedKeywords" rows="3" placeholder="Dán keyword hoặc URL cũ, mỗi dòng một mục..."></textarea>
+              </div>
+            </div>
+
+            <div class="form-group seo-content-box">
+              <label class="form-label">Nội dung HTML để kiểm tra</label>
+              <textarea class="form-input seo-check-input" id="seoContentHtml" rows="18" placeholder="Dán HTML bài viết hoặc nạp từ content đã tạo..."></textarea>
+            </div>
+
+            <label class="seo-ai-toggle">
+              <input type="checkbox" id="seoContentAiDone" class="seo-check-input" />
+              <span>Đã tối ưu bằng Content AI</span>
+            </label>
+
+            <div class="seo-score-strip">
+              <div>
+                <span class="seo-score-label">Điểm kiểm tra</span>
+                <strong id="seoScoreText">0 / 0</strong>
+              </div>
+              <div class="seo-score-meter">
+                <span id="seoScoreFill" style="width: 0%;"></span>
+              </div>
+            </div>
+
+            <div class="seo-result-grid" id="seoCheckResults"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast">
+      <i class="fas fa-info-circle"></i>
+      <span id="toastMessage"></span>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/seo-checker.js') }}"></script>
+  </body>
+</html>

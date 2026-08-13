@@ -41,6 +41,10 @@ def register_routes(app, runtime: RouteRuntime) -> None:
     def index():
         return render_template('index.html')
 
+    @app.route('/content-seo')
+    def content_seo():
+        return render_template('content-seo.html')
+
     @app.route('/api/status')
     def get_status():
         try:
